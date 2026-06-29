@@ -1,0 +1,272 @@
+name: Build & Package Kronos Synth (VST3)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-mac:
+    name: Build macOS VST3 & Installer
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JUCE
+        run: |
+          git clone --branch 8.0.13 --depth 1 https://github.com/juce-framework/JUCE.git JUCE
+
+      - name: Update Jucer Module Paths for CI
+        run: |
+          python -c '
+          import os
+          workspace = os.environ.get("GITHUB_WORKSPACE", "")
+          modules_path = os.path.join(workspace, "JUCE", "modules")
+          with open("Kronos.jucer", "r") as f:
+              text = f.read()
+          text = text.replace("C:/JUCE/modules", modules_path)
+          text = text.replace("useGlobalPath=\"1\"", "useGlobalPath=\"0\"")
+          with open("Kronos.jucer", "w") as f:
+              f.write(text)
+          '
+
+      - name: Download Projucer
+        run: |
+          curl -L https://github.com/juce-framework/JUCE/releases/download/8.0.13/juce-8.0.13-osx.zip -o juce.zip
+          mkdir -p temp_projucer
+          unzip -q juce.zip -d temp_projucer
+          mv temp_projucer/JUCE/Projucer.app ./Projucer.app
+          rm -rf temp_projucer juce.zip
+
+      - name: Generate Xcode Project
+        run: |
+          ./Projucer.app/Contents/MacOS/Projucer --resave Kronos.jucer
+
+      - name: Install macOS Certificates
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_INSTALLER_CERTIFICATE: ${{ secrets.MACOS_INSTALLER_CERTIFICATE }}
+          MACOS_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_PASSWORD }}
+        run: |
+          # Create custom keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 12)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import developer ID application certificate for code signing
+          if [ -n "$MACOS_CERTIFICATE" ]; then
+            echo "$MACOS_CERTIFICATE" | tr -d '\r \n' | base64 --decode -o $RUNNER_TEMP/certificate.p12
+            MACOS_CERTIFICATE_PASSWORD_CLEANED=$(echo -n "$MACOS_CERTIFICATE_PASSWORD" | xargs)
+            security import $RUNNER_TEMP/certificate.p12 -k "$KEYCHAIN_PATH" -P "$MACOS_CERTIFICATE_PASSWORD_CLEANED" -T /usr/bin/codesign -T /usr/bin/security
+          fi
+
+          # Import developer ID installer certificate for installer package signing
+          if [ -n "$MACOS_INSTALLER_CERTIFICATE" ]; then
+            echo "$MACOS_INSTALLER_CERTIFICATE" | tr -d '\r \n' | base64 --decode -o $RUNNER_TEMP/installer.p12
+            MACOS_INSTALLER_CERTIFICATE_PASSWORD_CLEANED=$(echo -n "$MACOS_INSTALLER_CERTIFICATE_PASSWORD" | xargs)
+            security import $RUNNER_TEMP/installer.p12 -k "$KEYCHAIN_PATH" -P "$MACOS_INSTALLER_CERTIFICATE_PASSWORD_CLEANED" -T /usr/bin/productsign -T /usr/bin/security
+          fi
+          
+          # Allow tools to run partitioning without popup confirmation dialog
+          security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Build VST3 (Universal Binary)
+        run: |
+          xcodebuild -project Builds/MacOSX/Kronos.xcodeproj \
+            -scheme "Kronos - VST3" \
+            -configuration Release \
+            ARCHS="x86_64 arm64" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="-"
+
+      - name: Sign VST3 Bundle
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+        run: |
+          VST3_PATH=$(find Builds/MacOSX/build -name "Kronos.vst3" -type d | head -n 1)
+          echo "Found VST3 at: $VST3_PATH"
+          
+          if [ -n "$MACOS_CERTIFICATE" ]; then
+            echo "Codesigning VST3 bundle with Developer ID Application certificate..."
+            codesign --force --options runtime --timestamp --deep --sign "Developer ID Application:" "$VST3_PATH"
+            codesign -vvv --deep --strict "$VST3_PATH"
+          else
+            echo "Signing certificate not found, skipping final code sign (relying on ad-hoc sign)"
+          fi
+
+      - name: Notarize VST3 Plugin
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          VST3_PATH=$(find Builds/MacOSX/build -name "Kronos.vst3" -type d | head -n 1)
+          
+          if [ -n "$MACOS_CERTIFICATE" ] && [ -n "$APPLE_ID" ]; then
+            echo "Zipping VST3 for submission..."
+            cd "$(dirname "$VST3_PATH")"
+            zip -r "$RUNNER_TEMP/Kronos_to_notarize.zip" "Kronos.vst3"
+            cd -
+            
+            CLEANED_APPLE_ID=$(echo -n "$APPLE_ID" | xargs)
+            CLEANED_PASSWORD=$(echo -n "$APPLE_APP_SPECIFIC_PASSWORD" | xargs)
+            CLEANED_TEAM_ID=$(echo -n "$APPLE_TEAM_ID" | xargs)
+            
+            echo "Submitting to notarytool..."
+            xcrun notarytool submit "$RUNNER_TEMP/Kronos_to_notarize.zip" \
+              --apple-id "$CLEANED_APPLE_ID" \
+              --password "$CLEANED_PASSWORD" \
+              --team-id "$CLEANED_TEAM_ID" \
+              --wait
+            
+            echo "Stapling notarization ticket..."
+            xcrun stapler staple "$VST3_PATH"
+          else
+            echo "Missing notarization credentials, skipping notarization"
+          fi
+
+      - name: Build macOS Installer Package
+        env:
+          MACOS_INSTALLER_CERTIFICATE: ${{ secrets.MACOS_INSTALLER_CERTIFICATE }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          VST3_PATH=$(find Builds/MacOSX/build -name "Kronos.vst3" -type d | head -n 1)
+          
+          # Create installation directories
+          mkdir -p pkgroot/Library/Audio/Plug-Ins/VST3/KronosSynth
+          cp -R "$VST3_PATH" pkgroot/Library/Audio/Plug-Ins/VST3/KronosSynth/
+          
+          # Build package component
+          pkgbuild --root pkgroot \
+                   --identifier com.KronosSynth.Kronos.pkg \
+                   --version 1.0.0 \
+                   --install-location / \
+                   KronosComponent.pkg
+          
+          # Build final distribution installer
+          productbuild --package KronosComponent.pkg Kronos_unsigned.pkg
+          
+          # Sign installer if certificate is provided
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          if [ -n "$MACOS_INSTALLER_CERTIFICATE" ]; then
+            echo "Signing installer package..."
+            productsign --keychain "$KEYCHAIN_PATH" --sign "Developer ID Installer:" Kronos_unsigned.pkg Kronos_macOS_Installer.pkg
+          else
+            echo "Installer certificate not found, bypassing package sign step"
+            cp Kronos_unsigned.pkg Kronos_macOS_Installer.pkg
+          fi
+
+          # Notarize installer package
+          if [ -n "$MACOS_INSTALLER_CERTIFICATE" ] && [ -n "$APPLE_ID" ]; then
+            echo "Notarizing installer package..."
+            CLEANED_APPLE_ID=$(echo -n "$APPLE_ID" | xargs)
+            CLEANED_PASSWORD=$(echo -n "$APPLE_APP_SPECIFIC_PASSWORD" | xargs)
+            CLEANED_TEAM_ID=$(echo -n "$APPLE_TEAM_ID" | xargs)
+            
+            xcrun notarytool submit Kronos_macOS_Installer.pkg \
+              --apple-id "$CLEANED_APPLE_ID" \
+              --password "$CLEANED_PASSWORD" \
+              --team-id "$CLEANED_TEAM_ID" \
+              --wait
+            
+            xcrun stapler staple Kronos_macOS_Installer.pkg
+          fi
+
+      - name: Package Raw VST3
+        run: |
+          VST3_PATH=$(find Builds/MacOSX/build -name "Kronos.vst3" -type d | head -n 1)
+          mkdir -p dist
+          cp -R "$VST3_PATH" dist/
+          zip -r Kronos_macOS_VST3.zip dist/Kronos.vst3
+
+      - name: Clean up Keychain
+        if: always()
+        run: |
+          security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true
+
+      - name: Upload Raw macOS VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kronos-macOS-VST3-Raw
+          path: Kronos_macOS_VST3.zip
+          retention-days: 7
+
+      - name: Upload macOS Installer PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kronos-macOS-Installer
+          path: Kronos_macOS_Installer.pkg
+          retention-days: 7
+
+  build-windows:
+    name: Build Windows VST3 & Installer
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JUCE
+        run: |
+          git clone --branch 8.0.13 --depth 1 https://github.com/juce-framework/JUCE.git JUCE
+
+      - name: Update Jucer Module Paths for Windows CI
+        shell: bash
+        run: |
+          python -c '
+          import os
+          workspace = os.environ.get("GITHUB_WORKSPACE", "")
+          modules_path = os.path.join(workspace, "JUCE", "modules").replace("\\", "/")
+          with open("Kronos.jucer", "r") as f:
+              text = f.read()
+          text = text.replace("C:/JUCE/modules", modules_path)
+          text = text.replace("useGlobalPath=\"1\"", "useGlobalPath=\"0\"")
+          with open("Kronos.jucer", "w") as f:
+              f.write(text)
+          '
+
+      - name: Download Projucer CLI (Windows)
+        shell: bash
+        run: |
+          curl -L https://github.com/juce-framework/JUCE/releases/download/8.0.13/juce-8.0.13-windows.zip -o juce.zip
+          mkdir -p temp_projucer
+          unzip -q juce.zip -d temp_projucer
+          mv temp_projucer/JUCE/Projucer.exe ./Projucer.exe
+          rm -rf temp_projucer juce.zip
+
+      - name: Generate Visual Studio Solution
+        run: |
+          ./Projucer.exe --resave Kronos.jucer
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build VST3 (x64 Release)
+        run: |
+          msbuild Builds/VisualStudio2022/Kronos.sln /p:Configuration=Release /p:Platform=x64
+
+      - name: Build Installer (Inno Setup)
+        run: |
+          iscc installer_win.iss
+
+      - name: Upload Windows Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kronos-Windows-Installer
+          path: Output/Kronos_Windows_Installer.exe
+          retention-days: 7

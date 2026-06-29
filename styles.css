@@ -1,0 +1,382 @@
+/* KRONOS DRONE SYNTHESIZER AESTHETIC SYSTEM */
+
+:root {
+    --bg-main: #252528;          /* Matte mid-gray base */
+    --bg-overlay: rgba(30, 30, 32, 0.45); /* Glass panel */
+    --fg-main: #e0e0e6;          /* Light gray text */
+    --fg-muted: #8e8e93;         /* Medium-dark gray text */
+    --accent: #d1d1d6;           /* UI element light gray */
+    --accent-glow: rgba(255, 255, 255, 0.2);
+    --font-ui: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: 'Space Mono', monospace;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--fg-main);
+    font-family: var(--font-ui);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#app-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: grid;
+    grid-template-rows: 60px 1fr;
+    padding: 20px;
+}
+
+/* ==========================================================================
+   Background Canvas
+   ========================================================================== */
+#canvas-visualizer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    background-color: var(--bg-main);
+}
+
+/* ==========================================================================
+   Overlay screen for Audio Context Unlock
+   ========================================================================== */
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(24, 24, 26, 0.95);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    transition: opacity 0.5s ease, visibility 0.5s ease;
+    backdrop-filter: blur(8px);
+}
+
+.overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.overlay-content {
+    text-align: center;
+    max-width: 600px;
+    padding: 40px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: rgba(35, 35, 38, 0.5);
+    border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.logo {
+    font-size: 3.5rem;
+    font-weight: 200;
+    letter-spacing: 0.8rem;
+    margin-bottom: 10px;
+    color: #ffffff;
+    text-indent: 0.8rem;
+}
+
+.subtitle {
+    font-size: 0.85rem;
+    font-weight: 400;
+    letter-spacing: 0.25rem;
+    color: var(--fg-muted);
+    margin-bottom: 20px;
+}
+
+.specs {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--accent);
+    opacity: 0.6;
+    margin-bottom: 40px;
+}
+
+.btn-primary {
+    background-color: var(--accent);
+    color: #1a1a1f;
+    border: none;
+    padding: 14px 36px;
+    font-family: var(--font-ui);
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.15rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.btn-primary:hover {
+    background-color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 255, 255, 0.15);
+}
+
+/* ==========================================================================
+   Overlay Header
+   ========================================================================== */
+.overlay-header {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 10px;
+    pointer-events: none;
+}
+
+.brand {
+    font-size: 1.5rem;
+    font-weight: 200;
+    letter-spacing: 0.4rem;
+    color: #ffffff;
+    pointer-events: auto;
+}
+
+.tagline {
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0.15rem;
+    color: var(--fg-muted);
+    margin-left: 15px;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    padding-left: 15px;
+}
+
+.midi-status {
+    display: flex;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1rem;
+    color: var(--fg-muted);
+    pointer-events: auto;
+}
+
+.status-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--fg-muted);
+    margin-right: 8px;
+}
+
+.status-indicator.active {
+    background-color: #a3e635;
+    box-shadow: 0 0 8px #a3e635;
+}
+
+/* ==========================================================================
+   Sidebar overlay for Controls
+   ========================================================================== */
+.control-panel-overlay {
+    position: absolute;
+    left: 40px;
+    top: 100px;
+    bottom: 200px;
+    width: 320px;
+    z-index: 5;
+    display: flex;
+    justify-content: space-around;
+    padding: 30px 10px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+.slider-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+}
+
+.slider-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+    text-align: center;
+    font-family: var(--font-mono);
+}
+
+.slider-num {
+    font-size: 0.65rem;
+    color: var(--fg-muted);
+    margin-bottom: 2px;
+}
+
+.slider-name {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08rem;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 4px;
+    font-family: var(--font-ui);
+}
+
+.slider-val {
+    font-size: 0.75rem;
+    color: var(--accent);
+}
+
+/* Custom vertical slider */
+.custom-slider {
+    position: relative;
+    width: 24px;
+    height: calc(100% - 60px);
+    cursor: pointer;
+    touch-action: none;
+}
+
+.slider-track {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 11px;
+    width: 2px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 1px;
+    transition: background 0.2s ease;
+}
+
+.custom-slider:hover .slider-track {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.slider-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: rgba(209, 209, 214, 0.3);
+    border-radius: 1px;
+}
+
+.slider-thumb {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+    transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.custom-slider:hover .slider-thumb {
+    background: #ffffff;
+    transform: translateX(-50%) scale(1.2);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+/* ==========================================================================
+   Keyboard overlay
+   ========================================================================== */
+.keyboard-overlay {
+    position: absolute;
+    bottom: 40px;
+    left: 40px;
+    right: 40px;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.keyboard-container {
+    background: transparent;
+    border: none;
+    padding: 15px;
+    pointer-events: auto;
+    box-shadow: none;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.keyboard-instructions {
+    font-size: 0.65rem;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08rem;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.keyboard-instructions span {
+    font-family: var(--font-mono);
+    color: var(--accent);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+}
+
+.piano-keyboard {
+    display: flex;
+    justify-content: center;
+    position: relative;
+    height: 60px;
+    width: 100%;
+}
+
+.key {
+    background-color: rgba(45, 45, 48, 0.55);
+    border: 1px solid rgba(26, 26, 31, 0.6);
+    border-bottom: 3px solid rgba(26, 26, 31, 0.6);
+    flex: 1;
+    max-width: 40px;
+    height: 100%;
+    cursor: pointer;
+    border-radius: 0 0 4px 4px;
+    transition: background-color 0.1s ease, border-bottom-color 0.1s ease;
+    z-index: 1;
+}
+
+.key.black {
+    background-color: #121214;
+    border: 1px solid #000;
+    max-width: 24px;
+    height: 60%;
+    margin-left: -12px;
+    margin-right: -12px;
+    z-index: 2;
+    border-radius: 0 0 2px 2px;
+}
+
+.key:hover {
+    background-color: rgba(61, 61, 68, 0.7);
+}
+
+.key.black:hover {
+    background-color: #1d1d22;
+}
+
+.key.active {
+    background-color: var(--accent) !important;
+    border-bottom-color: var(--fg-muted);
+}
+
+.key.black.active {
+    background-color: var(--accent) !important;
+    border-bottom-color: #a3a3a3;
+}

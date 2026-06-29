@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KRONOS // Experimental Additive Drone Synthesizer</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app-container">
+        <!-- Start screen overlay to unlock Web Audio -->
+        <div id="audio-unlock-overlay" class="overlay">
+            <div class="overlay-content">
+                <h1 class="logo">KRONOS</h1>
+                <p class="subtitle">EXPERIMENTAL POLYPHONIC ADDITIVE DRONE SYNTHESIZER</p>
+                <p class="specs">512 Partials / Spectral Filter / Inharmonic Warp / 8 Voices</p>
+                <button id="btn-unlock" class="btn-primary">START DSP ENGINE</button>
+            </div>
+        </div>
+
+        <!-- Unified Background Canvas -->
+        <canvas id="canvas-visualizer"></canvas>
+
+        <!-- Overlay Header -->
+        <header class="overlay-header">
+            <div class="header-left">
+                <span class="brand">KRONOS</span>
+                <span class="tagline">drone synthesis laboratory</span>
+            </div>
+            <div id="midi-status" class="midi-status">
+                <span class="status-indicator"></span>
+                <span class="status-text">NO MIDI CONNECTED</span>
+            </div>
+        </header>
+
+        <!-- Sidebar overlay for Controls -->
+        <section class="control-panel-overlay">
+            <div class="slider-wrapper" data-param="detune">
+                <div class="slider-header">
+                    <span class="slider-num">01</span>
+                    <span class="slider-name">DETUNE</span>
+                    <span class="slider-val" id="val-detune">0.00</span>
+                </div>
+                <div class="custom-slider" id="slider-detune">
+                    <div class="slider-track">
+                        <div class="slider-fill"></div>
+                        <div class="slider-thumb"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slider-wrapper" data-param="timbre">
+                <div class="slider-header">
+                    <span class="slider-num">02</span>
+                    <span class="slider-name">TIMBRE</span>
+                    <span class="slider-val" id="val-timbre">0.25</span>
+                </div>
+                <div class="custom-slider" id="slider-timbre">
+                    <div class="slider-track">
+                        <div class="slider-fill"></div>
+                        <div class="slider-thumb"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slider-wrapper" data-param="cutoff">
+                <div class="slider-header">
+                    <span class="slider-num">03</span>
+                    <span class="slider-name">CUTOFF</span>
+                    <span class="slider-val" id="val-cutoff">0.75</span>
+                </div>
+                <div class="custom-slider" id="slider-cutoff">
+                    <div class="slider-track">
+                        <div class="slider-fill"></div>
+                        <div class="slider-thumb"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slider-wrapper" data-param="space">
+                <div class="slider-header">
+                    <span class="slider-num">04</span>
+                    <span class="slider-name">SPACE</span>
+                    <span class="slider-val" id="val-space">0.30</span>
+                </div>
+                <div class="custom-slider" id="slider-space">
+                    <div class="slider-track">
+                        <div class="slider-fill"></div>
+                        <div class="slider-thumb"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Keyboard removed for minimal UI -->
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
