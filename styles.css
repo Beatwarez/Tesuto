@@ -141,26 +141,26 @@ body {
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    padding-bottom: 10px;
+    padding: 2vh 0 1vh 0;
     pointer-events: none;
 }
 
 .brand {
-    font-size: 1.5rem;
+    font-size: 2.5vw;
     font-weight: 200;
-    letter-spacing: 0.4rem;
+    letter-spacing: 0.7vw;
     color: #ffffff;
     pointer-events: auto;
 }
 
 .tagline {
-    font-size: 0.75rem;
+    font-size: 1.15vw;
     font-weight: 400;
-    letter-spacing: 0.15rem;
+    letter-spacing: 0.2vw;
     color: var(--fg-muted);
-    margin-left: 15px;
+    margin-left: 1.5vw;
     border-left: 1px solid rgba(255, 255, 255, 0.1);
-    padding-left: 15px;
+    padding-left: 1.5vw;
 }
 
 .midi-status {
@@ -191,14 +191,14 @@ body {
    ========================================================================== */
 .control-panel-overlay {
     position: absolute;
-    left: 40px;
-    top: 100px;
-    bottom: 200px;
-    width: 320px;
+    left: 4%;
+    top: 18%;
+    height: 70%;
+    width: 32%;
     z-index: 5;
     display: flex;
     justify-content: space-around;
-    padding: 30px 10px;
+    padding: 3vh 1vw;
     background: transparent;
     border: none;
     box-shadow: none;
@@ -215,36 +215,36 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 2.5vh;
     text-align: center;
     font-family: var(--font-mono);
 }
 
 .slider-num {
-    font-size: 0.65rem;
+    font-size: 0.8vw;
     color: var(--fg-muted);
     margin-bottom: 2px;
 }
 
 .slider-name {
-    font-size: 0.75rem;
+    font-size: 1.1vw;
     font-weight: 600;
-    letter-spacing: 0.08rem;
+    letter-spacing: 0.08vw;
     color: rgba(255, 255, 255, 0.9);
     margin-bottom: 4px;
     font-family: var(--font-ui);
 }
 
 .slider-val {
-    font-size: 0.75rem;
+    font-size: 1.1vw;
     color: var(--accent);
 }
 
 /* Custom vertical slider */
 .custom-slider {
     position: relative;
-    width: 24px;
-    height: calc(100% - 60px);
+    width: 3vw;
+    height: 60%;
     cursor: pointer;
     touch-action: none;
 }
@@ -253,7 +253,8 @@ body {
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 11px;
+    left: 50%;
+    transform: translateX(-50%);
     width: 2px;
     background: rgba(255, 255, 255, 0.08);
     border-radius: 1px;
@@ -267,8 +268,9 @@ body {
 .slider-fill {
     position: absolute;
     bottom: 0;
-    left: 0;
-    width: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
     background: rgba(209, 209, 214, 0.3);
     border-radius: 1px;
 }
@@ -277,8 +279,10 @@ body {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    width: 14px;
-    height: 14px;
+    width: 1.4vw;
+    height: 1.4vw;
+    min-width: 8px;
+    min-height: 8px;
     border-radius: 50%;
     background: var(--accent);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);

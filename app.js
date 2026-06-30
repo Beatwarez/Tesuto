@@ -383,10 +383,6 @@ class KronosSynth {
         this.synthNode = null;
 
         // UI elements
-        this.btnUnlock = document.getElementById('btn-unlock');
-        this.overlay = document.getElementById('audio-unlock-overlay');
-        this.midiStatusText = document.querySelector('.status-text');
-        this.midiStatusIndicator = document.querySelector('.status-indicator');
         this.canvas = document.getElementById('canvas-visualizer');
         this.ctx = this.canvas.getContext('2d');
 
@@ -417,13 +413,13 @@ class KronosSynth {
         this.buildPianoKeyboard();
         this.setupKeyboardListeners();
 
-        // Bind start screen unlock trigger
-        this.btnUnlock.addEventListener('click', () => this.initAudio());
-
         // Animation Particles
         this.particles = [];
         this.initParticles();
         this.animate();
+
+        // Initialize Audio engine setup immediately
+        this.initAudio();
     }
 
     async initAudio() {
@@ -431,7 +427,6 @@ class KronosSynth {
             // Bypass Web Audio when running as a native plugin
             const isNative = (window.chrome && window.chrome.webview) || (window.webkit && window.webkit.messageHandlers);
             if (isNative) {
-                this.overlay.classList.add('hidden');
                 console.log("KRONOS running inside native host, Web Audio bypassed.");
                 return;
             }
@@ -464,8 +459,10 @@ class KronosSynth {
             // Connect
             this.synthNode.connect(this.audioContext.destination);
 
-            // Hide overlay
-            this.overlay.classList.add('hidden');
+            // Hide overlay if present
+            if (this.overlay) {
+                this.overlay.classList.add('hidden');
+            }
 
             // Start MIDI
             this.initMIDI();

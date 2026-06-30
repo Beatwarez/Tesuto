@@ -32,7 +32,8 @@ KronosAudioProcessorEditor::KronosAudioProcessorEditor (KronosAudioProcessor& p)
 
     // 3. Configure Editor sizing and resizability
     setResizable (true, true);
-    setResizeLimits (600, 400, 1600, 1000);
+    getConstrainer()->setFixedAspectRatio (960.0 / 580.0);
+    setResizeLimits (600, 362, 1600, 966);
     setSize (960, 580);
 }
 
