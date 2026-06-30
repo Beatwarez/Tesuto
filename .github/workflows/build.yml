@@ -275,6 +275,13 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+
+      - name: Restore NuGet Packages
+        run: |
+          nuget restore Builds/VisualStudio2022/Kronos.sln
+
       - name: Build VST3 (x64 Release)
         run: |
           msbuild Builds/VisualStudio2022/Kronos.sln /p:Configuration=Release /p:Platform=x64
