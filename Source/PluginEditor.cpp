@@ -28,7 +28,7 @@ KronosAudioProcessorEditor::KronosAudioProcessorEditor (KronosAudioProcessor& p)
 
     auto indexFile = tempDir.getChildFile ("index.html");
     indexFile.deleteFile();
-    indexFile.writeText (indexContent);
+    indexFile.replaceWithText (indexContent);
 
     // 2. Add WebView UI
     addAndMakeVisible (webView);
