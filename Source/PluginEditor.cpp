@@ -69,9 +69,9 @@ void KronosAudioProcessorEditor::timerCallback()
         if (auto* rawVal = audioProcessor.apvts.getRawParameterValue (paramIDs[p]))
         {
             float val = rawVal->load();
-            if (std::abs (val - localParams[p]) > 0.001f)
+            if (std::abs (val - webView.localParams[p]) > 0.001f)
             {
-                localParams[p] = val;
+                webView.localParams[p] = val;
                 webView.evaluateJavascript ("if (window.kronosSynth) window.kronosSynth.updateParamFromCpp('" + paramIDs[p] + "', " + juce::String (val) + ");");
             }
         }

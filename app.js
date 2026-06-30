@@ -421,6 +421,9 @@ class KronosSynth {
 
         // Initialize Audio engine setup immediately
         this.initAudio();
+
+        // Request initial parameter states from C++ on load
+        this.sendParamToCpp("queryall", 0);
     }
 
     async initAudio() {
@@ -477,14 +480,13 @@ class KronosSynth {
 
     sendParamToCpp(param, val) {
         if (window.__JUCE__ && window.__JUCE__.backend) {
-            if (window.__JUCE__.backend.sendParamToCpp) {
-                window.__JUCE__.backend.sendParamToCpp(param, val);
-            } else {
-                window.__JUCE__.backend.emitEvent("__juce__invoke", {
-                    name: "sendParamToCpp",
-                    params: [param, val]
-                });
-            }
+            // Replicate JUCE 8's exact getNativeFunction invoke pattern by providing a resultId
+            const resultId = Math.floor(Math.random() * 1000000);
+            window.__JUCE__.backend.emitEvent("__juce__invoke", {
+                name: "sendParamToCpp",
+                params: [param, val],
+                resultId: resultId
+            });
         } else {
             console.log(`sendParamToCpp fallback: ${param} = ${val}`);
         }

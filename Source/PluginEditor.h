@@ -9,6 +9,8 @@
 class KronosWebView : public juce::WebBrowserComponent
 {
 public:
+    float localParams[4] = { -1.0f, -1.0f, -1.0f, -1.0f };
+
     static void logToFile (const juce::String& message)
     {
         auto logFile = juce::File::getSpecialLocation (juce::File::tempDirectory)
@@ -16,7 +18,7 @@ public:
         logFile.appendText (message + "\n");
     }
 
-    static juce::WebBrowserComponent::Options getOptions (KronosAudioProcessor& p)
+    static juce::WebBrowserComponent::Options getOptions (KronosWebView* webViewInstance, KronosAudioProcessor& p)
     {
         // 1. Force clear WebView2 cache folder to bypass any aggressive local caching
         auto folder = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
@@ -53,7 +55,7 @@ public:
 
                 return std::nullopt;
             })
-            .withNativeFunction ("sendParamToCpp", [&p](const juce::var& args, std::function<void (juce::var)> completion)
+            .withNativeFunction ("sendParamToCpp", [webViewInstance, &p](const juce::var& args, std::function<void (juce::var)> completion)
             {
                 logToFile ("C++: sendParamToCpp called. args size = " + juce::String (args.size()));
                 if (args.size() >= 2)
@@ -62,7 +64,12 @@ public:
                     float paramValue = (float)args[1];
                     logToFile ("C++: Received Parameter: " + paramName + " = " + juce::String (paramValue));
 
-                    if (paramName == "noteon")
+                    if (paramName == "queryall")
+                    {
+                        for (int i = 0; i < 4; ++i)
+                            webViewInstance->localParams[i] = -1.0f;
+                    }
+                    else if (paramName == "noteon")
                     {
                         p.triggerNoteOnFromEditor ((int)paramValue, 0.8f);
                     }
@@ -92,7 +99,7 @@ public:
     }
 
     KronosWebView (KronosAudioProcessor& p)
-        : juce::WebBrowserComponent (getOptions (p)),
+        : juce::WebBrowserComponent (getOptions (this, p)),
           processor (p)
     {
     }
@@ -119,7 +126,6 @@ private:
     KronosAudioProcessor& audioProcessor;
     KronosWebView webView;
     bool localActiveNotes[128] = { false };
-    float localParams[4] = { -1.0f, -1.0f, -1.0f, -1.0f };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KronosAudioProcessorEditor)
 };
