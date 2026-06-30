@@ -379,7 +379,7 @@ class CustomSlider {
 // 2b. Custom Knob Pointer Event Manager Class
 // ==========================================================================
 class CustomKnob {
-    constructor(id, min, max, defaultValue, isSeconds, onChange) {
+    constructor(id, min, max, defaultValue, isSeconds, isLogarithmic, onChange) {
         this.element = document.getElementById(id);
         this.dial = this.element.querySelector('.knob-dial');
         
@@ -387,11 +387,12 @@ class CustomKnob {
         this.max = max;
         this.value = defaultValue;
         this.isSeconds = isSeconds;
+        this.isLogarithmic = isLogarithmic;
         this.onChange = onChange;
         this.isDragging = false;
         
         this.startY = 0;
-        this.startValue = 0;
+        this.startValue = defaultValue;
 
         this.updateUI();
 
@@ -409,8 +410,13 @@ class CustomKnob {
     }
 
     updateUI() {
-        const range = this.max - this.min;
-        const pct = (this.value - this.min) / (range > 0 ? range : 1);
+        let pct = 0;
+        if (this.isLogarithmic) {
+            pct = Math.log(this.value / this.min) / Math.log(this.max / this.min);
+        } else {
+            const range = this.max - this.min;
+            pct = (this.value - this.min) / (range > 0 ? range : 1);
+        }
         const degrees = -135 + pct * 270; // 270 degree sweep
         this.dial.style.transform = `rotate(${degrees}deg)`;
     }
@@ -425,9 +431,26 @@ class CustomKnob {
     onPointerMove(e) {
         if (!this.isDragging) return;
         const deltaY = this.startY - e.clientY; // drag up increases
-        const range = this.max - this.min;
-        const deltaVal = (deltaY / 120.0) * range; // 120px for full sweep
-        this.setValue(this.startValue + deltaVal);
+        const pxRange = 120.0; // 120px for full sweep
+        
+        let startPct = 0;
+        if (this.isLogarithmic) {
+            startPct = Math.log(this.startValue / this.min) / Math.log(this.max / this.min);
+        } else {
+            startPct = (this.startValue - this.min) / (this.max - this.min);
+        }
+        
+        const deltaPct = deltaY / pxRange;
+        const newPct = Math.max(0.0, Math.min(1.0, startPct + deltaPct));
+        
+        let newVal = 0;
+        if (this.isLogarithmic) {
+            newVal = this.min * Math.pow(this.max / this.min, newPct);
+        } else {
+            newVal = this.min + newPct * (this.max - this.min);
+        }
+        
+        this.setValue(newVal);
     }
 
     onPointerUp() {
@@ -482,10 +505,10 @@ class KronosSynth {
 
         // Initialize Custom Knobs (ADSR panel)
         this.knobs = {
-            attack: new CustomKnob('knob-attack', 0.05, 5.0, this.values.attack, true, (v) => this.onKnobChange('attack', v)),
-            decay: new CustomKnob('knob-decay', 0.05, 5.0, this.values.decay, true, (v) => this.onKnobChange('decay', v)),
-            sustain: new CustomKnob('knob-sustain', 0.0, 1.0, this.values.sustain, false, (v) => this.onKnobChange('sustain', v)),
-            release: new CustomKnob('knob-release', 0.05, 8.0, this.values.release, true, (v) => this.onKnobChange('release', v))
+            attack: new CustomKnob('knob-attack', 0.01, 5.0, this.values.attack, true, true, (v) => this.onKnobChange('attack', v)),
+            decay: new CustomKnob('knob-decay', 0.01, 5.0, this.values.decay, true, true, (v) => this.onKnobChange('decay', v)),
+            sustain: new CustomKnob('knob-sustain', 0.0, 1.0, this.values.sustain, false, false, (v) => this.onKnobChange('sustain', v)),
+            release: new CustomKnob('knob-release', 0.01, 8.0, this.values.release, true, true, (v) => this.onKnobChange('release', v))
         };
 
         // Build UI overlays and canvas sizing

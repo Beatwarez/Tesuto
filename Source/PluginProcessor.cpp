@@ -20,10 +20,10 @@ KronosAudioProcessor::KronosAudioProcessor()
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("timbre", 1), "Timbre", 0.0f, 1.0f, 0.25f),
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("cutoff", 1), "Cutoff", 0.0f, 1.0f, 0.75f),
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("space", 1), "Space",  0.0f, 1.0f, 0.30f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("attack", 1), "Attack", 0.05f, 5.0f, 0.80f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("decay", 1), "Decay",  0.05f, 5.0f, 0.30f),
+           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("attack", 1), "Attack", juce::NormalisableRange<float> (0.01f, 5.0f, 0.01f, 0.35f), 0.20f),
+           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("decay", 1), "Decay",  juce::NormalisableRange<float> (0.01f, 5.0f, 0.01f, 0.35f), 0.30f),
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("sustain", 1), "Sustain", 0.0f, 1.0f, 0.80f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("release", 1), "Release", 0.05f, 8.0f, 1.50f)
+           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("release", 1), "Release", juce::NormalisableRange<float> (0.01f, 8.0f, 0.01f, 0.35f), 1.00f)
        })
 {
     for (int i = 0; i < 128; ++i)

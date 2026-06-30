@@ -25,7 +25,7 @@ public:
     fundamentalFreq = targetFreq;
     currentFundamentalFreq = targetFreq;
     for (int p = 0; p < 256; ++p)
-      phases[p] = juce::Random::getSystemRandom().nextFloat();
+      phases[p] = 0.0f;
 
     targetAmp = currentlyPlayingNote.noteOnVelocity.asUnsignedFloat();
     voiceActive = true;
