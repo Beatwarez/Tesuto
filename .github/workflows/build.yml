@@ -94,7 +94,8 @@ jobs:
             -configuration Release \
             ARCHS="x86_64 arm64" \
             ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGN_IDENTITY="-"
+            CODE_SIGN_IDENTITY="-" \
+            ENABLE_USER_SCRIPT_SANDBOXING=NO
 
       - name: Sign VST3 Bundle
         env:
