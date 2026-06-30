@@ -7,6 +7,7 @@
 KronosAudioProcessorEditor::KronosAudioProcessorEditor (KronosAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p), webView (p)
 {
+    startTimerHz (30);
     // 1. Extract embedded UI assets from BinaryData and write to temp directory
     auto tempDir = juce::File::getSpecialLocation (juce::File::tempDirectory)
                         .getChildFile ("KronosSynthUI");
@@ -54,4 +55,24 @@ void KronosAudioProcessorEditor::paint (juce::Graphics& g)
 void KronosAudioProcessorEditor::resized()
 {
     webView.setBounds (getLocalBounds());
+}
+
+void KronosAudioProcessorEditor::timerCallback()
+{
+    for (int i = 0; i < 128; ++i)
+    {
+        bool isMidiActive = audioProcessor.activeMidiNotes[i].load();
+        if (isMidiActive != localActiveNotes[i])
+        {
+            localActiveNotes[i] = isMidiActive;
+            if (isMidiActive)
+            {
+                webView.evaluateJavascript ("if (window.kronosSynth) window.kronosSynth.triggerNoteOn(" + juce::String (i) + ", 100);");
+            }
+            else
+            {
+                webView.evaluateJavascript ("if (window.kronosSynth) window.kronosSynth.triggerNoteOff(" + juce::String (i) + ");");
+            }
+        }
+    }
 }

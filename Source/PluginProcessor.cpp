@@ -22,6 +22,9 @@ KronosAudioProcessor::KronosAudioProcessor()
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("space", 1), "Space",  0.0f, 1.0f, 0.30f)
        })
 {
+    for (int i = 0; i < 128; ++i)
+        activeMidiNotes[i] = false;
+
     synth.clearVoices();
     for (int i = 0; i < 8; ++i)
         synth.addVoice (new KronosVoice());
@@ -154,6 +157,21 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         if (auto* voice = dynamic_cast<KronosVoice*> (synth.getVoice (i)))
         {
             voice->updateParams (detune, timbre, cutoff, space);
+        }
+    }
+
+    // Track active midi notes for visualizer feedback
+    for (const auto metadata : midiMessages)
+    {
+        const auto msg = metadata.getMessage();
+        if (msg.isNoteOn())
+            activeMidiNotes[msg.getNoteNumber()] = true;
+        else if (msg.isNoteOff())
+            activeMidiNotes[msg.getNoteNumber()] = false;
+        else if (msg.isAllNotesOff())
+        {
+            for (int i = 0; i < 128; ++i)
+                activeMidiNotes[i] = false;
         }
     }
 

@@ -428,6 +428,14 @@ class KronosSynth {
 
     async initAudio() {
         try {
+            // Bypass Web Audio when running as a native plugin
+            const isNative = (window.chrome && window.chrome.webview) || (window.webkit && window.webkit.messageHandlers);
+            if (isNative) {
+                this.overlay.classList.add('hidden');
+                console.log("KRONOS running inside native host, Web Audio bypassed.");
+                return;
+            }
+
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             this.audioContext = new AudioContext({ sampleRate: 44100 });
 
@@ -512,6 +520,9 @@ class KronosSynth {
                 velocity: velocity
             });
         }
+        
+        // Notify C++ plugin of screen-played note
+        this.sendParamToCpp("noteon", note);
     }
 
     triggerNoteOff(note) {
@@ -524,6 +535,9 @@ class KronosSynth {
                 note: note
             });
         }
+        
+        // Notify C++ plugin of screen-released note
+        this.sendParamToCpp("noteoff", note);
     }
 
     // ==========================================================================
@@ -886,5 +900,5 @@ class KronosSynth {
 
 // Start Synthesizer
 window.addEventListener('DOMContentLoaded', () => {
-    new KronosSynth();
+    window.kronosSynth = new KronosSynth();
 });

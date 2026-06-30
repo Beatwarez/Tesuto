@@ -40,9 +40,18 @@ public:
             }
             
             // Set parameter value in APVTS
+            // Set parameter value in APVTS or handle Note triggers
             if (paramName.isNotEmpty())
             {
-                if (auto* param = processor.apvts.getParameter (paramName))
+                if (paramName == "noteon")
+                {
+                    processor.triggerNoteOnFromEditor ((int)paramValue, 0.8f);
+                }
+                else if (paramName == "noteoff")
+                {
+                    processor.triggerNoteOffFromEditor ((int)paramValue);
+                }
+                else if (auto* param = processor.apvts.getParameter (paramName))
                 {
                     param->setValueNotifyingHost (paramValue);
                 }
@@ -60,7 +69,8 @@ private:
 // ==========================================================================
 // Plugin Editor Class
 // ==========================================================================
-class KronosAudioProcessorEditor : public juce::AudioProcessorEditor
+class KronosAudioProcessorEditor : public juce::AudioProcessorEditor,
+                                   public juce::Timer
 {
 public:
     KronosAudioProcessorEditor (KronosAudioProcessor&);
@@ -68,10 +78,12 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    void timerCallback() override;
 
 private:
     KronosAudioProcessor& audioProcessor;
     KronosWebView webView;
+    bool localActiveNotes[128] = { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KronosAudioProcessorEditor)
 };

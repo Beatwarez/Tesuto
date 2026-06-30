@@ -264,6 +264,17 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState apvts;
+    std::atomic<bool> activeMidiNotes[128];
+
+    void triggerNoteOnFromEditor (int note, float velocity)
+    {
+        synth.noteOn (1, note, velocity);
+    }
+    
+    void triggerNoteOffFromEditor (int note)
+    {
+        synth.noteOff (1, note, 0.0f, true);
+    }
 
 private:
     juce::Synthesiser synth;
