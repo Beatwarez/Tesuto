@@ -16,7 +16,7 @@ public:
                 .withUserDataFolder (juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
                                      .getChildFile ("KronosSynth/WebView2Data")))
             .withNativeIntegrationEnabled (true)
-            .withNativeFunction ("sendParamToCpp", [this](const juce::Array<juce::var>& args, std::function<void (juce::var)> completion)
+            .withNativeFunction ("sendParamToCpp", [this](const juce::var& args, std::function<void (juce::var)> completion)
             {
                 if (args.size() >= 2)
                 {
