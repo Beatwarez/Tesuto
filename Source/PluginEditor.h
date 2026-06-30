@@ -89,7 +89,10 @@ public:
                         if (auto* param = p.apvts.getParameter (paramName))
                         {
                             param->beginChangeGesture();
-                            param->setValueNotifyingHost (paramValue);
+                            if (auto* rangedParam = dynamic_cast<juce::RangedAudioParameter*> (param))
+                                rangedParam->setValueNotifyingHost (rangedParam->getNormalisableRange().convertTo0to1 (paramValue));
+                            else
+                                param->setValueNotifyingHost (paramValue);
                             param->endChangeGesture();
                         }
                     }

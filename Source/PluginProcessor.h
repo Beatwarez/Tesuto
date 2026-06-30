@@ -39,7 +39,6 @@ public:
 
   void noteStopped(bool allowTailOff) override {
     if (allowTailOff) {
-      targetAmp = 0.0f;
       envState = EnvState::release;
     } else {
       envState = EnvState::idle;
