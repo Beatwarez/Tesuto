@@ -49,6 +49,22 @@ jobs:
       - name: Generate Xcode Project
         run: |
           ./Projucer.app/Contents/MacOS/Projucer --resave Kronos.jucer
+          python -c '
+          import os
+          path = "Builds/MacOSX/Kronos.xcodeproj/project.pbxproj"
+          if os.path.exists(path):
+              with open(path, "r") as f:
+                  text = f.read()
+              idx = text.find("/* Create VST3 Manifest */ = {")
+              if idx != -1:
+                  ss_idx = text.find("shellScript =", idx)
+                  if ss_idx != -1:
+                      semi_idx = text.find(";", ss_idx)
+                      text = text[:ss_idx] + "shellScript = \"echo \\\"Skipping VST3 Manifest on CI\\\"\\n\";" + text[semi_idx + 1:]
+                      with open(path, "w") as f:
+                          f.write(text)
+                      print("Bypassed VST3 Manifest script phase successfully.")
+          '
 
       - name: Install macOS Certificates
         env:
