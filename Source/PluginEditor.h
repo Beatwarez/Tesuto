@@ -10,7 +10,7 @@ class KronosWebView : public juce::WebBrowserComponent
 {
 public:
     KronosWebView (KronosAudioProcessor& p)
-        : juce::WebBrowserComponent (juce::WebBrowserComponent::Options().withResourceProvider (nullptr)),
+        : juce::WebBrowserComponent (juce::WebBrowserComponent::Options()),
           processor (p)
     {
     }
@@ -21,13 +21,27 @@ public:
         if (newURL.startsWith ("kronos://"))
         {
             juce::URL url (newURL);
-            auto name = url.getParameterValue ("name");
-            auto value = url.getParameterValue ("value").getFloatValue();
+            auto names = url.getParameterNames();
+            auto values = url.getParameterValues();
+            
+            juce::String paramName;
+            float paramValue = 0.0f;
+            
+            for (int i = 0; i < names.size(); ++i)
+            {
+                if (names[i] == "name")
+                    paramName = values[i];
+                else if (names[i] == "value")
+                    paramValue = values[i].getFloatValue();
+            }
             
             // Set parameter value in APVTS
-            if (auto* param = processor.apvts.getParameter (name))
+            if (paramName.isNotEmpty())
             {
-                param->setValueNotifyingHost (value);
+                if (auto* param = processor.apvts.getParameter (paramName))
+                {
+                    param->setValueNotifyingHost (paramValue);
+                }
             }
             
             return false; // Block actual browser page redirect

@@ -27,7 +27,7 @@ KronosAudioProcessorEditor::KronosAudioProcessorEditor (KronosAudioProcessor& p)
     addAndMakeVisible (webView);
 
     // Point the web view to the extracted index.html file
-    webView.goToURL (juce::URL (indexFile).toString());
+    webView.goToURL (juce::URL (indexFile).toString (true));
 
     // 3. Configure Editor sizing and resizability
     setResizable (true, true);

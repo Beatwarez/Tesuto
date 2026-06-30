@@ -224,8 +224,8 @@ class KronosSound : public juce::SynthesiserSound
 {
 public:
     KronosSound() {}
-    bool canPlayNote (int) override { return true; }
-    bool canPlayChannel (int) override { return true; }
+    bool appliesToNote (int) override { return true; }
+    bool appliesToChannel (int) override { return true; }
 };
 
 // ==========================================================================
