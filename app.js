@@ -225,8 +225,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 
                 const activePartials = [];
 
-                // CLOUD reverb parameters
-                const reverbAmount = cloudVal * 0.98;
+                // CLOUD decay time in seconds (0.1s at min, up to 15.0s at max)
+                const decayTimeSeconds = 0.1 + cloudVal * cloudVal * 14.9;
                 const p_start = Math.floor(MAX_PARTIALS * (1.0 - cloudVal));
 
                 // 1. Apply Spectral Diffusion (amplitude blur across adjacent harmonics) at block rate
@@ -253,33 +253,35 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                         let rawVal = 0.0;
                         switch (shapeIndex) {
                             case 0: // 1. Warm Triangle/Saw
-                                rawVal = 1.0 / Math.pow(harmonicIndex, 1.5); break;
+                                rawVal = 1.0 / Math.pow(harmonicIndex, 1.3); break;
                             case 1: // 2. Hollow Square (Odd harmonics only)
-                                rawVal = (p % 2 === 0) ? (1.0 / harmonicIndex) : 0.0; break;
+                                rawVal = (p % 2 === 0) ? (1.0 / harmonicIndex) : (0.08 / harmonicIndex); break;
                             case 2: // 3. Comb Filter / Phased
-                                rawVal = (Math.sin(p * 0.22) * 0.5 + 0.5) / Math.sqrt(harmonicIndex); break;
+                                rawVal = (Math.sin(p * 0.22) * 0.4 + 0.6) / Math.sqrt(harmonicIndex); break;
                             case 3: // 4. High Fizz (High-pass)
-                                rawVal = (p / 256.0) * (1.0 / Math.sqrt(harmonicIndex)); break;
+                                rawVal = (0.1 + 0.9 * (p / 256.0)) * (1.0 / Math.sqrt(harmonicIndex)); break;
                             case 4: // 5. Formant Vocal "Ooh" (Double peaks near H3 & H8)
                                 rawVal = Math.exp(-Math.pow(harmonicIndex - 3, 2) / 2)
-                                     + 0.5 * Math.exp(-Math.pow(harmonicIndex - 8, 2) / 8); break;
+                                     + 0.5 * Math.exp(-Math.pow(harmonicIndex - 8, 2) / 8)
+                                     + 0.05 / harmonicIndex; break;
                             case 5: // 6. Formant Vocal "Aah" (Double peaks near H6 & H14)
                                 rawVal = Math.exp(-Math.pow(harmonicIndex - 6, 2) / 4)
-                                     + 0.4 * Math.exp(-Math.pow(harmonicIndex - 14, 2) / 16); break;
+                                     + 0.4 * Math.exp(-Math.pow(harmonicIndex - 14, 2) / 16)
+                                     + 0.05 / harmonicIndex; break;
                             case 6: // 7. Octave Double (Even harmonics dominant)
-                                rawVal = (p % 2 === 1) ? (1.0 / Math.pow(harmonicIndex, 1.2)) : (0.1 / harmonicIndex); break;
+                                rawVal = (p % 2 === 1) ? (1.0 / Math.pow(harmonicIndex, 1.2)) : (0.15 / harmonicIndex); break;
                             case 7: // 8. Metallic / Inharmonic (Golden ratio spacing)
-                                rawVal = (Math.sin(p * 1.618) * 0.5 + 0.5) / Math.pow(harmonicIndex, 0.8); break;
+                                rawVal = (Math.sin(p * 1.618) * 0.4 + 0.6) / Math.pow(harmonicIndex, 0.7); break;
                             case 8: // 9. Resonance Spike (Resonant peak at H12)
-                                rawVal = (p === 0) ? 1.0 : (0.05 + 0.95 * Math.exp(-Math.pow(harmonicIndex - 12, 2) / 2)); break;
+                                rawVal = (p === 0) ? 1.0 : (0.08 + 0.92 * Math.exp(-Math.pow(harmonicIndex - 12, 2) / 2)); break;
                             case 9: // 10. Grit (Deterministic noise-like hash)
-                                rawVal = (Math.sin(p * 123.456) * 0.5 + 0.5) / harmonicIndex; break;
+                                rawVal = (Math.sin(p * 123.456) * 0.3 + 0.7) / harmonicIndex; break;
                             default:
                                 rawVal = 0.0; break;
                         }
                         
-                        const baseline = 0.15 / Math.pow(harmonicIndex, 1.1);
-                        return rawVal * 0.85 + baseline;
+                        const baseline = 0.05 / Math.sqrt(harmonicIndex);
+                        return rawVal * 0.90 + baseline;
                     };
 
                     const scaledTimbre = timbreVal * 9.0;
@@ -316,9 +318,10 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                         pR_block[p] = voice.panRight[p] * (1 - spaceVal) + 1.0 * spaceVal;
                     }
 
-                    // Reverb time-constant (alpha) per partial
+                    // Reverb time-constant (alpha) per partial (sample-rate independent)
                     if (p >= p_start) {
-                        alpha_block[p] = 1.0 - (reverbAmount * 0.96);
+                        const alpha = 1.0 / (sampleRate * decayTimeSeconds);
+                        alpha_block[p] = (alpha > 1.0) ? 1.0 : alpha;
                     } else {
                         alpha_block[p] = 1.0;
                     }
@@ -353,7 +356,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                         if (idx > 0) {
                             const p_prev = activePartials[idx - 1];
                             const distance = Math.abs(freqs[p] - freqs[p_prev]);
-                            let modIndex = (alterVal * alterVal * 1.5 * voice.smoothedAmps[p_prev]) / (distance + 0.1);
+                            const normDistance = distance / voice.currentFreq;
+                            let modIndex = (alterVal * alterVal * 1.5 * voice.smoothedAmps[p_prev]) / (normDistance + 0.05);
                             if (modIndex > 2.0) modIndex = 2.0;
                             modPhase += modIndex * prevVal;
                         }
@@ -753,6 +757,14 @@ class KronosSynth {
             }
             this.knobs[param].value = val;
             this.knobs[param].updateUI();
+        }
+
+        // Sync changes to the AudioWorklet node if active
+        if (this.synthNode) {
+            const audioParam = this.synthNode.parameters.get(param);
+            if (audioParam) {
+                audioParam.setValueAtTime(val, this.audioContext.currentTime);
+            }
         }
     }
 

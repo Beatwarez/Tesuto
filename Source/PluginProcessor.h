@@ -135,33 +135,36 @@ public:
         switch (shapeIndex)
         {
             case 0: // 1. Warm Triangle/Saw
-                rawVal = 1.0f / std::pow ((float)harmonicIndex, 1.5f); break;
+                rawVal = 1.0f / std::pow ((float)harmonicIndex, 1.3f); break;
             case 1: // 2. Hollow Square (Odd harmonics only)
-                rawVal = (p % 2 == 0) ? (1.0f / (float)harmonicIndex) : 0.0f; break;
+                rawVal = (p % 2 == 0) ? (1.0f / (float)harmonicIndex) : (0.08f / (float)harmonicIndex); break;
             case 2: // 3. Comb Filter / Phased
-                rawVal = (std::sin ((float)p * 0.22f) * 0.5f + 0.5f) / std::sqrt ((float)harmonicIndex); break;
+                rawVal = (std::sin ((float)p * 0.22f) * 0.4f + 0.6f) / std::sqrt ((float)harmonicIndex); break;
             case 3: // 4. High Fizz (High-pass)
-                rawVal = ((float)p / 256.0f) * (1.0f / std::sqrt ((float)harmonicIndex)); break;
+                rawVal = (0.1f + 0.9f * ((float)p / 256.0f)) * (1.0f / std::sqrt ((float)harmonicIndex)); break;
             case 4: // 5. Formant Vocal "Ooh" (Double peaks near H3 & H8)
                 rawVal = std::exp (-std::pow ((float)harmonicIndex - 3.0f, 2.0f) / 2.0f)
-                     + 0.5f * std::exp (-std::pow ((float)harmonicIndex - 8.0f, 2.0f) / 8.0f); break;
+                     + 0.5f * std::exp (-std::pow ((float)harmonicIndex - 8.0f, 2.0f) / 8.0f)
+                     + 0.05f / (float)harmonicIndex; break;
             case 5: // 6. Formant Vocal "Aah" (Double peaks near H6 & H14)
                 rawVal = std::exp (-std::pow ((float)harmonicIndex - 6.0f, 2.0f) / 4.0f)
-                     + 0.4f * std::exp (-std::pow ((float)harmonicIndex - 14.0f, 2.0f) / 16.0f); break;
+                     + 0.4f * std::exp (-std::pow ((float)harmonicIndex - 14.0f, 2.0f) / 16.0f)
+                     + 0.05f / (float)harmonicIndex; break;
             case 6: // 7. Octave Double (Even harmonics dominant)
-                rawVal = (p % 2 == 1) ? (1.0f / std::pow ((float)harmonicIndex, 1.2f)) : (0.1f / (float)harmonicIndex); break;
+                rawVal = (p % 2 == 1) ? (1.0f / std::pow ((float)harmonicIndex, 1.2f)) : (0.15f / (float)harmonicIndex); break;
             case 7: // 8. Metallic / Inharmonic (Golden ratio spacing)
-                rawVal = (std::sin ((float)p * 1.618f) * 0.5f + 0.5f) / std::pow ((float)harmonicIndex, 0.8f); break;
+                rawVal = (std::sin ((float)p * 1.618f) * 0.4f + 0.6f) / std::pow ((float)harmonicIndex, 0.7f); break;
             case 8: // 9. Resonance Spike (Resonant peak at H12)
-                rawVal = (p == 0) ? 1.0f : (0.05f + 0.95f * std::exp (-std::pow ((float)harmonicIndex - 12.0f, 2.0f) / 2.0f)); break;
+                rawVal = (p == 0) ? 1.0f : (0.08f + 0.92f * std::exp (-std::pow ((float)harmonicIndex - 12.0f, 2.0f) / 2.0f)); break;
             case 9: // 10. Grit (Deterministic noise-like hash)
-                rawVal = (std::sin ((float)p * 123.456f) * 0.5f + 0.5f) / (float)harmonicIndex; break;
+                rawVal = (std::sin ((float)p * 123.456f) * 0.3f + 0.7f) / (float)harmonicIndex; break;
             default:
                 rawVal = 0.0f; break;
         }
         
-        float baseline = 0.15f / std::pow ((float)harmonicIndex, 1.1f);
-        return rawVal * 0.85f + baseline;
+        // Dynamic sheen baseline (adds subtle bright high frequencies without masking the shape)
+        float baseline = 0.05f / std::sqrt ((float)harmonicIndex);
+        return rawVal * 0.90f + baseline;
     };
 
     // Morph between shapes based on voiceTimbre
@@ -173,8 +176,8 @@ public:
       timbreMix = 1.0f;
     }
 
-    // CLOUD reverb parameters
-    float reverbAmount = cloudVal * 0.98f;
+    // CLOUD decay time in seconds (0.1s at min, up to 15.0s at max)
+    float decayTimeSeconds = 0.1f + cloudVal * cloudVal * 14.9f;
     int p_start = static_cast<int>(256.0f * (1.0f - cloudVal));
 
     // 1. Apply Spectral Diffusion (amplitude blur across adjacent harmonics) at block rate
@@ -227,9 +230,10 @@ public:
         pR_block[p] = panRight[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
       }
 
-      // Reverb time-constant (alpha) per partial
+      // Reverb time-constant (alpha) per partial (sample-rate independent)
       if (p >= p_start) {
-        alpha_block[p] = 1.0f - (reverbAmount * 0.96f);
+        float alpha = 1.0f / (currentSampleRate * decayTimeSeconds);
+        alpha_block[p] = (alpha > 1.0f) ? 1.0f : alpha;
       } else {
         alpha_block[p] = 1.0f; // Instant response
       }
@@ -265,7 +269,9 @@ public:
         if (i > 0) {
           int p_prev = activePartials[i - 1];
           float distance = std::abs (freqs[p] - freqs[p_prev]);
-          float modIndex = (alterVal * alterVal * 1.5f * smoothedAmps[p_prev]) / (distance + 0.1f);
+          // Normalize the distance by the fundamental frequency to make it pitch-independent
+          float normDistance = distance / currentFundamentalFreq;
+          float modIndex = (alterVal * alterVal * 1.5f * smoothedAmps[p_prev]) / (normDistance + 0.05f);
           if (modIndex > 2.0f) modIndex = 2.0f;
           modPhase += modIndex * prevVal;
         }
