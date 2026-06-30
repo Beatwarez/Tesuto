@@ -12,7 +12,7 @@ KronosAudioProcessorEditor::KronosAudioProcessorEditor (KronosAudioProcessor& p)
     addAndMakeVisible (webView);
 
     // 2. Point the web view to the virtual origin managed by the C++ ResourceProvider
-    webView.goToURL ("http://kronos.local/index.html");
+    webView.goToURL (juce::WebBrowserComponent::getResourceProviderRoot());
 
     // 3. Configure Editor sizing and resizability
     setResizable (true, true);
