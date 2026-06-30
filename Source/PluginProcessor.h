@@ -258,11 +258,11 @@ public:
   std::atomic<bool> activeMidiNotes[128];
 
   void triggerNoteOnFromEditor(int note, float velocity) {
-    synth.processNextMidiEvent(juce::MidiMessage::noteOn(1, note, velocity));
+    synth.noteOn(1, note, velocity);
   }
 
   void triggerNoteOffFromEditor(int note) {
-    synth.processNextMidiEvent(juce::MidiMessage::noteOff(1, note, 0.0f));
+    synth.noteOff(1, note, 0.0f, true);
   }
 
 private:
