@@ -269,7 +269,6 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 for (let i = 0; i < bufferLength; i++) {
                     let sumL = 0.0;
                     let sumR = 0.0;
-                    let prevVal = 0.0;
 
                     for (let p = 0; p < MAX_PARTIALS; p++) {
                         const f = freqs[p];
@@ -282,31 +281,23 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                             voice.phases[p] -= 1.0;
                         }
 
-                        // PM Chain modulation
-                        let modPhase = voice.phases[p];
-                        if (p > 0) {
-                            const distance = Math.abs(freqs[p] - freqs[p-1]);
-                            const modIndex = (alterVal * alterVal * 15.0 * amps[p-1]) / (distance + 0.01);
-                            modPhase += modIndex * prevVal;
-                        }
-
-                        // Lookup sine table with modulated phase wrapped to [0, 1)
-                        let normModPhase = modPhase % 1.0;
-                        if (normModPhase < 0) normModPhase += 1.0;
-                        const idx = ((normModPhase * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
-                        const val = SINE_TABLE[idx];
-                        prevVal = val;
-
                         if (a < 0.0001) continue;
+
+                        // Lookup sine table with phase wrapped to [0, 1)
+                        const idx = ((voice.phases[p] * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
+                        const val = SINE_TABLE[idx];
 
                         // Balanced Panning: keep fundamental (p == 0) centered (0.707), and alternate Left/Right for higher harmonics
                         let pL, pR;
                         if (p === 0) {
                             pL = voice.panLeft[p] * (1 - spaceVal) + 0.707 * spaceVal;
                             pR = voice.panRight[p] * (1 - spaceVal) + 0.707 * spaceVal;
+                        } else if (p % 2 === 0) {
+                            pL = voice.panLeft[p] * (1 - spaceVal) + 1.0 * spaceVal;
+                            pR = voice.panRight[p] * (1 - spaceVal) + 0.0 * spaceVal;
                         } else {
-                            pL = voice.panLeft[p] * (1 - spaceVal) + (p % 2 === 1 ? 1.0 : 0.0) * spaceVal;
-                            pR = voice.panRight[p] * (1 - spaceVal) + (p % 2 === 0 ? 1.0 : 0.0) * spaceVal;
+                            pL = voice.panLeft[p] * (1 - spaceVal) + 0.0 * spaceVal;
+                            pR = voice.panRight[p] * (1 - spaceVal) + 1.0 * spaceVal;
                         }
 
                         sumL += val * a * pL;

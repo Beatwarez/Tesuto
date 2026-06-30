@@ -189,7 +189,6 @@ public:
       float envVal = adsr.getNextSample();
       float sampleL = 0.0f;
       float sampleR = 0.0f;
-      float prevVal = 0.0f;
 
       for (int p = 0; p < 256; ++p) {
         float f = freqs[p];
@@ -199,26 +198,21 @@ public:
         if (phases[p] >= 1.0f)
           phases[p] -= 1.0f;
 
-        float modPhase = phases[p];
-        if (p > 0) {
-          float distance = std::abs (freqs[p] - freqs[p-1]);
-          float modIndex = (alterVal * alterVal * 15.0f * amps[p-1]) / (distance + 0.01f);
-          modPhase += modIndex * prevVal;
-        }
-
-        float val = std::sin(modPhase * juce::MathConstants<float>::twoPi);
-        prevVal = val;
-
         if (a < 0.0001f)
           continue;
+
+        float val = std::sin(phases[p] * juce::MathConstants<float>::twoPi);
 
         float pL, pR;
         if (p == 0) {
           pL = panLeft[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
           pR = panRight[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
+        } else if (p % 2 == 0) {
+          pL = panLeft[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
+          pR = panRight[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
         } else {
-          pL = panLeft[p] * (1.0f - spaceVal) + (p % 2 == 1 ? 1.0f : 0.0f) * spaceVal;
-          pR = panRight[p] * (1.0f - spaceVal) + (p % 2 == 0 ? 1.0f : 0.0f) * spaceVal;
+          pL = panLeft[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
+          pR = panRight[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
         }
 
         sampleL += val * a * pL;
