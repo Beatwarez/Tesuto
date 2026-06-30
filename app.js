@@ -20,7 +20,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             { name: 'detune', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'timbre', defaultValue: 0.25, minValue: 0.0, maxValue: 1.0 },
             { name: 'cutoff', defaultValue: 0.75, minValue: 0.0, maxValue: 1.0 },
-            { name: 'space', defaultValue: 0.3, minValue: 0.0, maxValue: 1.0 }
+            { name: 'space', defaultValue: 0.3, minValue: 0.0, maxValue: 1.0 },
+            { name: 'alter', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 }
         ];
     }
 
@@ -46,9 +47,9 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 panRight: new Float32Array(MAX_PARTIALS)
             });
             for (let p = 0; p < MAX_PARTIALS; p++) {
-                this.voices[i].phases[p] = Math.random();
+                this.voices[i].phases[p] = 0.0;
                 this.voices[i].phaseDrifts[p] = Math.random() * Math.PI * 2;
-                const basePan = p % 2 === 0 ? 0.25 : 0.75;
+                const basePan = p === 0 ? 0.5 : (p % 2 === 0 ? 0.25 : 0.75);
                 this.voices[i].panLeft[p] = Math.sqrt(1 - basePan);
                 this.voices[i].panRight[p] = Math.sqrt(basePan);
             }
@@ -93,7 +94,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             voice.freq = targetFreq;
             voice.currentFreq = targetFreq;
             for (let p = 0; p < MAX_PARTIALS; p++) {
-                voice.phases[p] = Math.random();
+                voice.phases[p] = 0.0;
             }
         } else {
             // Pitch glide if reusing active voice
@@ -155,6 +156,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             const timbreVal = parameters.timbre[0];
             const cutoffVal = parameters.cutoff[0];
             const spaceVal = parameters.space[0];
+            const alterVal = parameters.alter ? parameters.alter[0] : 0.0;
 
             // Correctly scale envelope step sizes for block-rate updates (128 samples per block)
             // Drone envelopes: smooth attack (approx 0.8s), longer release (approx 1.5s)
@@ -212,19 +214,46 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     const stretch = detuneVal * detuneVal * 3.5 * Math.sin(harmonicIndex * 1.57 + p * 0.1);
                     freqs[p] = voice.currentFreq * (harmonicIndex + stretch);
 
-                    // Timbre Morph
-                    let baseAmp = 0.0;
-                    if (timbreVal < 0.5) {
-                        const mix = timbreVal * 2.0;
-                        const ampA = 1.0 / Math.pow(harmonicIndex, 1.2);
-                        const ampB = (Math.sin(p * 0.25) * 0.5 + 0.5) / Math.sqrt(harmonicIndex);
-                        baseAmp = ampA * (1 - mix) + ampB * mix;
-                    } else {
-                        const mix = (timbreVal - 0.5) * 2.0;
-                        const ampB = (Math.sin(p * 0.25) * 0.5 + 0.5) / Math.sqrt(harmonicIndex);
-                        const ampC = (1.0 - (p / MAX_PARTIALS)) * 0.5;
-                        baseAmp = ampB * (1 - mix) + ampC * mix;
+                    // Timbre Morphing (10 distinct shapes)
+                    const getSpectralShape = (p, harmonicIndex, shapeIndex) => {
+                        switch (shapeIndex) {
+                            case 0: // 1. Warm Triangle/Saw
+                                return 1.0 / Math.pow(harmonicIndex, 1.5);
+                            case 1: // 2. Hollow Square (Odd harmonics only)
+                                return (p % 2 === 0) ? (1.0 / harmonicIndex) : 0.0;
+                            case 2: // 3. Comb Filter / Phased
+                                return (Math.sin(p * 0.22) * 0.5 + 0.5) / Math.sqrt(harmonicIndex);
+                            case 3: // 4. High Fizz (High-pass)
+                                return (p / 256.0) * (1.0 / Math.sqrt(harmonicIndex));
+                            case 4: // 5. Formant Vocal "Ooh" (Double peaks near H3 & H8)
+                                return Math.exp(-Math.pow(harmonicIndex - 3, 2) / 2)
+                                     + 0.5 * Math.exp(-Math.pow(harmonicIndex - 8, 2) / 8);
+                            case 5: // 6. Formant Vocal "Aah" (Double peaks near H6 & H14)
+                                return Math.exp(-Math.pow(harmonicIndex - 6, 2) / 4)
+                                     + 0.4 * Math.exp(-Math.pow(harmonicIndex - 14, 2) / 16);
+                            case 6: // 7. Octave Double (Even harmonics dominant)
+                                return (p % 2 === 1) ? (1.0 / Math.pow(harmonicIndex, 1.2)) : (0.1 / harmonicIndex);
+                            case 7: // 8. Metallic / Inharmonic (Golden ratio spacing)
+                                return (Math.sin(p * 1.618) * 0.5 + 0.5) / Math.pow(harmonicIndex, 0.8);
+                            case 8: // 9. Resonance Spike (Resonant peak at H12)
+                                return (p === 0) ? 1.0 : (0.05 + 0.95 * Math.exp(-Math.pow(harmonicIndex - 12, 2) / 2));
+                            case 9: // 10. Grit (Deterministic noise-like hash)
+                                return (Math.sin(p * 123.456) * 0.5 + 0.5) / harmonicIndex;
+                            default:
+                                return 0.0;
+                        }
+                    };
+
+                    const scaledTimbre = timbreVal * 9.0;
+                    let timbreIdx = Math.floor(scaledTimbre);
+                    let timbreMix = scaledTimbre - timbreIdx;
+                    if (timbreIdx >= 9) {
+                        timbreIdx = 8;
+                        timbreMix = 1.0;
                     }
+
+                    const baseAmp = getSpectralShape(p, harmonicIndex, timbreIdx) * (1 - timbreMix)
+                                  + getSpectralShape(p, harmonicIndex, timbreIdx + 1) * timbreMix;
 
                     // Cutoff Filter
                     const ratio = freqs[p] / cutoffFreq;
@@ -240,11 +269,11 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 for (let i = 0; i < bufferLength; i++) {
                     let sumL = 0.0;
                     let sumR = 0.0;
+                    let prevVal = 0.0;
 
                     for (let p = 0; p < MAX_PARTIALS; p++) {
                         const f = freqs[p];
                         const a = amps[p];
-                        if (a < 0.0001) continue;
 
                         // Increment phase
                         const phaseStep = f / sampleRate;
@@ -253,13 +282,32 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                             voice.phases[p] -= 1.0;
                         }
 
-                        // Lookup sine table
-                        const idx = ((voice.phases[p] * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
-                        const val = SINE_TABLE[idx];
+                        // PM Chain modulation
+                        let modPhase = voice.phases[p];
+                        if (p > 0) {
+                            const distance = Math.abs(freqs[p] - freqs[p-1]);
+                            const modIndex = (alterVal * alterVal * 15.0 * amps[p-1]) / (distance + 0.01);
+                            modPhase += modIndex * prevVal;
+                        }
 
-                        // Pan spread
-                        const pL = voice.panLeft[p] * (1 - spaceVal) + (p % 2 === 0 ? 1 : 0) * spaceVal;
-                        const pR = voice.panRight[p] * (1 - spaceVal) + (p % 2 === 1 ? 1 : 0) * spaceVal;
+                        // Lookup sine table with modulated phase wrapped to [0, 1)
+                        let normModPhase = modPhase % 1.0;
+                        if (normModPhase < 0) normModPhase += 1.0;
+                        const idx = ((normModPhase * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
+                        const val = SINE_TABLE[idx];
+                        prevVal = val;
+
+                        if (a < 0.0001) continue;
+
+                        // Balanced Panning: keep fundamental (p == 0) centered (0.707), and alternate Left/Right for higher harmonics
+                        let pL, pR;
+                        if (p === 0) {
+                            pL = voice.panLeft[p] * (1 - spaceVal) + 0.707 * spaceVal;
+                            pR = voice.panRight[p] * (1 - spaceVal) + 0.707 * spaceVal;
+                        } else {
+                            pL = voice.panLeft[p] * (1 - spaceVal) + (p % 2 === 1 ? 1.0 : 0.0) * spaceVal;
+                            pR = voice.panRight[p] * (1 - spaceVal) + (p % 2 === 0 ? 1.0 : 0.0) * spaceVal;
+                        }
 
                         sumL += val * a * pL;
                         sumR += val * a * pR;
@@ -481,7 +529,7 @@ class KronosSynth {
             timbre: 0.25,
             cutoff: 0.75,
             space: 0.30,
-            param5: 0.00,
+            alter: 0.00,
             param6: 0.25,
             param7: 0.50,
             param8: 0.30,
@@ -497,7 +545,7 @@ class KronosSynth {
             timbre: new CustomSlider('slider-timbre', 0, 1, this.values.timbre, 0.001, (v) => this.onSliderChange('timbre', v)),
             cutoff: new CustomSlider('slider-cutoff', 0, 1, this.values.cutoff, 0.001, (v) => this.onSliderChange('cutoff', v)),
             space: new CustomSlider('slider-space', 0, 1, this.values.space, 0.001, (v) => this.onSliderChange('space', v)),
-            param5: new CustomSlider('slider-param5', 0, 1, this.values.param5, 0.001, (v) => this.onSliderChange('param5', v)),
+            alter: new CustomSlider('slider-alter', 0, 1, this.values.alter, 0.001, (v) => this.onSliderChange('alter', v)),
             param6: new CustomSlider('slider-param6', 0, 1, this.values.param6, 0.001, (v) => this.onSliderChange('param6', v)),
             param7: new CustomSlider('slider-param7', 0, 1, this.values.param7, 0.001, (v) => this.onSliderChange('param7', v)),
             param8: new CustomSlider('slider-param8', 0, 1, this.values.param8, 0.001, (v) => this.onSliderChange('param8', v))

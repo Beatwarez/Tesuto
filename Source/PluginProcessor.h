@@ -9,10 +9,10 @@ class KronosVoice : public juce::MPESynthesiserVoice {
 public:
   KronosVoice() {
     for (int p = 0; p < 256; ++p) {
-      phases[p] = juce::Random::getSystemRandom().nextFloat();
+      phases[p] = 0.0f;
       phaseDrifts[p] = juce::Random::getSystemRandom().nextFloat() *
                        juce::MathConstants<float>::twoPi;
-      float basePan = (p % 2 == 0) ? 0.25f : 0.75f;
+      float basePan = (p == 0) ? 0.5f : ((p % 2 == 0) ? 0.25f : 0.75f);
       panLeft[p] = std::sqrt(1.0f - basePan);
       panRight[p] = std::sqrt(basePan);
     }
@@ -68,6 +68,10 @@ public:
     spaceVal = space;
   }
 
+  void updateAlter(float alter) {
+    alterVal = alter;
+  }
+
   void updateAdsr(float attack, float decay, float sustain, float release) {
     adsrParams.attack = attack;
     adsrParams.decay = decay;
@@ -102,6 +106,57 @@ public:
     float voiceTimbre =
         std::max(0.0f, std::min(1.0f, timbreVal + localTimbreMod));
 
+    // Lambda for the 10 distinct spectral shapes
+    auto getSpectralShape = [] (int p, int harmonicIndex, int shapeIndex) -> float
+    {
+        switch (shapeIndex)
+        {
+            case 0: // 1. Warm Triangle/Saw
+                return 1.0f / std::pow ((float)harmonicIndex, 1.5f);
+                
+            case 1: // 2. Hollow Square (Odd harmonics only)
+                return (p % 2 == 0) ? (1.0f / (float)harmonicIndex) : 0.0f;
+                
+            case 2: // 3. Comb Filter / Phased
+                return (std::sin ((float)p * 0.22f) * 0.5f + 0.5f) / std::sqrt ((float)harmonicIndex);
+                
+            case 3: // 4. High Fizz (High-pass)
+                return ((float)p / 256.0f) * (1.0f / std::sqrt ((float)harmonicIndex));
+                
+            case 4: // 5. Formant Vocal "Ooh" (Double peaks near H3 & H8)
+                return std::exp (-std::pow ((float)harmonicIndex - 3.0f, 2.0f) / 2.0f)
+                     + 0.5f * std::exp (-std::pow ((float)harmonicIndex - 8.0f, 2.0f) / 8.0f);
+                     
+            case 5: // 6. Formant Vocal "Aah" (Double peaks near H6 & H14)
+                return std::exp (-std::pow ((float)harmonicIndex - 6.0f, 2.0f) / 4.0f)
+                     + 0.4f * std::exp (-std::pow ((float)harmonicIndex - 14.0f, 2.0f) / 16.0f);
+                     
+            case 6: // 7. Octave Double (Even harmonics dominant)
+                return (p % 2 == 1) ? (1.0f / std::pow ((float)harmonicIndex, 1.2f)) : (0.1f / (float)harmonicIndex);
+                
+            case 7: // 8. Metallic / Inharmonic (Golden ratio spacing)
+                return (std::sin ((float)p * 1.618f) * 0.5f + 0.5f) / std::pow ((float)harmonicIndex, 0.8f);
+                
+            case 8: // 9. Resonance Spike (Resonant peak at H12)
+                return (p == 0) ? 1.0f : (0.05f + 0.95f * std::exp (-std::pow ((float)harmonicIndex - 12.0f, 2.0f) / 2.0f));
+                
+            case 9: // 10. Grit (Deterministic noise-like hash)
+                return (std::sin ((float)p * 123.456f) * 0.5f + 0.5f) / (float)harmonicIndex;
+                
+            default:
+                return 0.0f;
+        }
+    };
+
+    // Morph between shapes based on voiceTimbre
+    float scaledTimbre = voiceTimbre * 9.0f;
+    int timbreIdx = (int)scaledTimbre;
+    float timbreMix = scaledTimbre - (float)timbreIdx;
+    if (timbreIdx >= 9) {
+      timbreIdx = 8;
+      timbreMix = 1.0f;
+    }
+
     for (int p = 0; p < 256; ++p) {
       int harmonicIndex = p + 1;
 
@@ -112,21 +167,9 @@ public:
                       std::sin((float)harmonicIndex * 1.57f + (float)p * 0.1f));
       freqs[p] = currentFundamentalFreq * ((float)harmonicIndex + stretch);
 
-      // Timbre Morph (modulated by voiceTimbre)
-      float baseAmp = 0.0f;
-      if (voiceTimbre < 0.5f) {
-        float mix = voiceTimbre * 2.0f;
-        float ampA = 1.0f / std::pow((float)harmonicIndex, 1.2f);
-        float ampB = (std::sin((float)p * 0.22f) * 0.5f + 0.5f) /
-                     std::sqrt((float)harmonicIndex);
-        baseAmp = ampA * (1.0f - mix) + ampB * mix;
-      } else {
-        float mix = (voiceTimbre - 0.5f) * 2.0f;
-        float ampB = (std::sin((float)p * 0.22f) * 0.5f + 0.5f) /
-                     std::sqrt((float)harmonicIndex);
-        float ampC = (1.0f - ((float)p / 256.0f)) * 0.5f;
-        baseAmp = ampB * (1.0f - mix) + ampC * mix;
-      }
+      // Timbre Morphing
+      float baseAmp = getSpectralShape (p, harmonicIndex, timbreIdx) * (1.0f - timbreMix)
+                    + getSpectralShape (p, harmonicIndex, timbreIdx + 1) * timbreMix;
 
       // Cutoff limiter
       float ratio = freqs[p] / cutoffFreq;
@@ -146,23 +189,37 @@ public:
       float envVal = adsr.getNextSample();
       float sampleL = 0.0f;
       float sampleR = 0.0f;
+      float prevVal = 0.0f;
 
       for (int p = 0; p < 256; ++p) {
         float f = freqs[p];
         float a = amps[p] * envVal;
-        if (a < 0.0001f)
-          continue;
 
         phases[p] += f / (float)currentSampleRate;
         if (phases[p] >= 1.0f)
           phases[p] -= 1.0f;
 
-        float val = std::sin(phases[p] * juce::MathConstants<float>::twoPi);
+        float modPhase = phases[p];
+        if (p > 0) {
+          float distance = std::abs (freqs[p] - freqs[p-1]);
+          float modIndex = (alterVal * alterVal * 15.0f * amps[p-1]) / (distance + 0.01f);
+          modPhase += modIndex * prevVal;
+        }
 
-        float pL = panLeft[p] * (1.0f - spaceVal) +
-                   (p % 2 == 0 ? 1.0f : 0.0f) * spaceVal;
-        float pR = panRight[p] * (1.0f - spaceVal) +
-                   (p % 2 == 1 ? 1.0f : 0.0f) * spaceVal;
+        float val = std::sin(modPhase * juce::MathConstants<float>::twoPi);
+        prevVal = val;
+
+        if (a < 0.0001f)
+          continue;
+
+        float pL, pR;
+        if (p == 0) {
+          pL = panLeft[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
+          pR = panRight[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
+        } else {
+          pL = panLeft[p] * (1.0f - spaceVal) + (p % 2 == 1 ? 1.0f : 0.0f) * spaceVal;
+          pR = panRight[p] * (1.0f - spaceVal) + (p % 2 == 0 ? 1.0f : 0.0f) * spaceVal;
+        }
 
         sampleL += val * a * pL;
         sampleR += val * a * pR;
@@ -200,6 +257,7 @@ private:
   float timbreVal = 0.25f;
   float cutoffVal = 0.75f;
   float spaceVal = 0.30f;
+  float alterVal = 0.0f;
 
   float localTimbreMod = 0.0f;
   double voiceTime = 0.0;
