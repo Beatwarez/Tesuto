@@ -334,8 +334,9 @@ class CustomSlider {
         const percentage = (this.value - this.min) / (this.max - this.min);
         // Map percentage to CSS styles
         this.fill.style.height = `${percentage * 100}%`;
-        // Offset center of thumb
-        this.thumb.style.bottom = `calc(${percentage * 100}% - 7px)`;
+        // Offset center of thumb dynamically
+        const halfThumbHeight = (this.thumb.offsetHeight || 14) / 2;
+        this.thumb.style.bottom = `calc(${percentage * 100}% - ${halfThumbHeight}px)`;
     }
 
     onPointerDown(e) {

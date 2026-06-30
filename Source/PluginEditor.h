@@ -53,7 +53,9 @@ public:
                 }
                 else if (auto* param = processor.apvts.getParameter (paramName))
                 {
+                    param->beginChangeGesture();
                     param->setValueNotifyingHost (paramValue);
+                    param->endChangeGesture();
                 }
             }
             
