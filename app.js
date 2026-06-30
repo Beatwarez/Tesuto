@@ -206,6 +206,11 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 // Compute partial frequencies and amplitudes (optimized block-rate calculation)
                 const freqs = new Float32Array(MAX_PARTIALS);
                 const amps = new Float32Array(MAX_PARTIALS);
+                const phaseDeltas = new Float32Array(MAX_PARTIALS);
+                const pL_block = new Float32Array(MAX_PARTIALS);
+                const pR_block = new Float32Array(MAX_PARTIALS);
+                
+                const activePartials = [];
 
                 for (let p = 0; p < MAX_PARTIALS; p++) {
                     const harmonicIndex = p + 1;
@@ -263,6 +268,25 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     const lfoDrift = Math.sin(this.time * 1.2 + voice.phaseDrifts[p]) * spaceVal * 0.3;
 
                     amps[p] = baseAmp * filterMult * currentAmp * (1.0 + lfoDrift);
+
+                    // Precalculate phase delta and panning
+                    phaseDeltas[p] = freqs[p] / sampleRate;
+
+                    if (p === 0) {
+                        pL_block[p] = voice.panLeft[p] * (1 - spaceVal) + 0.707 * spaceVal;
+                        pR_block[p] = voice.panRight[p] * (1 - spaceVal) + 0.707 * spaceVal;
+                    } else if (p % 2 === 0) {
+                        pL_block[p] = voice.panLeft[p] * (1 - spaceVal) + 1.0 * spaceVal;
+                        pR_block[p] = voice.panRight[p] * (1 - spaceVal) + 0.0 * spaceVal;
+                    } else {
+                        pL_block[p] = voice.panLeft[p] * (1 - spaceVal) + 0.0 * spaceVal;
+                        pR_block[p] = voice.panRight[p] * (1 - spaceVal) + 1.0 * spaceVal;
+                    }
+
+                    // Collect active partials
+                    if (amps[p] >= 0.0001) {
+                        activePartials.push(p);
+                    }
                 }
 
                 // Sample loop
@@ -270,38 +294,22 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     let sumL = 0.0;
                     let sumR = 0.0;
 
-                    for (let p = 0; p < MAX_PARTIALS; p++) {
-                        const f = freqs[p];
+                    for (let idx = 0; idx < activePartials.length; idx++) {
+                        const p = activePartials[idx];
                         const a = amps[p];
 
                         // Increment phase
-                        const phaseStep = f / sampleRate;
-                        voice.phases[p] += phaseStep;
+                        voice.phases[p] += phaseDeltas[p];
                         if (voice.phases[p] >= 1.0) {
                             voice.phases[p] -= 1.0;
                         }
 
-                        if (a < 0.0001) continue;
-
                         // Lookup sine table with phase wrapped to [0, 1)
-                        const idx = ((voice.phases[p] * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
-                        const val = SINE_TABLE[idx];
+                        const sineIdx = ((voice.phases[p] * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
+                        const val = SINE_TABLE[sineIdx];
 
-                        // Balanced Panning: keep fundamental (p == 0) centered (0.707), and alternate Left/Right for higher harmonics
-                        let pL, pR;
-                        if (p === 0) {
-                            pL = voice.panLeft[p] * (1 - spaceVal) + 0.707 * spaceVal;
-                            pR = voice.panRight[p] * (1 - spaceVal) + 0.707 * spaceVal;
-                        } else if (p % 2 === 0) {
-                            pL = voice.panLeft[p] * (1 - spaceVal) + 1.0 * spaceVal;
-                            pR = voice.panRight[p] * (1 - spaceVal) + 0.0 * spaceVal;
-                        } else {
-                            pL = voice.panLeft[p] * (1 - spaceVal) + 0.0 * spaceVal;
-                            pR = voice.panRight[p] * (1 - spaceVal) + 1.0 * spaceVal;
-                        }
-
-                        sumL += val * a * pL;
-                        sumR += val * a * pR;
+                        sumL += val * a * pL_block[p];
+                        sumR += val * a * pR_block[p];
                     }
 
                     leftChannel[i] += sumL * scaleFactor;

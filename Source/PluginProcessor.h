@@ -2,6 +2,8 @@
 
 #include <JuceHeader.h>
 
+extern float sineTable[32768];
+
 // ==========================================================================
 // 1. Synthesiser Voice Class
 // ==========================================================================
@@ -95,9 +97,15 @@ public:
     // Exponential mapping for cutoff frequency (50Hz to 12000Hz)
     float cutoffFreq = 50.0f * std::pow(2.0f, cutoffVal * 8.0f);
 
-    // Precompute partial amplitudes and frequencies
+    // Precompute partial amplitudes, frequencies, phase deltas, panning, and build active list
     float freqs[256];
     float amps[256];
+    float phaseDeltas[256];
+    float pL_block[256];
+    float pR_block[256];
+
+    int activePartials[256];
+    int numActivePartials = 0;
 
     currentFundamentalFreq +=
         (fundamentalFreq - currentFundamentalFreq) * 0.06f;
@@ -180,6 +188,25 @@ public:
           std::sin((float)voiceTime * 1.2f + phaseDrifts[p]) * spaceVal * 0.3f;
 
       amps[p] = baseAmp * filterMult * targetAmp * (1.0f + lfoDrift);
+
+      // Precalculate phase delta and panning
+      phaseDeltas[p] = freqs[p] / (float)currentSampleRate;
+      
+      if (p == 0) {
+        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
+        pR_block[p] = panRight[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
+      } else if (p % 2 == 0) {
+        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
+        pR_block[p] = panRight[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
+      } else {
+        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
+        pR_block[p] = panRight[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
+      }
+
+      // Collect active partials
+      if (amps[p] >= 0.0001f) {
+        activePartials[numActivePartials++] = p;
+      }
     }
 
     // Mix into output buffers
@@ -190,33 +217,20 @@ public:
       float sampleL = 0.0f;
       float sampleR = 0.0f;
 
-      for (int p = 0; p < 256; ++p) {
-        float f = freqs[p];
+      for (int i = 0; i < numActivePartials; ++i) {
+        int p = activePartials[i];
         float a = amps[p] * envVal;
 
-        phases[p] += f / (float)currentSampleRate;
+        phases[p] += phaseDeltas[p];
         if (phases[p] >= 1.0f)
           phases[p] -= 1.0f;
 
-        if (a < 0.0001f)
-          continue;
+        // Sine table lookup with bitwise wrapping
+        int idx = static_cast<int>(phases[p] * 32768.0f) & 32767;
+        float val = sineTable[idx];
 
-        float val = std::sin(phases[p] * juce::MathConstants<float>::twoPi);
-
-        float pL, pR;
-        if (p == 0) {
-          pL = panLeft[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
-          pR = panRight[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
-        } else if (p % 2 == 0) {
-          pL = panLeft[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
-          pR = panRight[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
-        } else {
-          pL = panLeft[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
-          pR = panRight[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
-        }
-
-        sampleL += val * a * pL;
-        sampleR += val * a * pR;
+        sampleL += val * a * pL_block[p];
+        sampleR += val * a * pR_block[p];
       }
 
       outputBuffer.addSample(0, startSample + s, sampleL * scaleFactor);

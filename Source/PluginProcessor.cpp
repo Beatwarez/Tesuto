@@ -1,6 +1,8 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+float sineTable[32768];
+
 // ==========================================================================
 // Constructor & Destructor
 // ==========================================================================
@@ -27,6 +29,9 @@ KronosAudioProcessor::KronosAudioProcessor()
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("release", 1), "Release", juce::NormalisableRange<float> (0.01f, 8.0f, 0.01f, 0.35f), 1.00f)
        })
 {
+    for (int i = 0; i < 32768; ++i)
+        sineTable[i] = std::sin (((float)i / 32768.0f) * juce::MathConstants<float>::twoPi);
+
     for (int i = 0; i < 128; ++i)
         activeMidiNotes[i] = false;
 
