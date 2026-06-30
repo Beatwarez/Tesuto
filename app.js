@@ -376,6 +376,66 @@ class CustomSlider {
 }
 
 // ==========================================================================
+// 2b. Custom Knob Pointer Event Manager Class
+// ==========================================================================
+class CustomKnob {
+    constructor(id, min, max, defaultValue, isSeconds, onChange) {
+        this.element = document.getElementById(id);
+        this.dial = this.element.querySelector('.knob-dial');
+        
+        this.min = min;
+        this.max = max;
+        this.value = defaultValue;
+        this.isSeconds = isSeconds;
+        this.onChange = onChange;
+        this.isDragging = false;
+        
+        this.startY = 0;
+        this.startValue = 0;
+
+        this.updateUI();
+
+        // Pointer listeners for universal mouse/touch support
+        this.element.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+        window.addEventListener('pointermove', (e) => this.onPointerMove(e));
+        window.addEventListener('pointerup', () => this.onPointerUp());
+    }
+
+    setValue(val) {
+        const clamped = Math.max(this.min, Math.min(this.max, val));
+        this.value = clamped;
+        this.updateUI();
+        if (this.onChange) this.onChange(this.value);
+    }
+
+    updateUI() {
+        const range = this.max - this.min;
+        const pct = (this.value - this.min) / (range > 0 ? range : 1);
+        const degrees = -135 + pct * 270; // 270 degree sweep
+        this.dial.style.transform = `rotate(${degrees}deg)`;
+    }
+
+    onPointerDown(e) {
+        this.isDragging = true;
+        this.startY = e.clientY;
+        this.startValue = this.value;
+        this.element.setPointerCapture(e.pointerId);
+    }
+
+    onPointerMove(e) {
+        if (!this.isDragging) return;
+        const deltaY = this.startY - e.clientY; // drag up increases
+        const range = this.max - this.min;
+        const deltaVal = (deltaY / 120.0) * range; // 120px for full sweep
+        this.setValue(this.startValue + deltaVal);
+    }
+
+    onPointerUp() {
+        this.isDragging = false;
+    }
+}
+
+// ==========================================================================
 // 3. Main Synthesizer Application Manager
 // ==========================================================================
 class KronosSynth {
@@ -392,20 +452,40 @@ class KronosSynth {
         this.notesDown = {};
         this.visualEnvelope = 0.0;
 
-        // 4 Param Values
+        // 12 Param Values (including new right-hand sliders and ADSR knobs)
         this.values = {
             detune: 0.00,
             timbre: 0.25,
             cutoff: 0.75,
-            space: 0.30
+            space: 0.30,
+            param5: 0.00,
+            param6: 0.25,
+            param7: 0.50,
+            param8: 0.30,
+            attack: 0.80,
+            decay: 0.30,
+            sustain: 0.80,
+            release: 1.50
         };
 
-        // Initialize Custom Sliders
+        // Initialize Custom Sliders (Left and Right symmetric panels)
         this.sliders = {
             detune: new CustomSlider('slider-detune', 0, 1, this.values.detune, 0.001, (v) => this.onSliderChange('detune', v)),
             timbre: new CustomSlider('slider-timbre', 0, 1, this.values.timbre, 0.001, (v) => this.onSliderChange('timbre', v)),
             cutoff: new CustomSlider('slider-cutoff', 0, 1, this.values.cutoff, 0.001, (v) => this.onSliderChange('cutoff', v)),
-            space: new CustomSlider('slider-space', 0, 1, this.values.space, 0.001, (v) => this.onSliderChange('space', v))
+            space: new CustomSlider('slider-space', 0, 1, this.values.space, 0.001, (v) => this.onSliderChange('space', v)),
+            param5: new CustomSlider('slider-param5', 0, 1, this.values.param5, 0.001, (v) => this.onSliderChange('param5', v)),
+            param6: new CustomSlider('slider-param6', 0, 1, this.values.param6, 0.001, (v) => this.onSliderChange('param6', v)),
+            param7: new CustomSlider('slider-param7', 0, 1, this.values.param7, 0.001, (v) => this.onSliderChange('param7', v)),
+            param8: new CustomSlider('slider-param8', 0, 1, this.values.param8, 0.001, (v) => this.onSliderChange('param8', v))
+        };
+
+        // Initialize Custom Knobs (ADSR panel)
+        this.knobs = {
+            attack: new CustomKnob('knob-attack', 0.05, 5.0, this.values.attack, true, (v) => this.onKnobChange('attack', v)),
+            decay: new CustomKnob('knob-decay', 0.05, 5.0, this.values.decay, true, (v) => this.onKnobChange('decay', v)),
+            sustain: new CustomKnob('knob-sustain', 0.0, 1.0, this.values.sustain, false, (v) => this.onKnobChange('sustain', v)),
+            release: new CustomKnob('knob-release', 0.05, 8.0, this.values.release, true, (v) => this.onKnobChange('release', v))
         };
 
         // Build UI overlays and canvas sizing
@@ -494,13 +574,32 @@ class KronosSynth {
 
     onSliderChange(param, val) {
         this.values[param] = val;
-        document.getElementById(`val-${param}`).textContent = val.toFixed(2);
+        const displayEl = document.getElementById(`val-${param}`);
+        if (displayEl) {
+            displayEl.textContent = val.toFixed(2);
+        }
 
         if (this.synthNode) {
             const audioParam = this.synthNode.parameters.get(param);
             if (audioParam) {
                 audioParam.setTargetAtTime(val, this.audioContext.currentTime, 0.02);
             }
+        }
+
+        this.sendParamToCpp(param, val);
+    }
+
+    onKnobChange(param, val) {
+        this.values[param] = val;
+        
+        let displayVal = val.toFixed(2);
+        if (param === 'attack' || param === 'decay' || param === 'release') {
+            displayVal += 's';
+        }
+        
+        const displayEl = document.getElementById(`val-${param}`);
+        if (displayEl) {
+            displayEl.textContent = displayVal;
         }
 
         this.sendParamToCpp(param, val);
@@ -515,6 +614,18 @@ class KronosSynth {
             }
             this.sliders[param].value = val;
             this.sliders[param].updateUI();
+        } else if (this.knobs[param] && !this.knobs[param].isDragging) {
+            this.values[param] = val;
+            let displayVal = val.toFixed(2);
+            if (param === 'attack' || param === 'decay' || param === 'release') {
+                displayVal += 's';
+            }
+            const valDisplay = document.getElementById(`val-${param}`);
+            if (valDisplay) {
+                valDisplay.textContent = displayVal;
+            }
+            this.knobs[param].value = val;
+            this.knobs[param].updateUI();
         }
     }
 
@@ -722,8 +833,10 @@ class KronosSynth {
     // 6. Canvas Responsive Resizer
     // ==========================================================================
     resizeCanvas() {
-        this.canvas.width = window.innerWidth * window.devicePixelRatio;
-        this.canvas.height = window.innerHeight * window.devicePixelRatio;
+        const parent = this.canvas.parentElement;
+        const rect = parent ? parent.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight };
+        this.canvas.width = rect.width * window.devicePixelRatio;
+        this.canvas.height = rect.height * window.devicePixelRatio;
         this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
     }
 
@@ -756,10 +869,10 @@ class KronosSynth {
         this.ctx.fillStyle = '#252528';
         this.ctx.fillRect(0, 0, w, h);
 
-        // Shift center coordinates to the right of the screen
-        const centerX = w * 0.6;
+        // Center coordinates inside the middle panel container
+        const centerX = w / 2;
         const centerY = h / 2;
-        const maxRadius = Math.min(w * 0.32, h * 0.42);
+        const maxRadius = Math.min(w * 0.42, h * 0.42);
 
         const detune = this.values.detune;
         const timbre = this.values.timbre;
@@ -782,9 +895,14 @@ class KronosSynth {
             const slider = this.sliders[key];
             const start = slider.getThumbCanvasPos(this.canvas);
             
-            // Connect to orbital layers
-            const t = Date.now() * 0.0004 + index * (Math.PI / 2);
-            const anchorRadius = maxRadius * (0.2 + index * 0.2) * (1.0 - cutoff * 0.1);
+            // Connect to orbital layers (modulo 4 prevents expanding orbit for right side sliders)
+            const orbitIdx = index % 4;
+            let phaseOffset = orbitIdx * (Math.PI / 2);
+            if (index >= 4) {
+                phaseOffset += Math.PI; // Connect to opposite/distinct side of orbits for right sliders
+            }
+            const t = Date.now() * 0.0004 + phaseOffset;
+            const anchorRadius = maxRadius * (0.2 + orbitIdx * 0.2) * (1.0 - cutoff * 0.1);
             
             // Rotate anchor target on grid
             const targetX = centerX + anchorRadius * Math.cos(t);

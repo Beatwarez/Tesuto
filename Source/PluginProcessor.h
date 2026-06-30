@@ -5,7 +5,7 @@
 // ==========================================================================
 // 1. Synthesiser Voice Class
 // ==========================================================================
-class KronosVoice : public juce::SynthesiserVoice
+class KronosVoice : public juce::MPESynthesiserVoice
 {
 public:
     KronosVoice()
@@ -20,15 +20,16 @@ public:
         }
     }
 
-    bool canPlaySound (juce::SynthesiserSound* sound) override
+    bool canPlayNote (const juce::MPENote& note) override
     {
-        return sound != nullptr;
+        juce::ignoreUnused (note);
+        return true;
     }
 
-    void startNote (int midiNoteNumber, float velocity, juce::SynthesiserSound*, int) override
+    void noteStarted() override
     {
-        noteNumber = midiNoteNumber;
-        float targetFreq = 440.0f * std::pow(2.0f, (float)(midiNoteNumber - 69) / 12.0f);
+        noteNumber = currentlyPlayingNote.noteNumber;
+        float targetFreq = (float)currentlyPlayingNote.getFrequencyInHertz();
         
         if (envState == EnvState::idle)
         {
@@ -39,15 +40,16 @@ public:
         }
         else
         {
-            fundamentalFreq = targetFreq; // Glide
+            fundamentalFreq = targetFreq;
         }
 
-        targetAmp = velocity;
+        targetAmp = currentlyPlayingNote.noteOnVelocity.asUnsignedFloat();
         envState = EnvState::attack;
         voiceActive = true;
+        localTimbreMod = currentlyPlayingNote.timbre.asUnsignedFloat() * 0.4f;
     }
 
-    void stopNote (float, bool allowTailOff) override
+    void noteStopped (bool allowTailOff) override
     {
         if (allowTailOff)
         {
@@ -62,8 +64,23 @@ public:
         }
     }
 
-    void pitchWheelMoved (int) override {}
-    void controllerMoved (int, int) override {}
+    void notePitchbendChanged() override
+    {
+        fundamentalFreq = (float)currentlyPlayingNote.getFrequencyInHertz();
+    }
+
+    void notePressureChanged() override
+    {
+        float pressure = currentlyPlayingNote.pressure.asUnsignedFloat();
+        targetAmp = currentlyPlayingNote.noteOnVelocity.asUnsignedFloat() * (0.3f + pressure * 0.7f);
+    }
+
+    void noteTimbreChanged() override
+    {
+        localTimbreMod = currentlyPlayingNote.timbre.asUnsignedFloat() * 0.4f;
+    }
+
+    void noteKeyStateChanged() override {}
 
     void updateParams (float detune, float timbre, float cutoff, float space)
     {
@@ -124,26 +141,29 @@ public:
         if (currentAmp <= 0.0001f)
             return;
 
+        // Apply MPE timbre slide modifier
+        float voiceTimbre = std::max (0.0f, std::min (1.0f, timbreVal + localTimbreMod));
+
         for (int p = 0; p < 256; ++p)
         {
             int harmonicIndex = p + 1;
 
-            // Detune / Inharmonic Warp
-            float stretch = detuneVal * detuneVal * 3.5f * std::sin((float)harmonicIndex * 1.57f + (float)p * 0.1f);
+            // Detune / Inharmonic Warp (does not affect fundamental partial, i.e., p == 0)
+            float stretch = (p == 0) ? 0.0f : (detuneVal * detuneVal * 3.5f * std::sin((float)harmonicIndex * 1.57f + (float)p * 0.1f));
             freqs[p] = currentFundamentalFreq * ((float)harmonicIndex + stretch);
 
-            // Timbre Morph
+            // Timbre Morph (modulated by voiceTimbre)
             float baseAmp = 0.0f;
-            if (timbreVal < 0.5f)
+            if (voiceTimbre < 0.5f)
             {
-                float mix = timbreVal * 2.0f;
+                float mix = voiceTimbre * 2.0f;
                 float ampA = 1.0f / std::pow((float)harmonicIndex, 1.2f);
                 float ampB = (std::sin((float)p * 0.22f) * 0.5f + 0.5f) / std::sqrt((float)harmonicIndex);
                 baseAmp = ampA * (1.0f - mix) + ampB * mix;
             }
             else
             {
-                float mix = (timbreVal - 0.5f) * 2.0f;
+                float mix = (voiceTimbre - 0.5f) * 2.0f;
                 float ampB = (std::sin((float)p * 0.22f) * 0.5f + 0.5f) / std::sqrt((float)harmonicIndex);
                 float ampC = (1.0f - ((float)p / 256.0f)) * 0.5f;
                 baseAmp = ampB * (1.0f - mix) + ampC * mix;
@@ -214,22 +234,12 @@ private:
     float cutoffVal = 0.75f;
     float spaceVal = 0.30f;
 
+    float localTimbreMod = 0.0f;
     double voiceTime = 0.0;
 };
 
 // ==========================================================================
-// 2. Synthesiser Sound Class
-// ==========================================================================
-class KronosSound : public juce::SynthesiserSound
-{
-public:
-    KronosSound() {}
-    bool appliesToNote (int) override { return true; }
-    bool appliesToChannel (int) override { return true; }
-};
-
-// ==========================================================================
-// 3. Audio Processor Class
+// 2. Audio Processor Class
 // ==========================================================================
 class KronosAudioProcessor : public juce::AudioProcessor
 {
@@ -268,16 +278,16 @@ public:
 
     void triggerNoteOnFromEditor (int note, float velocity)
     {
-        synth.noteOn (1, note, velocity);
+        synth.processNextMidiEvent (juce::MidiMessage::noteOn (1, note, velocity));
     }
     
     void triggerNoteOffFromEditor (int note)
     {
-        synth.noteOff (1, note, 0.0f, true);
+        synth.processNextMidiEvent (juce::MidiMessage::noteOff (1, note, 0.0f));
     }
 
 private:
-    juce::Synthesiser synth;
+    juce::MPESynthesiser synth;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KronosAudioProcessor)
 };

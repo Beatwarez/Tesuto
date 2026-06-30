@@ -189,18 +189,56 @@ body {
 }
 
 /* ==========================================================================
-   Sidebar overlay for Controls
+   Floating Left and Right Control Panels (Transparent overlay over visualizer)
    ========================================================================== */
-.control-panel-overlay {
-    flex-grow: 1;
-    width: 32%;
+.control-panel-left {
+    position: absolute;
+    top: 14vh;
+    bottom: 4vh;
+    left: 3vw;
+    width: 28vw;
     z-index: 5;
     display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    pointer-events: none; /* Let clicks pass through visualizer where empty */
+}
+
+.control-panel-left * {
+    pointer-events: auto; /* Re-enable pointer events for actual slider/knob UI controls */
+}
+
+.control-panel-right {
+    position: absolute;
+    top: 14vh;
+    bottom: 4vh;
+    right: 3vw;
+    width: 28vw;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    pointer-events: none;
+}
+
+.control-panel-right * {
+    pointer-events: auto;
+}
+
+.adsr-spacer {
+    width: 100%;
+    margin-top: 2vh;
+    padding-top: 2vh;
+    height: 6vw;
+    visibility: hidden;
+}
+
+.sliders-container {
+    display: flex;
+    flex-direction: row;
     justify-content: space-around;
-    padding: 2vh 1vw;
-    background: transparent;
-    border: none;
-    box-shadow: none;
+    width: 100%;
+    height: 60%; /* Same relative height limits as before */
 }
 
 .slider-wrapper {
@@ -243,7 +281,7 @@ body {
 .custom-slider {
     position: relative;
     width: 3vw;
-    height: 60%;
+    height: 100%; /* Fill the container space to match original height */
     cursor: pointer;
     touch-action: none;
 }
@@ -390,4 +428,97 @@ body {
     color: var(--fg-muted);
     opacity: 0.5;
     pointer-events: auto;
+}
+
+/* ==========================================================================
+   ADSR Knobs System
+   ========================================================================== */
+.adsr-container {
+    width: 100%;
+    border-top: none;
+    padding-top: 2vh;
+    margin-top: 2vh;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.adsr-title {
+    font-family: var(--font-mono);
+    font-size: 0.75vw;
+    color: var(--fg-muted);
+    letter-spacing: 0.08vw;
+    margin-bottom: 1.5vh;
+    text-transform: uppercase;
+}
+
+.knobs-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 1.6vw;
+    width: 100%;
+}
+
+.knob-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.custom-knob {
+    width: 2.0vw;
+    height: 2.0vw;
+    min-width: 24px;
+    min-height: 24px;
+    border-radius: 50%;
+    background: transparent;
+    border: 1px solid var(--accent); /* Same color outline as sliders */
+    position: relative;
+    cursor: pointer;
+    touch-action: none;
+    margin-bottom: 0.8vh;
+}
+
+.knob-dial {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform: rotate(-135deg); /* Start at min angle */
+}
+
+.knob-marker {
+    width: 1.5px;
+    height: 35%;
+    background-color: var(--accent);
+    position: absolute;
+    top: 5%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 0.5px;
+}
+
+.custom-knob:hover {
+    border-color: #ffffff;
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.2);
+}
+
+.custom-knob:hover .knob-marker {
+    background-color: #ffffff;
+}
+
+.knob-name {
+    font-size: 0.8vw;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 2px;
+}
+
+.knob-val {
+    font-family: var(--font-mono);
+    font-size: 0.7vw;
+    color: var(--fg-muted);
 }

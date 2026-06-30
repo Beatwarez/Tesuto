@@ -28,9 +28,6 @@ KronosAudioProcessor::KronosAudioProcessor()
     synth.clearVoices();
     for (int i = 0; i < 8; ++i)
         synth.addVoice (new KronosVoice());
-
-    synth.clearSounds();
-    synth.addSound (new KronosSound());
 }
 
 KronosAudioProcessor::~KronosAudioProcessor()

@@ -25,66 +25,173 @@
             </div>
         </header>
 
-        <!-- Sidebar overlay for Controls -->
-        <section class="control-panel-overlay">
-            <div class="slider-wrapper" data-param="detune">
-                <div class="slider-header">
-                    <span class="slider-num">01</span>
-                    <span class="slider-name">DETUNE</span>
-                    <span class="slider-val" id="val-detune">0.00</span>
+        <!-- Left Side Floating Control Panel -->
+        <section class="control-panel-left">
+            <div class="sliders-container">
+                <div class="slider-wrapper" data-param="detune">
+                    <div class="slider-header">
+                        <span class="slider-num">01</span>
+                        <span class="slider-name">DETUNE</span>
+                        <span class="slider-val" id="val-detune">0.00</span>
+                    </div>
+                    <div class="custom-slider" id="slider-detune">
+                        <div class="slider-track">
+                            <div class="slider-fill"></div>
+                            <div class="slider-thumb"></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="custom-slider" id="slider-detune">
-                    <div class="slider-track">
-                        <div class="slider-fill"></div>
-                        <div class="slider-thumb"></div>
+
+                <div class="slider-wrapper" data-param="timbre">
+                    <div class="slider-header">
+                        <span class="slider-num">02</span>
+                        <span class="slider-name">TIMBRE</span>
+                        <span class="slider-val" id="val-timbre">0.25</span>
+                    </div>
+                    <div class="custom-slider" id="slider-timbre">
+                        <div class="slider-track">
+                            <div class="slider-fill"></div>
+                            <div class="slider-thumb"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="slider-wrapper" data-param="cutoff">
+                    <div class="slider-header">
+                        <span class="slider-num">03</span>
+                        <span class="slider-name">CUTOFF</span>
+                        <span class="slider-val" id="val-cutoff">0.75</span>
+                    </div>
+                    <div class="custom-slider" id="slider-cutoff">
+                        <div class="slider-track">
+                            <div class="slider-fill"></div>
+                            <div class="slider-thumb"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="slider-wrapper" data-param="space">
+                    <div class="slider-header">
+                        <span class="slider-num">04</span>
+                        <span class="slider-name">SPACE</span>
+                        <span class="slider-val" id="val-space">0.30</span>
+                    </div>
+                    <div class="custom-slider" id="slider-space">
+                        <div class="slider-track">
+                            <div class="slider-fill"></div>
+                            <div class="slider-thumb"></div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="slider-wrapper" data-param="timbre">
-                <div class="slider-header">
-                    <span class="slider-num">02</span>
-                    <span class="slider-name">TIMBRE</span>
-                    <span class="slider-val" id="val-timbre">0.25</span>
-                </div>
-                <div class="custom-slider" id="slider-timbre">
-                    <div class="slider-track">
-                        <div class="slider-fill"></div>
-                        <div class="slider-thumb"></div>
+            <!-- Compact ADSR Outlined Knobs Panel -->
+            <div class="adsr-container">
+                <div class="adsr-title">ENVELOPE (ADSR)</div>
+                <div class="knobs-row">
+                    <div class="knob-wrapper" data-param="attack">
+                        <div class="custom-knob" id="knob-attack">
+                            <div class="knob-dial">
+                                <div class="knob-marker"></div>
+                            </div>
+                        </div>
+                        <span class="knob-name">A</span>
+                        <span class="knob-val" id="val-attack">0.80s</span>
                     </div>
-                </div>
-            </div>
-
-            <div class="slider-wrapper" data-param="cutoff">
-                <div class="slider-header">
-                    <span class="slider-num">03</span>
-                    <span class="slider-name">CUTOFF</span>
-                    <span class="slider-val" id="val-cutoff">0.75</span>
-                </div>
-                <div class="custom-slider" id="slider-cutoff">
-                    <div class="slider-track">
-                        <div class="slider-fill"></div>
-                        <div class="slider-thumb"></div>
+                    <div class="knob-wrapper" data-param="decay">
+                        <div class="custom-knob" id="knob-decay">
+                            <div class="knob-dial">
+                                <div class="knob-marker"></div>
+                            </div>
+                        </div>
+                        <span class="knob-name">D</span>
+                        <span class="knob-val" id="val-decay">0.30s</span>
                     </div>
-                </div>
-            </div>
-
-            <div class="slider-wrapper" data-param="space">
-                <div class="slider-header">
-                    <span class="slider-num">04</span>
-                    <span class="slider-name">SPACE</span>
-                    <span class="slider-val" id="val-space">0.30</span>
-                </div>
-                <div class="custom-slider" id="slider-space">
-                    <div class="slider-track">
-                        <div class="slider-fill"></div>
-                        <div class="slider-thumb"></div>
+                    <div class="knob-wrapper" data-param="sustain">
+                        <div class="custom-knob" id="knob-sustain">
+                            <div class="knob-dial">
+                                <div class="knob-marker"></div>
+                            </div>
+                        </div>
+                        <span class="knob-name">S</span>
+                        <span class="knob-val" id="val-sustain">0.80</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="release">
+                        <div class="custom-knob" id="knob-release">
+                            <div class="knob-dial">
+                                <div class="knob-marker"></div>
+                            </div>
+                        </div>
+                        <span class="knob-name">R</span>
+                        <span class="knob-val" id="val-release">1.50s</span>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Keyboard removed for minimal UI -->
+        <!-- Right Side Floating Control Panel (Symmetric Sliders) -->
+        <section class="control-panel-right">
+            <div class="sliders-container">
+                <div class="slider-wrapper" data-param="param5">
+                    <div class="slider-header">
+                        <span class="slider-num">05</span>
+                        <span class="slider-name">MORPH</span>
+                        <span class="slider-val" id="val-param5">0.00</span>
+                    </div>
+                    <div class="custom-slider" id="slider-param5">
+                        <div class="slider-track">
+                            <div class="slider-fill"></div>
+                            <div class="slider-thumb"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="slider-wrapper" data-param="param6">
+                    <div class="slider-header">
+                        <span class="slider-num">06</span>
+                        <span class="slider-name">SPEED</span>
+                        <span class="slider-val" id="val-param6">0.25</span>
+                    </div>
+                    <div class="custom-slider" id="slider-param6">
+                        <div class="slider-track">
+                            <div class="slider-fill"></div>
+                            <div class="slider-thumb"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="slider-wrapper" data-param="param7">
+                    <div class="slider-header">
+                        <span class="slider-num">07</span>
+                        <span class="slider-name">FEEDBACK</span>
+                        <span class="slider-val" id="val-param7">0.50</span>
+                    </div>
+                    <div class="custom-slider" id="slider-param7">
+                        <div class="slider-track">
+                            <div class="slider-fill"></div>
+                            <div class="slider-thumb"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="slider-wrapper" data-param="param8">
+                    <div class="slider-header">
+                        <span class="slider-num">08</span>
+                        <span class="slider-name">DRY/WET</span>
+                        <span class="slider-val" id="val-param8">0.30</span>
+                    </div>
+                    <div class="custom-slider" id="slider-param8">
+                        <div class="slider-track">
+                            <div class="slider-fill"></div>
+                            <div class="slider-thumb"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Spacer matching the height of left ADSR for perfect vertical symmetry -->
+            <div class="adsr-spacer"></div>
+        </section>
     </div>
     
     <script src="app.js"></script>
