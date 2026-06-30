@@ -51,11 +51,21 @@ public:
                 {
                     processor.triggerNoteOffFromEditor ((int)paramValue);
                 }
-                else if (auto* param = processor.apvts.getParameter (paramName))
+                else
                 {
-                    param->beginChangeGesture();
-                    param->setValueNotifyingHost (paramValue);
-                    param->endChangeGesture();
+                    // 1. Force raw parameter update directly to guarantee instant audio thread response
+                    if (auto* rawVal = processor.apvts.getRawParameterValue (paramName))
+                    {
+                        rawVal->store (paramValue);
+                    }
+                    
+                    // 2. Notify the host of the parameter change for automation recording
+                    if (auto* param = processor.apvts.getParameter (paramName))
+                    {
+                        param->beginChangeGesture();
+                        param->setValueNotifyingHost (paramValue);
+                        param->endChangeGesture();
+                    }
                 }
             }
             
