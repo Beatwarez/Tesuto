@@ -22,26 +22,24 @@ public:
     noteNumber = currentlyPlayingNote.initialNote;
     float targetFreq = (float)currentlyPlayingNote.getFrequencyInHertz();
 
-    if (envState == EnvState::idle) {
-      fundamentalFreq = targetFreq;
-      currentFundamentalFreq = targetFreq;
-      for (int p = 0; p < 256; ++p)
-        phases[p] = juce::Random::getSystemRandom().nextFloat();
-    } else {
-      fundamentalFreq = targetFreq;
-    }
+    fundamentalFreq = targetFreq;
+    currentFundamentalFreq = targetFreq;
+    for (int p = 0; p < 256; ++p)
+      phases[p] = juce::Random::getSystemRandom().nextFloat();
 
     targetAmp = currentlyPlayingNote.noteOnVelocity.asUnsignedFloat();
-    envState = EnvState::attack;
     voiceActive = true;
     localTimbreMod = currentlyPlayingNote.timbre.asUnsignedFloat() * 0.4f;
+
+    adsr.setSampleRate (getSampleRate() > 0.0 ? getSampleRate() : 44100.0);
+    adsr.noteOn();
   }
 
   void noteStopped(bool allowTailOff) override {
     if (allowTailOff) {
-      envState = EnvState::release;
+      adsr.noteOff();
     } else {
-      envState = EnvState::idle;
+      adsr.reset();
       clearCurrentNote();
       voiceActive = false;
     }
@@ -71,25 +69,24 @@ public:
   }
 
   void updateAdsr(float attack, float decay, float sustain, float release) {
-    attackVal = attack;
-    decayVal = decay;
-    sustainVal = sustain;
-    releaseVal = release;
+    adsrParams.attack = attack;
+    adsrParams.decay = decay;
+    adsrParams.sustain = sustain;
+    adsrParams.release = release;
+    adsr.setParameters(adsrParams);
   }
 
   void renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int startSample,
                        int numSamples) override {
-    if (envState == EnvState::idle)
+    if (! adsr.isActive()) {
+      clearCurrentNote();
+      voiceActive = false;
       return;
+    }
 
     currentSampleRate = getSampleRate();
     if (currentSampleRate <= 0.0)
       currentSampleRate = 44100.0;
-
-    float blockTime = (float)numSamples / (float)currentSampleRate;
-    float attackStep = (attackVal > 0.005f) ? (blockTime / attackVal) : 1.0f;
-    float decayStep = (decayVal > 0.005f) ? (blockTime / decayVal) : 1.0f;
-    float releaseStep = (releaseVal > 0.005f) ? (blockTime / releaseVal) : 1.0f;
 
     // Exponential mapping for cutoff frequency (50Hz to 12000Hz)
     float cutoffFreq = 50.0f * std::pow(2.0f, cutoffVal * 8.0f);
@@ -101,36 +98,6 @@ public:
     currentFundamentalFreq +=
         (fundamentalFreq - currentFundamentalFreq) * 0.06f;
 
-    // Envelope update for the block
-    if (envState == EnvState::attack) {
-      currentAmp += attackStep * targetAmp;
-      if (currentAmp >= targetAmp) {
-        currentAmp = targetAmp;
-        envState = EnvState::decay;
-      }
-    } else if (envState == EnvState::decay) {
-      float sustainLevel = targetAmp * sustainVal;
-      currentAmp -= decayStep * (targetAmp - sustainLevel);
-      if (currentAmp <= sustainLevel) {
-        currentAmp = sustainLevel;
-        envState = EnvState::sustain;
-      }
-    } else if (envState == EnvState::sustain) {
-      currentAmp = targetAmp * sustainVal;
-    } else if (envState == EnvState::release) {
-      currentAmp -= releaseStep * targetAmp;
-      if (currentAmp <= 0.0f) {
-        currentAmp = 0.0f;
-        envState = EnvState::idle;
-        clearCurrentNote();
-        voiceActive = false;
-        return;
-      }
-    }
-
-    if (currentAmp <= 0.0001f)
-      return;
-
     // Apply MPE timbre slide modifier
     float voiceTimbre =
         std::max(0.0f, std::min(1.0f, timbreVal + localTimbreMod));
@@ -138,8 +105,7 @@ public:
     for (int p = 0; p < 256; ++p) {
       int harmonicIndex = p + 1;
 
-      // Detune / Inharmonic Warp (does not affect fundamental partial, i.e., p
-      // == 0)
+      // Detune / Inharmonic Warp
       float stretch =
           (p == 0) ? 0.0f
                    : (detuneVal * detuneVal * 3.5f *
@@ -170,19 +136,20 @@ public:
       float lfoDrift =
           std::sin((float)voiceTime * 1.2f + phaseDrifts[p]) * spaceVal * 0.3f;
 
-      amps[p] = baseAmp * filterMult * currentAmp * (1.0f + lfoDrift);
+      amps[p] = baseAmp * filterMult * targetAmp * (1.0f + lfoDrift);
     }
 
     // Mix into output buffers
     float scaleFactor = 0.045f; // Level normalization per voice
 
     for (int s = 0; s < numSamples; ++s) {
+      float envVal = adsr.getNextSample();
       float sampleL = 0.0f;
       float sampleR = 0.0f;
 
       for (int p = 0; p < 256; ++p) {
         float f = freqs[p];
-        float a = amps[p];
+        float a = amps[p] * envVal;
         if (a < 0.0001f)
           continue;
 
@@ -206,21 +173,20 @@ public:
 
       voiceTime += 1.0 / currentSampleRate;
     }
+
+    if (! adsr.isActive()) {
+      clearCurrentNote();
+      voiceActive = false;
+    }
   }
 
 private:
-  enum class EnvState { idle, attack, decay, sustain, release };
-  EnvState envState = EnvState::idle;
+  juce::ADSR adsr;
+  juce::ADSR::Parameters adsrParams;
   bool voiceActive = false;
-
-  float attackVal = 0.80f;
-  float decayVal = 0.30f;
-  float sustainVal = 0.80f;
-  float releaseVal = 1.50f;
 
   double currentSampleRate = 44100.0;
   int noteNumber = -1;
-  float currentAmp = 0.0f;
   float targetAmp = 0.0f;
   float fundamentalFreq = 0.0f;
   float currentFundamentalFreq = 0.0f;
