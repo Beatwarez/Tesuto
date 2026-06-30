@@ -10,7 +10,11 @@ class KronosWebView : public juce::WebBrowserComponent
 {
 public:
     KronosWebView (KronosAudioProcessor& p)
-        : juce::WebBrowserComponent (juce::WebBrowserComponent::Options()),
+        : juce::WebBrowserComponent (juce::WebBrowserComponent::Options()
+            .withBackend (juce::WebBrowserComponent::Options::Backend::webview2)
+            .withWinWebView2Options (juce::WebBrowserComponent::Options::WinWebView2()
+                .withUserDataFolder (juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                                     .getChildFile ("KronosSynth/WebView2Data")))),
           processor (p)
     {
     }
