@@ -15,20 +15,26 @@ KronosAudioProcessorEditor::KronosAudioProcessorEditor (KronosAudioProcessor& p)
     // Create temp directory if it does not exist
     tempDir.createDirectory();
 
-    auto indexFile = tempDir.getChildFile ("index.html");
-    indexFile.replaceWithData (BinaryData::index_html, (size_t)BinaryData::index_htmlSize);
-
     auto stylesFile = tempDir.getChildFile ("styles.css");
     stylesFile.replaceWithData (BinaryData::styles_css, (size_t)BinaryData::styles_cssSize);
 
     auto appFile = tempDir.getChildFile ("app.js");
     appFile.replaceWithData (BinaryData::app_js, (size_t)BinaryData::app_jsSize);
 
+    auto timeString = juce::String (juce::Time::currentTimeMillis());
+    juce::String indexContent = juce::String::createStringFromData (BinaryData::index_html, BinaryData::index_htmlSize);
+    indexContent = indexContent.replace ("styles.css", "styles.css?v=" + timeString);
+    indexContent = indexContent.replace ("app.js", "app.js?v=" + timeString);
+
+    auto indexFile = tempDir.getChildFile ("index.html");
+    indexFile.deleteFile();
+    indexFile.writeText (indexContent);
+
     // 2. Add WebView UI
     addAndMakeVisible (webView);
 
-    // Point the web view to the extracted index.html file
-    webView.goToURL (juce::URL (indexFile).toString (true));
+    // Point the web view to the extracted index.html file with a cache-buster query param
+    webView.goToURL (juce::URL (indexFile).withParameter ("v", timeString).toString (true));
 
     // 3. Configure Editor sizing and resizability
     setResizable (true, true);
