@@ -240,6 +240,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Inject Build Number
+        shell: bash
+        run: |
+          sed -i "s/{{BUILD_NUMBER}}/${{ github.run_number }}/g" index.html
+
       - name: Set up JUCE
         run: |
           git clone --branch 8.0.13 --depth 1 https://github.com/juce-framework/JUCE.git JUCE

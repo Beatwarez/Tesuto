@@ -383,3 +383,11 @@ body {
     background-color: var(--accent) !important;
     border-bottom-color: #a3a3a3;
 }
+
+.build-version {
+    font-family: var(--font-mono);
+    font-size: 1.0vw;
+    color: var(--fg-muted);
+    opacity: 0.5;
+    pointer-events: auto;
+}

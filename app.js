@@ -476,8 +476,15 @@ class KronosSynth {
     }
 
     sendParamToCpp(param, val) {
-        if (window.__JUCE__ && window.__JUCE__.backend && window.__JUCE__.backend.sendParamToCpp) {
-            window.__JUCE__.backend.sendParamToCpp(param, val);
+        if (window.__JUCE__ && window.__JUCE__.backend) {
+            if (window.__JUCE__.backend.sendParamToCpp) {
+                window.__JUCE__.backend.sendParamToCpp(param, val);
+            } else {
+                window.__JUCE__.backend.emitEvent("__juce__invoke", {
+                    name: "sendParamToCpp",
+                    params: [param, val]
+                });
+            }
         } else {
             console.log(`sendParamToCpp fallback: ${param} = ${val}`);
         }
