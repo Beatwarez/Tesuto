@@ -66,6 +66,7 @@ void KronosAudioProcessorEditor::resized()
 
 void KronosAudioProcessorEditor::timerCallback()
 {
+    // 1. Sync MIDI note states from C++ synthesiser to JS Visualizer
     for (int i = 0; i < 128; ++i)
     {
         bool isMidiActive = audioProcessor.activeMidiNotes[i].load();
@@ -79,6 +80,21 @@ void KronosAudioProcessorEditor::timerCallback()
             else
             {
                 webView.evaluateJavascript ("if (window.kronosSynth) window.kronosSynth.triggerNoteOff(" + juce::String (i) + ");");
+            }
+        }
+    }
+
+    // 2. Sync DAW-automated/saved parameters from C++ APVTS back to JS UI Sliders
+    juce::String paramIDs[4] = { "detune", "timbre", "cutoff", "space" };
+    for (int p = 0; p < 4; ++p)
+    {
+        if (auto* rawVal = audioProcessor.apvts.getRawParameterValue (paramIDs[p]))
+        {
+            float val = rawVal->load();
+            if (std::abs (val - localParams[p]) > 0.001f)
+            {
+                localParams[p] = val;
+                webView.evaluateJavascript ("if (window.kronosSynth) window.kronosSynth.updateParamFromCpp('" + paramIDs[p] + "', " + juce::String (val) + ");");
             }
         }
     }

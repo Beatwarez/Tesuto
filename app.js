@@ -504,6 +504,18 @@ class KronosSynth {
         this.sendParamToCpp(param, val);
     }
 
+    updateParamFromCpp(param, val) {
+        if (this.sliders[param] && !this.sliders[param].isDragging) {
+            this.values[param] = val;
+            const valDisplay = document.getElementById(`val-${param}`);
+            if (valDisplay) {
+                valDisplay.textContent = val.toFixed(2);
+            }
+            this.sliders[param].value = val;
+            this.sliders[param].updateUI();
+        }
+    }
+
     updateNodeParameters() {
         if (!this.synthNode) return;
         Object.keys(this.values).forEach(key => {
@@ -655,7 +667,9 @@ class KronosSynth {
             navigator.requestMIDIAccess()
                 .then(midi => this.onMIDISuccess(midi), () => this.onMIDIFailure());
         } else {
-            this.midiStatusText.textContent = "MIDI UNSUPPORTED";
+            if (this.midiStatusText) {
+                this.midiStatusText.textContent = "MIDI UNSUPPORTED";
+            }
         }
     }
 
@@ -667,22 +681,26 @@ class KronosSynth {
             hasDevices = true;
         }
 
-        midiAccess.onstatechange = (e) => {
-            if (e.port.type === 'input') this.initMIDI();
-        };
+        // Avoid infinite state change loop
+        if (!midiAccess.hasStateChangeListener) {
+            midiAccess.onstatechange = (e) => {
+                if (e.port.type === 'input') this.initMIDI();
+            };
+            midiAccess.hasStateChangeListener = true;
+        }
 
         if (hasDevices) {
-            this.midiStatusIndicator.classList.add('active');
-            this.midiStatusText.textContent = "MIDI READY";
+            if (this.midiStatusIndicator) this.midiStatusIndicator.classList.add('active');
+            if (this.midiStatusText) this.midiStatusText.textContent = "MIDI READY";
         } else {
-            this.midiStatusIndicator.classList.remove('active');
-            this.midiStatusText.textContent = "NO MIDI DEVICES";
+            if (this.midiStatusIndicator) this.midiStatusIndicator.classList.remove('active');
+            if (this.midiStatusText) this.midiStatusText.textContent = "NO MIDI DEVICES";
         }
     }
 
     onMIDIFailure() {
-        this.midiStatusText.textContent = "MIDI BLOCKED";
-        this.midiStatusIndicator.classList.remove('active');
+        if (this.midiStatusText) this.midiStatusText.textContent = "MIDI BLOCKED";
+        if (this.midiStatusIndicator) this.midiStatusIndicator.classList.remove('active');
     }
 
     onMIDIMessage(msg) {

@@ -96,6 +96,7 @@ private:
     KronosAudioProcessor& audioProcessor;
     KronosWebView webView;
     bool localActiveNotes[128] = { false };
+    float localParams[4] = { -1.0f, -1.0f, -1.0f, -1.0f };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KronosAudioProcessorEditor)
 };
