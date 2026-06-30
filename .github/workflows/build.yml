@@ -167,12 +167,12 @@ jobs:
           VST3_PATH=$(find Builds/MacOSX/build -name "Kronos.vst3" -type d | head -n 1)
           
           # Create installation directories
-          mkdir -p pkgroot/Library/Audio/Plug-Ins/VST3/KronosSynth
-          cp -R "$VST3_PATH" pkgroot/Library/Audio/Plug-Ins/VST3/KronosSynth/
+          mkdir -p pkgroot/Library/Audio/Plug-Ins/VST3/Algebra\ Within
+          cp -R "$VST3_PATH" pkgroot/Library/Audio/Plug-Ins/VST3/Algebra\ Within/
           
           # Build package component
           pkgbuild --root pkgroot \
-                   --identifier com.KronosSynth.Kronos.pkg \
+                   --identifier com.AlgebraWithin.Kronos.pkg \
                    --version 1.0.0 \
                    --install-location / \
                    KronosComponent.pkg

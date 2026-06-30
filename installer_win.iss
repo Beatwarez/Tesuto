@@ -3,8 +3,8 @@
 [Setup]
 AppName=Kronos
 AppVersion=1.0.0
-AppPublisher=KronosSynth
-DefaultDirName={commoncf}\VST3\Kronos.vst3
+AppPublisher=Algebra Within
+DefaultDirName={commoncf}\VST3\Algebra Within\Kronos.vst3
 DisableDirPage=yes
 UsePreviousAppDir=no
 OutputBaseFilename=Kronos_Windows_Installer
