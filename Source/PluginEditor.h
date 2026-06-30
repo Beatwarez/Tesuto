@@ -9,7 +9,7 @@
 class KronosWebView : public juce::WebBrowserComponent
 {
 public:
-    float localParams[9] = { -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f };
+    float localParams[10] = { -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f };
 
     static void logToFile (const juce::String& message)
     {
@@ -66,7 +66,7 @@ public:
 
                     if (paramName == "queryall")
                     {
-                        for (int i = 0; i < 9; ++i)
+                        for (int i = 0; i < 10; ++i)
                             webViewInstance->localParams[i] = -1.0f;
                     }
                     else if (paramName == "noteon")

@@ -21,7 +21,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             { name: 'timbre', defaultValue: 0.25, minValue: 0.0, maxValue: 1.0 },
             { name: 'cutoff', defaultValue: 0.75, minValue: 0.0, maxValue: 1.0 },
             { name: 'space', defaultValue: 0.3, minValue: 0.0, maxValue: 1.0 },
-            { name: 'alter', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 }
+            { name: 'alter', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'cloud', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 }
         ];
     }
 
@@ -44,7 +45,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 phases: new Float32Array(MAX_PARTIALS),
                 phaseDrifts: new Float32Array(MAX_PARTIALS),
                 panLeft: new Float32Array(MAX_PARTIALS),
-                panRight: new Float32Array(MAX_PARTIALS)
+                panRight: new Float32Array(MAX_PARTIALS),
+                smoothedAmps: new Float32Array(MAX_PARTIALS)
             });
             for (let p = 0; p < MAX_PARTIALS; p++) {
                 this.voices[i].phases[p] = 0.0;
@@ -95,6 +97,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             voice.currentFreq = targetFreq;
             for (let p = 0; p < MAX_PARTIALS; p++) {
                 voice.phases[p] = 0.0;
+                voice.smoothedAmps[p] = 0.0;
             }
         } else {
             // Pitch glide if reusing active voice
@@ -157,6 +160,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             const cutoffVal = parameters.cutoff[0];
             const spaceVal = parameters.space[0];
             const alterVal = parameters.alter ? parameters.alter[0] : 0.0;
+            const cloudVal = parameters.cloud ? parameters.cloud[0] : 0.0;
 
             // Correctly scale envelope step sizes for block-rate updates (128 samples per block)
             // Drone envelopes: smooth attack (approx 0.8s), longer release (approx 1.5s)
@@ -192,9 +196,17 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     voice.amp -= releaseStep;
                     if (voice.amp <= 0.0) {
                         voice.amp = 0.0;
-                        voice.active = false;
-                        voice.envState = 'idle';
-                        continue;
+                        
+                        // Check if reverb tail is still ringing
+                        let maxAmp = 0.0;
+                        for (let p = 0; p < MAX_PARTIALS; p++) {
+                            if (voice.smoothedAmps[p] > maxAmp) maxAmp = voice.smoothedAmps[p];
+                        }
+                        if (maxAmp <= 0.001) {
+                            voice.active = false;
+                            voice.envState = 'idle';
+                            continue;
+                        }
                     }
                 } else if (voice.envState === 'sustain') {
                     voice.amp += (voice.targetAmp - voice.amp) * 0.01;
@@ -205,12 +217,29 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
 
                 // Compute partial frequencies and amplitudes (optimized block-rate calculation)
                 const freqs = new Float32Array(MAX_PARTIALS);
-                const amps = new Float32Array(MAX_PARTIALS);
+                const targetAmps = new Float32Array(MAX_PARTIALS);
                 const phaseDeltas = new Float32Array(MAX_PARTIALS);
                 const pL_block = new Float32Array(MAX_PARTIALS);
                 const pR_block = new Float32Array(MAX_PARTIALS);
+                const alpha_block = new Float32Array(MAX_PARTIALS);
                 
                 const activePartials = [];
+
+                // CLOUD reverb parameters
+                const reverbAmount = cloudVal * 0.98;
+                const p_start = Math.floor(MAX_PARTIALS * (1.0 - cloudVal));
+
+                // 1. Apply Spectral Diffusion (amplitude blur across adjacent harmonics) at block rate
+                if (cloudVal > 0.01) {
+                    const diffusion = cloudVal * 0.15;
+                    let prevAmp = voice.smoothedAmps[0];
+                    for (let p = 0; p < MAX_PARTIALS; p++) {
+                        const currentAmp = voice.smoothedAmps[p];
+                        const nextAmp = (p < MAX_PARTIALS - 1) ? voice.smoothedAmps[p + 1] : currentAmp;
+                        voice.smoothedAmps[p] = (1.0 - diffusion) * currentAmp + diffusion * 0.5 * (prevAmp + nextAmp);
+                        prevAmp = currentAmp;
+                    }
+                }
 
                 for (let p = 0; p < MAX_PARTIALS; p++) {
                     const harmonicIndex = p + 1;
@@ -219,34 +248,38 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     const stretch = detuneVal * detuneVal * 3.5 * Math.sin(harmonicIndex * 1.57 + p * 0.1);
                     freqs[p] = voice.currentFreq * (harmonicIndex + stretch);
 
-                    // Timbre Morphing (10 distinct shapes)
+                    // Timbre Morphing (10 distinct shapes with baseline floor)
                     const getSpectralShape = (p, harmonicIndex, shapeIndex) => {
+                        let rawVal = 0.0;
                         switch (shapeIndex) {
                             case 0: // 1. Warm Triangle/Saw
-                                return 1.0 / Math.pow(harmonicIndex, 1.5);
+                                rawVal = 1.0 / Math.pow(harmonicIndex, 1.5); break;
                             case 1: // 2. Hollow Square (Odd harmonics only)
-                                return (p % 2 === 0) ? (1.0 / harmonicIndex) : 0.0;
+                                rawVal = (p % 2 === 0) ? (1.0 / harmonicIndex) : 0.0; break;
                             case 2: // 3. Comb Filter / Phased
-                                return (Math.sin(p * 0.22) * 0.5 + 0.5) / Math.sqrt(harmonicIndex);
+                                rawVal = (Math.sin(p * 0.22) * 0.5 + 0.5) / Math.sqrt(harmonicIndex); break;
                             case 3: // 4. High Fizz (High-pass)
-                                return (p / 256.0) * (1.0 / Math.sqrt(harmonicIndex));
+                                rawVal = (p / 256.0) * (1.0 / Math.sqrt(harmonicIndex)); break;
                             case 4: // 5. Formant Vocal "Ooh" (Double peaks near H3 & H8)
-                                return Math.exp(-Math.pow(harmonicIndex - 3, 2) / 2)
-                                     + 0.5 * Math.exp(-Math.pow(harmonicIndex - 8, 2) / 8);
+                                rawVal = Math.exp(-Math.pow(harmonicIndex - 3, 2) / 2)
+                                     + 0.5 * Math.exp(-Math.pow(harmonicIndex - 8, 2) / 8); break;
                             case 5: // 6. Formant Vocal "Aah" (Double peaks near H6 & H14)
-                                return Math.exp(-Math.pow(harmonicIndex - 6, 2) / 4)
-                                     + 0.4 * Math.exp(-Math.pow(harmonicIndex - 14, 2) / 16);
+                                rawVal = Math.exp(-Math.pow(harmonicIndex - 6, 2) / 4)
+                                     + 0.4 * Math.exp(-Math.pow(harmonicIndex - 14, 2) / 16); break;
                             case 6: // 7. Octave Double (Even harmonics dominant)
-                                return (p % 2 === 1) ? (1.0 / Math.pow(harmonicIndex, 1.2)) : (0.1 / harmonicIndex);
+                                rawVal = (p % 2 === 1) ? (1.0 / Math.pow(harmonicIndex, 1.2)) : (0.1 / harmonicIndex); break;
                             case 7: // 8. Metallic / Inharmonic (Golden ratio spacing)
-                                return (Math.sin(p * 1.618) * 0.5 + 0.5) / Math.pow(harmonicIndex, 0.8);
+                                rawVal = (Math.sin(p * 1.618) * 0.5 + 0.5) / Math.pow(harmonicIndex, 0.8); break;
                             case 8: // 9. Resonance Spike (Resonant peak at H12)
-                                return (p === 0) ? 1.0 : (0.05 + 0.95 * Math.exp(-Math.pow(harmonicIndex - 12, 2) / 2));
+                                rawVal = (p === 0) ? 1.0 : (0.05 + 0.95 * Math.exp(-Math.pow(harmonicIndex - 12, 2) / 2)); break;
                             case 9: // 10. Grit (Deterministic noise-like hash)
-                                return (Math.sin(p * 123.456) * 0.5 + 0.5) / harmonicIndex;
+                                rawVal = (Math.sin(p * 123.456) * 0.5 + 0.5) / harmonicIndex; break;
                             default:
-                                return 0.0;
+                                rawVal = 0.0; break;
                         }
+                        
+                        const baseline = 0.15 / Math.pow(harmonicIndex, 1.1);
+                        return rawVal * 0.85 + baseline;
                     };
 
                     const scaledTimbre = timbreVal * 9.0;
@@ -267,7 +300,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     // Space (Organic LFO drift)
                     const lfoDrift = Math.sin(this.time * 1.2 + voice.phaseDrifts[p]) * spaceVal * 0.3;
 
-                    amps[p] = baseAmp * filterMult * currentAmp * (1.0 + lfoDrift);
+                    targetAmps[p] = baseAmp * filterMult * (1.0 + lfoDrift);
 
                     // Precalculate phase delta and panning
                     phaseDeltas[p] = freqs[p] / sampleRate;
@@ -283,8 +316,15 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                         pR_block[p] = voice.panRight[p] * (1 - spaceVal) + 1.0 * spaceVal;
                     }
 
+                    // Reverb time-constant (alpha) per partial
+                    if (p >= p_start) {
+                        alpha_block[p] = 1.0 - (reverbAmount * 0.96);
+                    } else {
+                        alpha_block[p] = 1.0;
+                    }
+
                     // Collect active partials
-                    if (amps[p] >= 0.0001) {
+                    if (targetAmps[p] * currentAmp >= 0.0001 || voice.smoothedAmps[p] >= 0.0001) {
                         activePartials.push(p);
                     }
                 }
@@ -293,10 +333,15 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 for (let i = 0; i < bufferLength; i++) {
                     let sumL = 0.0;
                     let sumR = 0.0;
+                    let prevVal = 0.0;
 
                     for (let idx = 0; idx < activePartials.length; idx++) {
                         const p = activePartials[idx];
-                        const a = amps[p];
+                        const target_a = targetAmps[p] * currentAmp;
+
+                        // Apply decay smoothing
+                        voice.smoothedAmps[p] += (target_a - voice.smoothedAmps[p]) * alpha_block[p];
+                        const a = voice.smoothedAmps[p];
 
                         // Increment phase
                         voice.phases[p] += phaseDeltas[p];
@@ -304,9 +349,21 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                             voice.phases[p] -= 1.0;
                         }
 
+                        let modPhase = voice.phases[p];
+                        if (idx > 0) {
+                            const p_prev = activePartials[idx - 1];
+                            const distance = Math.abs(freqs[p] - freqs[p_prev]);
+                            let modIndex = (alterVal * alterVal * 1.5 * voice.smoothedAmps[p_prev]) / (distance + 0.1);
+                            if (modIndex > 2.0) modIndex = 2.0;
+                            modPhase += modIndex * prevVal;
+                        }
+
                         // Lookup sine table with phase wrapped to [0, 1)
-                        const sineIdx = ((voice.phases[p] * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
+                        let normModPhase = modPhase % 1.0;
+                        if (normModPhase < 0) normModPhase += 1.0;
+                        const sineIdx = ((normModPhase * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
                         const val = SINE_TABLE[sineIdx];
+                        prevVal = val;
 
                         sumL += val * a * pL_block[p];
                         sumR += val * a * pR_block[p];
@@ -531,7 +588,7 @@ class KronosSynth {
             alter: 0.00,
             param6: 0.25,
             param7: 0.50,
-            param8: 0.30,
+            cloud: 0.30,
             attack: 0.80,
             decay: 0.30,
             sustain: 0.80,
@@ -547,7 +604,7 @@ class KronosSynth {
             alter: new CustomSlider('slider-alter', 0, 1, this.values.alter, 0.001, (v) => this.onSliderChange('alter', v)),
             param6: new CustomSlider('slider-param6', 0, 1, this.values.param6, 0.001, (v) => this.onSliderChange('param6', v)),
             param7: new CustomSlider('slider-param7', 0, 1, this.values.param7, 0.001, (v) => this.onSliderChange('param7', v)),
-            param8: new CustomSlider('slider-param8', 0, 1, this.values.param8, 0.001, (v) => this.onSliderChange('param8', v))
+            cloud: new CustomSlider('slider-cloud', 0, 1, this.values.cloud, 0.001, (v) => this.onSliderChange('cloud', v)),
         };
 
         // Initialize Custom Knobs (ADSR panel)

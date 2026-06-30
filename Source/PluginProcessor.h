@@ -26,8 +26,10 @@ public:
 
     fundamentalFreq = targetFreq;
     currentFundamentalFreq = targetFreq;
-    for (int p = 0; p < 256; ++p)
+    for (int p = 0; p < 256; ++p) {
       phases[p] = 0.0f;
+      smoothedAmps[p] = 0.0f;
+    }
 
     targetAmp = currentlyPlayingNote.noteOnVelocity.asUnsignedFloat();
     voiceActive = true;
@@ -63,11 +65,12 @@ public:
 
   void noteKeyStateChanged() override {}
 
-  void updateParams(float detune, float timbre, float cutoff, float space) {
+  void updateParams(float detune, float timbre, float cutoff, float space, float cloud) {
     detuneVal = detune;
     timbreVal = timbre;
     cutoffVal = cutoff;
     spaceVal = space;
+    cloudVal = cloud;
   }
 
   void updateAlter(float alter) {
@@ -84,10 +87,20 @@ public:
 
   void renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int startSample,
                        int numSamples) override {
-    if (! adsr.isActive()) {
-      clearCurrentNote();
-      voiceActive = false;
-      return;
+    bool adsrActive = adsr.isActive();
+    
+    // Check if both ADSR is inactive and the reverb tail has fully decayed
+    if (! adsrActive) {
+      float maxAmp = 0.0f;
+      for (int p = 0; p < 256; ++p) {
+        if (smoothedAmps[p] > maxAmp)
+          maxAmp = smoothedAmps[p];
+      }
+      if (maxAmp <= 0.001f) {
+        clearCurrentNote();
+        voiceActive = false;
+        return;
+      }
     }
 
     currentSampleRate = getSampleRate();
@@ -99,10 +112,11 @@ public:
 
     // Precompute partial amplitudes, frequencies, phase deltas, panning, and build active list
     float freqs[256];
-    float amps[256];
+    float targetAmps[256];
     float phaseDeltas[256];
     float pL_block[256];
     float pR_block[256];
+    float alpha_block[256];
 
     int activePartials[256];
     int numActivePartials = 0;
@@ -114,46 +128,40 @@ public:
     float voiceTimbre =
         std::max(0.0f, std::min(1.0f, timbreVal + localTimbreMod));
 
-    // Lambda for the 10 distinct spectral shapes
+    // Lambda for the 10 distinct spectral shapes with a baseline floor
     auto getSpectralShape = [] (int p, int harmonicIndex, int shapeIndex) -> float
     {
+        float rawVal = 0.0f;
         switch (shapeIndex)
         {
             case 0: // 1. Warm Triangle/Saw
-                return 1.0f / std::pow ((float)harmonicIndex, 1.5f);
-                
+                rawVal = 1.0f / std::pow ((float)harmonicIndex, 1.5f); break;
             case 1: // 2. Hollow Square (Odd harmonics only)
-                return (p % 2 == 0) ? (1.0f / (float)harmonicIndex) : 0.0f;
-                
+                rawVal = (p % 2 == 0) ? (1.0f / (float)harmonicIndex) : 0.0f; break;
             case 2: // 3. Comb Filter / Phased
-                return (std::sin ((float)p * 0.22f) * 0.5f + 0.5f) / std::sqrt ((float)harmonicIndex);
-                
+                rawVal = (std::sin ((float)p * 0.22f) * 0.5f + 0.5f) / std::sqrt ((float)harmonicIndex); break;
             case 3: // 4. High Fizz (High-pass)
-                return ((float)p / 256.0f) * (1.0f / std::sqrt ((float)harmonicIndex));
-                
+                rawVal = ((float)p / 256.0f) * (1.0f / std::sqrt ((float)harmonicIndex)); break;
             case 4: // 5. Formant Vocal "Ooh" (Double peaks near H3 & H8)
-                return std::exp (-std::pow ((float)harmonicIndex - 3.0f, 2.0f) / 2.0f)
-                     + 0.5f * std::exp (-std::pow ((float)harmonicIndex - 8.0f, 2.0f) / 8.0f);
-                     
+                rawVal = std::exp (-std::pow ((float)harmonicIndex - 3.0f, 2.0f) / 2.0f)
+                     + 0.5f * std::exp (-std::pow ((float)harmonicIndex - 8.0f, 2.0f) / 8.0f); break;
             case 5: // 6. Formant Vocal "Aah" (Double peaks near H6 & H14)
-                return std::exp (-std::pow ((float)harmonicIndex - 6.0f, 2.0f) / 4.0f)
-                     + 0.4f * std::exp (-std::pow ((float)harmonicIndex - 14.0f, 2.0f) / 16.0f);
-                     
+                rawVal = std::exp (-std::pow ((float)harmonicIndex - 6.0f, 2.0f) / 4.0f)
+                     + 0.4f * std::exp (-std::pow ((float)harmonicIndex - 14.0f, 2.0f) / 16.0f); break;
             case 6: // 7. Octave Double (Even harmonics dominant)
-                return (p % 2 == 1) ? (1.0f / std::pow ((float)harmonicIndex, 1.2f)) : (0.1f / (float)harmonicIndex);
-                
+                rawVal = (p % 2 == 1) ? (1.0f / std::pow ((float)harmonicIndex, 1.2f)) : (0.1f / (float)harmonicIndex); break;
             case 7: // 8. Metallic / Inharmonic (Golden ratio spacing)
-                return (std::sin ((float)p * 1.618f) * 0.5f + 0.5f) / std::pow ((float)harmonicIndex, 0.8f);
-                
+                rawVal = (std::sin ((float)p * 1.618f) * 0.5f + 0.5f) / std::pow ((float)harmonicIndex, 0.8f); break;
             case 8: // 9. Resonance Spike (Resonant peak at H12)
-                return (p == 0) ? 1.0f : (0.05f + 0.95f * std::exp (-std::pow ((float)harmonicIndex - 12.0f, 2.0f) / 2.0f));
-                
+                rawVal = (p == 0) ? 1.0f : (0.05f + 0.95f * std::exp (-std::pow ((float)harmonicIndex - 12.0f, 2.0f) / 2.0f)); break;
             case 9: // 10. Grit (Deterministic noise-like hash)
-                return (std::sin ((float)p * 123.456f) * 0.5f + 0.5f) / (float)harmonicIndex;
-                
+                rawVal = (std::sin ((float)p * 123.456f) * 0.5f + 0.5f) / (float)harmonicIndex; break;
             default:
-                return 0.0f;
+                rawVal = 0.0f; break;
         }
+        
+        float baseline = 0.15f / std::pow ((float)harmonicIndex, 1.1f);
+        return rawVal * 0.85f + baseline;
     };
 
     // Morph between shapes based on voiceTimbre
@@ -163,6 +171,22 @@ public:
     if (timbreIdx >= 9) {
       timbreIdx = 8;
       timbreMix = 1.0f;
+    }
+
+    // CLOUD reverb parameters
+    float reverbAmount = cloudVal * 0.98f;
+    int p_start = static_cast<int>(256.0f * (1.0f - cloudVal));
+
+    // 1. Apply Spectral Diffusion (amplitude blur across adjacent harmonics) at block rate
+    if (cloudVal > 0.01f) {
+      float diffusion = cloudVal * 0.15f;
+      float prevAmp = smoothedAmps[0];
+      for (int p = 0; p < 256; ++p) {
+        float currentAmp = smoothedAmps[p];
+        float nextAmp = (p < 255) ? smoothedAmps[p + 1] : currentAmp;
+        smoothedAmps[p] = (1.0f - diffusion) * currentAmp + diffusion * 0.5f * (prevAmp + nextAmp);
+        prevAmp = currentAmp;
+      }
     }
 
     for (int p = 0; p < 256; ++p) {
@@ -187,7 +211,7 @@ public:
       float lfoDrift =
           std::sin((float)voiceTime * 1.2f + phaseDrifts[p]) * spaceVal * 0.3f;
 
-      amps[p] = baseAmp * filterMult * targetAmp * (1.0f + lfoDrift);
+      targetAmps[p] = baseAmp * filterMult * targetAmp * (1.0f + lfoDrift);
 
       // Precalculate phase delta and panning
       phaseDeltas[p] = freqs[p] / (float)currentSampleRate;
@@ -203,8 +227,15 @@ public:
         pR_block[p] = panRight[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
       }
 
-      // Collect active partials
-      if (amps[p] >= 0.0001f) {
+      // Reverb time-constant (alpha) per partial
+      if (p >= p_start) {
+        alpha_block[p] = 1.0f - (reverbAmount * 0.96f);
+      } else {
+        alpha_block[p] = 1.0f; // Instant response
+      }
+
+      // Collect active partials: active if target is audible OR if reverb tail is still ringing
+      if (targetAmps[p] >= 0.0001f || smoothedAmps[p] >= 0.0001f) {
         activePartials[numActivePartials++] = p;
       }
     }
@@ -216,18 +247,33 @@ public:
       float envVal = adsr.getNextSample();
       float sampleL = 0.0f;
       float sampleR = 0.0f;
+      float prevVal = 0.0f;
 
       for (int i = 0; i < numActivePartials; ++i) {
         int p = activePartials[i];
-        float a = amps[p] * envVal;
+        float target_a = targetAmps[p] * envVal;
+
+        // Apply decay smoothing
+        smoothedAmps[p] += (target_a - smoothedAmps[p]) * alpha_block[p];
+        float a = smoothedAmps[p];
 
         phases[p] += phaseDeltas[p];
         if (phases[p] >= 1.0f)
           phases[p] -= 1.0f;
 
+        float modPhase = phases[p];
+        if (i > 0) {
+          int p_prev = activePartials[i - 1];
+          float distance = std::abs (freqs[p] - freqs[p_prev]);
+          float modIndex = (alterVal * alterVal * 1.5f * smoothedAmps[p_prev]) / (distance + 0.1f);
+          if (modIndex > 2.0f) modIndex = 2.0f;
+          modPhase += modIndex * prevVal;
+        }
+
         // Sine table lookup with bitwise wrapping
-        int idx = static_cast<int>(phases[p] * 32768.0f) & 32767;
+        int idx = static_cast<int>(modPhase * 32768.0f) & 32767;
         float val = sineTable[idx];
+        prevVal = val;
 
         sampleL += val * a * pL_block[p];
         sampleR += val * a * pR_block[p];
@@ -260,6 +306,9 @@ private:
   float phaseDrifts[256];
   float panLeft[256];
   float panRight[256];
+
+  float smoothedAmps[256];
+  float cloudVal = 0.0f;
 
   float detuneVal = 0.0f;
   float timbreVal = 0.25f;
