@@ -19,7 +19,11 @@ KronosAudioProcessor::KronosAudioProcessor()
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("detune", 1), "Detune", 0.0f, 1.0f, 0.0f),
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("timbre", 1), "Timbre", 0.0f, 1.0f, 0.25f),
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("cutoff", 1), "Cutoff", 0.0f, 1.0f, 0.75f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("space", 1), "Space",  0.0f, 1.0f, 0.30f)
+           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("space", 1), "Space",  0.0f, 1.0f, 0.30f),
+           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("attack", 1), "Attack", 0.05f, 5.0f, 0.80f),
+           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("decay", 1), "Decay",  0.05f, 5.0f, 0.30f),
+           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("sustain", 1), "Sustain", 0.0f, 1.0f, 0.80f),
+           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("release", 1), "Release", 0.05f, 8.0f, 1.50f)
        })
 {
     for (int i = 0; i < 128; ++i)
@@ -148,12 +152,17 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     float timbre = *apvts.getRawParameterValue ("timbre");
     float cutoff = *apvts.getRawParameterValue ("cutoff");
     float space  = *apvts.getRawParameterValue ("space");
+    float attack = *apvts.getRawParameterValue ("attack");
+    float decay  = *apvts.getRawParameterValue ("decay");
+    float sustain = *apvts.getRawParameterValue ("sustain");
+    float release = *apvts.getRawParameterValue ("release");
 
     for (int i = 0; i < synth.getNumVoices(); ++i)
     {
         if (auto* voice = dynamic_cast<KronosVoice*> (synth.getVoice (i)))
         {
             voice->updateParams (detune, timbre, cutoff, space);
+            voice->updateAdsr (attack, decay, sustain, release);
         }
     }
 

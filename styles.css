@@ -195,8 +195,8 @@ body {
     position: absolute;
     top: 14vh;
     bottom: 4vh;
-    left: 3vw;
-    width: 28vw;
+    left: 0.8vw;
+    width: 24vw;
     z-index: 5;
     display: flex;
     flex-direction: column;
@@ -212,8 +212,8 @@ body {
     position: absolute;
     top: 14vh;
     bottom: 4vh;
-    right: 3vw;
-    width: 28vw;
+    right: 0.8vw;
+    width: 24vw;
     z-index: 5;
     display: flex;
     flex-direction: column;

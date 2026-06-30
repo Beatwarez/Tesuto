@@ -16,9 +16,9 @@ KronosAudioProcessorEditor::KronosAudioProcessorEditor (KronosAudioProcessor& p)
 
     // 3. Configure Editor sizing and resizability
     setResizable (true, true);
-    getConstrainer()->setFixedAspectRatio (960.0 / 580.0);
-    setResizeLimits (600, 362, 1600, 966);
-    setSize (960, 580);
+    getConstrainer()->setFixedAspectRatio (1190.0 / 580.0);
+    setResizeLimits (744, 362, 1984, 966);
+    setSize (1190, 580);
 }
 
 // ==========================================================================
@@ -63,8 +63,8 @@ void KronosAudioProcessorEditor::timerCallback()
     }
 
     // 2. Sync DAW-automated/saved parameters from C++ APVTS back to JS UI Sliders
-    juce::String paramIDs[4] = { "detune", "timbre", "cutoff", "space" };
-    for (int p = 0; p < 4; ++p)
+    juce::String paramIDs[8] = { "detune", "timbre", "cutoff", "space", "attack", "decay", "sustain", "release" };
+    for (int p = 0; p < 8; ++p)
     {
         if (auto* rawVal = audioProcessor.apvts.getRawParameterValue (paramIDs[p]))
         {

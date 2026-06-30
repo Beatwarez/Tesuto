@@ -71,6 +71,13 @@ public:
     spaceVal = space;
   }
 
+  void updateAdsr(float attack, float decay, float sustain, float release) {
+    attackVal = attack;
+    decayVal = decay;
+    sustainVal = sustain;
+    releaseVal = release;
+  }
+
   void renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int startSample,
                        int numSamples) override {
     if (envState == EnvState::idle)
@@ -81,8 +88,9 @@ public:
       currentSampleRate = 44100.0;
 
     float blockTime = (float)numSamples / (float)currentSampleRate;
-    float attackStep = blockTime / 0.8f;
-    float releaseStep = blockTime / 1.5f;
+    float attackStep = (attackVal > 0.005f) ? (blockTime / attackVal) : 1.0f;
+    float decayStep = (decayVal > 0.005f) ? (blockTime / decayVal) : 1.0f;
+    float releaseStep = (releaseVal > 0.005f) ? (blockTime / releaseVal) : 1.0f;
 
     // Exponential mapping for cutoff frequency (50Hz to 12000Hz)
     float cutoffFreq = 50.0f * std::pow(2.0f, cutoffVal * 8.0f);
@@ -96,13 +104,22 @@ public:
 
     // Envelope update for the block
     if (envState == EnvState::attack) {
-      currentAmp += attackStep;
+      currentAmp += attackStep * targetAmp;
       if (currentAmp >= targetAmp) {
         currentAmp = targetAmp;
+        envState = EnvState::decay;
+      }
+    } else if (envState == EnvState::decay) {
+      float sustainLevel = targetAmp * sustainVal;
+      currentAmp -= decayStep * (targetAmp - sustainLevel);
+      if (currentAmp <= sustainLevel) {
+        currentAmp = sustainLevel;
         envState = EnvState::sustain;
       }
+    } else if (envState == EnvState::sustain) {
+      currentAmp = targetAmp * sustainVal;
     } else if (envState == EnvState::release) {
-      currentAmp -= releaseStep;
+      currentAmp -= releaseStep * targetAmp;
       if (currentAmp <= 0.0f) {
         currentAmp = 0.0f;
         envState = EnvState::idle;
@@ -110,8 +127,6 @@ public:
         voiceActive = false;
         return;
       }
-    } else if (envState == EnvState::sustain) {
-      currentAmp += (targetAmp - currentAmp) * 0.01f;
     }
 
     if (currentAmp <= 0.0001f)
@@ -195,9 +210,14 @@ public:
   }
 
 private:
-  enum class EnvState { idle, attack, sustain, release };
+  enum class EnvState { idle, attack, decay, sustain, release };
   EnvState envState = EnvState::idle;
   bool voiceActive = false;
+
+  float attackVal = 0.80f;
+  float decayVal = 0.30f;
+  float sustainVal = 0.80f;
+  float releaseVal = 1.50f;
 
   double currentSampleRate = 44100.0;
   int noteNumber = -1;
