@@ -476,11 +476,11 @@ class KronosSynth {
     }
 
     sendParamToCpp(param, val) {
-        const iframe = document.createElement('iframe');
-        iframe.src = `kronos://param?name=${param}&value=${val}`;
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
-        document.body.removeChild(iframe);
+        if (window.__JUCE__ && window.__JUCE__.backend && window.__JUCE__.backend.sendParamToCpp) {
+            window.__JUCE__.backend.sendParamToCpp(param, val);
+        } else {
+            console.log(`sendParamToCpp fallback: ${param} = ${val}`);
+        }
     }
 
     onSliderChange(param, val) {
