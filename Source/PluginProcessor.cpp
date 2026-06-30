@@ -160,7 +160,7 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         }
     }
 
-    // Track active midi notes for visualizer feedback
+    // Track active midi notes for visualizer feedback and handle parameter CC modulations
     for (const auto metadata : midiMessages)
     {
         const auto msg = metadata.getMessage();
@@ -172,6 +172,32 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         {
             for (int i = 0; i < 128; ++i)
                 activeMidiNotes[i] = false;
+        }
+        else if (msg.isController())
+        {
+            int ccNumber = msg.getControllerNumber();
+            float ccValue = (float) msg.getControllerValue() / 127.0f; // Normalized 0.0 to 1.0
+
+            if (ccNumber == 1)
+            {
+                if (auto* rawVal = apvts.getRawParameterValue ("detune"))
+                    rawVal->store (ccValue);
+            }
+            else if (ccNumber == 2)
+            {
+                if (auto* rawVal = apvts.getRawParameterValue ("timbre"))
+                    rawVal->store (ccValue);
+            }
+            else if (ccNumber == 3)
+            {
+                if (auto* rawVal = apvts.getRawParameterValue ("cutoff"))
+                    rawVal->store (ccValue);
+            }
+            else if (ccNumber == 4)
+            {
+                if (auto* rawVal = apvts.getRawParameterValue ("space"))
+                    rawVal->store (ccValue);
+            }
         }
     }
 

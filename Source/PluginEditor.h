@@ -30,6 +30,26 @@ public:
             .withWinWebView2Options (juce::WebBrowserComponent::Options::WinWebView2()
                 .withUserDataFolder (folder))
             .withNativeIntegrationEnabled (true)
+            .withResourceProvider ([] (const juce::String& url) -> std::optional<juce::WebBrowserComponent::Resource>
+            {
+                auto retrieveResource = [] (const char* data, int size, const juce::String& mime)
+                {
+                    std::vector<std::byte> vec;
+                    vec.resize ((size_t) size);
+                    std::memcpy (vec.data(), data, (size_t) size);
+                    return juce::WebBrowserComponent::Resource { std::move (vec), mime };
+                };
+
+                // Serve from memory over a virtual origin so the browser allows native C++/JS scripting
+                if (url.endsWith ("index.html") || url == "http://kronos.local" || url == "http://kronos.local/")
+                    return retrieveResource (BinaryData::index_html, BinaryData::index_htmlSize, "text/html");
+                if (url.contains ("app.js"))
+                    return retrieveResource (BinaryData::app_js, BinaryData::app_jsSize, "application/javascript");
+                if (url.contains ("styles.css"))
+                    return retrieveResource (BinaryData::styles_css, BinaryData::styles_cssSize, "text/css");
+
+                return std::nullopt;
+            }, "http://kronos.local")
             .withNativeFunction ("sendParamToCpp", [&p](const juce::var& args, std::function<void (juce::var)> completion)
             {
                 logToFile ("C++: sendParamToCpp called. args size = " + juce::String (args.size()));
