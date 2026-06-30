@@ -342,8 +342,12 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                         const p = activePartials[idx];
                         const target_a = targetAmps[p] * currentAmp;
 
-                        // Apply decay smoothing
-                        voice.smoothedAmps[p] += (target_a - voice.smoothedAmps[p]) * alpha_block[p];
+                        // Apply decay smoothing conditionally: instant tracking on attack, slow tracking on decay
+                        let alpha = 1.0;
+                        if (target_a < voice.smoothedAmps[p]) {
+                            alpha = alpha_block[p];
+                        }
+                        voice.smoothedAmps[p] += (target_a - voice.smoothedAmps[p]) * alpha;
                         const a = voice.smoothedAmps[p];
 
                         // Increment phase

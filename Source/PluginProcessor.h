@@ -257,8 +257,12 @@ public:
         int p = activePartials[i];
         float target_a = targetAmps[p] * envVal;
 
-        // Apply decay smoothing
-        smoothedAmps[p] += (target_a - smoothedAmps[p]) * alpha_block[p];
+        // Apply decay smoothing conditionally: instant tracking on attack, slow tracking on decay
+        float alpha = 1.0f;
+        if (target_a < smoothedAmps[p]) {
+          alpha = alpha_block[p];
+        }
+        smoothedAmps[p] += (target_a - smoothedAmps[p]) * alpha;
         float a = smoothedAmps[p];
 
         phases[p] += phaseDeltas[p];
