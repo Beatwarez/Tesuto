@@ -23,6 +23,8 @@ KronosAudioProcessor::KronosAudioProcessor()
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("cutoff", 1), "Cutoff", 0.0f, 1.0f, 0.75f),
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("space", 1), "Space",  0.0f, 1.0f, 0.30f),
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("alter", 1), "Alter",  0.0f, 1.0f, 0.0f),
+           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("size", 1), "Size",   0.0f, 1.0f, 0.50f),
+           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("sweep", 1), "Sweep",  0.0f, 1.0f, 0.50f),
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("cloud", 1), "Cloud",  0.0f, 1.0f, 0.0f),
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("attack", 1), "Attack", juce::NormalisableRange<float> (0.01f, 5.0f, 0.01f, 0.35f), 0.20f),
            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("decay", 1), "Decay",  juce::NormalisableRange<float> (0.01f, 5.0f, 0.01f, 0.35f), 0.30f),
@@ -160,6 +162,8 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     float cutoff = *apvts.getRawParameterValue ("cutoff");
     float space  = *apvts.getRawParameterValue ("space");
     float alter  = *apvts.getRawParameterValue ("alter");
+    float size   = *apvts.getRawParameterValue ("size");
+    float sweep  = *apvts.getRawParameterValue ("sweep");
     float cloud  = *apvts.getRawParameterValue ("cloud");
     float attack = *apvts.getRawParameterValue ("attack");
     float decay  = *apvts.getRawParameterValue ("decay");
@@ -170,7 +174,7 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     {
         if (auto* voice = dynamic_cast<KronosVoice*> (synth.getVoice (i)))
         {
-            voice->updateParams (detune, timbre, cutoff, space, cloud);
+            voice->updateParams (detune, timbre, cutoff, space, cloud, size, sweep);
             voice->updateAlter (alter);
             voice->updateAdsr (attack, decay, sustain, release);
         }
@@ -217,6 +221,16 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             else if (ccNumber == 5)
             {
                 if (auto* rawVal = apvts.getRawParameterValue ("alter"))
+                    rawVal->store (ccValue);
+            }
+            else if (ccNumber == 6)
+            {
+                if (auto* rawVal = apvts.getRawParameterValue ("size"))
+                    rawVal->store (ccValue);
+            }
+            else if (ccNumber == 7)
+            {
+                if (auto* rawVal = apvts.getRawParameterValue ("sweep"))
                     rawVal->store (ccValue);
             }
             else if (ccNumber == 8)

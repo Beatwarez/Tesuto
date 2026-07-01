@@ -22,6 +22,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             { name: 'cutoff', defaultValue: 0.75, minValue: 0.0, maxValue: 1.0 },
             { name: 'space', defaultValue: 0.3, minValue: 0.0, maxValue: 1.0 },
             { name: 'alter', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'size', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
+            { name: 'sweep', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
             { name: 'cloud', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 }
         ];
     }
@@ -32,10 +34,9 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
         this.time = 0;
         
         // Initialize 8 voices
-        this.envHistSize = 128;
         this.voices = [];
         for (let i = 0; i < MAX_VOICES; i++) {
-            const envHistory = Array.from({ length: MAX_PARTIALS }, () => new Float32Array(this.envHistSize));
+            const delayBuffers = Array.from({ length: MAX_PARTIALS }, () => new Float32Array(4096));
             this.voices.push({
                 active: false,
                 note: -1,
@@ -49,11 +50,15 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 panLeft: new Float32Array(MAX_PARTIALS),
                 panRight: new Float32Array(MAX_PARTIALS),
                 smoothedAmps: new Float32Array(MAX_PARTIALS),
-                delayedWetAmps: new Float32Array(MAX_PARTIALS),
-                envHistory: envHistory,
-                histWriteIdx: 0,
-                p_delay_scale: new Float32Array(MAX_PARTIALS),
-                lastEnvVal: 0.0
+                delayBuffers: delayBuffers,
+                delayIndices: new Int32Array(MAX_PARTIALS),
+                p_base_delay: new Float32Array(MAX_PARTIALS),
+                p_delay_samples: new Float32Array(MAX_PARTIALS),
+                p_feedback: new Float32Array(MAX_PARTIALS),
+                p_send_gain: new Float32Array(MAX_PARTIALS),
+                isReleasingReverb: false,
+                reverbReleaseSamplesLeft: 0,
+                activePartials: []
             });
             for (let p = 0; p < MAX_PARTIALS; p++) {
                 this.voices[i].phases[p] = 0.0;
@@ -62,9 +67,9 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 this.voices[i].panLeft[p] = Math.sqrt(1 - basePan);
                 this.voices[i].panRight[p] = Math.sqrt(basePan);
                 
-                // golden ratio scattered delay mapping
-                const scatter = Math.sin(p * 1.618) * 0.15;
-                this.voices[i].p_delay_scale[p] = Math.max(0.0, Math.min(1.0, p / (MAX_PARTIALS - 1) + scatter));
+                // Inharmonic room size delay base mapping
+                const scatter = Math.sin(p * 1.618) * 0.5 + 0.5;
+                this.voices[i].p_base_delay[p] = 400.0 + 3200.0 * (Math.sqrt(p / (MAX_PARTIALS - 1)) * 0.7 + scatter * 0.3);
             }
         }
 
@@ -109,11 +114,11 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             for (let p = 0; p < MAX_PARTIALS; p++) {
                 voice.phases[p] = 0.0;
                 voice.smoothedAmps[p] = 0.0;
-                voice.delayedWetAmps[p] = 0.0;
-                voice.envHistory[p].fill(0.0);
+                voice.delayBuffers[p].fill(0.0);
+                voice.delayIndices[p] = 0;
             }
-            voice.histWriteIdx = 0;
-            voice.lastEnvVal = 0.0;
+            voice.isReleasingReverb = false;
+            voice.reverbReleaseSamplesLeft = 0;
         } else {
             // Pitch glide if reusing active voice
             voice.freq = targetFreq;
@@ -175,6 +180,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             const cutoffVal = parameters.cutoff[0];
             const spaceVal = parameters.space[0];
             const alterVal = parameters.alter ? parameters.alter[0] : 0.0;
+            const sizeVal = parameters.size ? parameters.size[0] : 0.5;
+            const sweepVal = parameters.sweep ? parameters.sweep[0] : 0.5;
             const cloudVal = parameters.cloud ? parameters.cloud[0] : 0.0;
 
             // Correctly scale envelope step sizes for block-rate updates (128 samples per block)
@@ -201,6 +208,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 voice.currentFreq += (voice.freq - voice.currentFreq) * 0.06;
 
                 // Update voice envelope at block rate (using block-scaled speeds)
+                let isEnvelopeActive = true;
                 if (voice.envState === 'attack') {
                     voice.amp += attackStep;
                     if (voice.amp >= voice.targetAmp) {
@@ -211,135 +219,149 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     voice.amp -= releaseStep;
                     if (voice.amp <= 0.0) {
                         voice.amp = 0.0;
-                        
-                        // Check if reverb tail is still ringing
-                        let maxAmp = 0.0;
-                        for (let p = 0; p < MAX_PARTIALS; p++) {
-                            if (voice.smoothedAmps[p] > maxAmp) maxAmp = voice.smoothedAmps[p];
-                        }
-                        if (maxAmp <= 0.001) {
-                            voice.active = false;
-                            voice.envState = 'idle';
-                            continue;
-                        }
+                        isEnvelopeActive = false;
                     }
                 } else if (voice.envState === 'sustain') {
                     voice.amp += (voice.targetAmp - voice.amp) * 0.01;
+                } else if (voice.envState === 'idle') {
+                    isEnvelopeActive = false;
+                }
+
+                if (!isEnvelopeActive) {
+                    if (!voice.isReleasingReverb) {
+                        voice.isReleasingReverb = true;
+                        const decayTimeSeconds = 0.1 + sizeVal * sizeVal * 5.9;
+                        voice.reverbReleaseSamplesLeft = Math.floor(decayTimeSeconds * sampleRate);
+                    }
+                    voice.reverbReleaseSamplesLeft -= bufferLength;
+                    if (voice.reverbReleaseSamplesLeft <= 0) {
+                        voice.active = false;
+                        voice.envState = 'idle';
+                        voice.isReleasingReverb = false;
+                        continue;
+                    }
+                } else {
+                    voice.isReleasingReverb = false;
+                    voice.reverbReleaseSamplesLeft = 0;
                 }
 
                 const currentAmp = voice.amp;
-                if (currentAmp <= 0.0001) continue;
+                if (currentAmp <= 0.0001 && !voice.isReleasingReverb) continue;
 
-                // Compute partial frequencies and amplitudes (optimized block-rate calculation)
+                // Update frequencies, targetAmps, phaseDeltas, pL_block, pR_block, and rebuild active list
                 const freqs = new Float32Array(MAX_PARTIALS);
                 const targetAmps = new Float32Array(MAX_PARTIALS);
                 const phaseDeltas = new Float32Array(MAX_PARTIALS);
                 const pL_block = new Float32Array(MAX_PARTIALS);
                 const pR_block = new Float32Array(MAX_PARTIALS);
-                const alpha_block = new Float32Array(MAX_PARTIALS);
-                
-                const activePartials = [];
 
-                // CLOUD decay time in seconds (0.5s at min, up to 15.0s at max)
-                const decayTimeSeconds = 0.5 + cloudVal * cloudVal * 14.5;
+                if (!voice.isReleasingReverb) {
+                    voice.activePartials = [];
+                    for (let p = 0; p < MAX_PARTIALS; p++) {
+                        const harmonicIndex = p + 1;
 
-                // Update circular history write index once per block
-                voice.histWriteIdx = (voice.histWriteIdx + 1) % voice.envHistSize;
+                        // Detune / Inharmonic Warp
+                        const stretch = detuneVal * detuneVal * 3.5 * Math.sin(harmonicIndex * 1.57 + p * 0.1);
+                        freqs[p] = voice.currentFreq * (harmonicIndex + stretch);
 
-                for (let p = 0; p < MAX_PARTIALS; p++) {
-                    const harmonicIndex = p + 1;
+                        // Timbre Morphing (10 distinct shapes with baseline floor)
+                        const getSpectralShape = (p, harmonicIndex, shapeIndex) => {
+                            let rawVal = 0.0;
+                            switch (shapeIndex) {
+                                case 0: // 1. Warm Triangle/Saw
+                                    rawVal = 1.0 / Math.pow(harmonicIndex, 1.3); break;
+                                case 1: // 2. Hollow Square (Odd harmonics only)
+                                    rawVal = (p % 2 === 0) ? (1.0 / harmonicIndex) : (0.08 / harmonicIndex); break;
+                                case 2: // 3. Comb Filter / Phased
+                                    rawVal = (Math.sin(p * 0.22) * 0.4 + 0.6) / Math.sqrt(harmonicIndex); break;
+                                case 3: // 4. High Fizz (High-pass)
+                                    rawVal = (0.1 + 0.9 * (p / 256.0)) * (1.0 / Math.sqrt(harmonicIndex)); break;
+                                case 4: // 5. Formant Vocal "Ooh" (Double peaks near H3 & H8)
+                                    rawVal = Math.exp(-Math.pow(harmonicIndex - 3, 2) / 2)
+                                         + 0.5 * Math.exp(-Math.pow(harmonicIndex - 8, 2) / 8)
+                                         + 0.05 / harmonicIndex; break;
+                                case 5: // 6. Formant Vocal "Aah" (Double peaks near H6 & H14)
+                                    rawVal = Math.exp(-Math.pow(harmonicIndex - 6, 2) / 4)
+                                         + 0.4 * Math.exp(-Math.pow(harmonicIndex - 14, 2) / 16)
+                                         + 0.05 / harmonicIndex; break;
+                                case 6: // 7. Octave Double (Even harmonics dominant)
+                                    rawVal = (p % 2 === 1) ? (1.0 / Math.pow(harmonicIndex, 1.2)) : (0.15 / harmonicIndex); break;
+                                case 7: // 8. Metallic / Inharmonic (Golden ratio spacing)
+                                    rawVal = (Math.sin(p * 1.618) * 0.4 + 0.6) / Math.pow(harmonicIndex, 0.7); break;
+                                case 8: // 9. Resonance Spike (Resonant peak at H12)
+                                    rawVal = (p === 0) ? 1.0 : (0.08 + 0.92 * Math.exp(-Math.pow(harmonicIndex - 12, 2) / 2)); break;
+                                case 9: // 10. Grit (Deterministic noise-like hash)
+                                    rawVal = (Math.sin(p * 123.456) * 0.3 + 0.7) / harmonicIndex; break;
+                                default:
+                                    rawVal = 0.0; break;
+                            }
+                            
+                            const baseline = 0.05 / Math.sqrt(harmonicIndex);
+                            return rawVal * 0.90 + baseline;
+                        };
 
-                    // Detune / Inharmonic Warp
-                    const stretch = detuneVal * detuneVal * 3.5 * Math.sin(harmonicIndex * 1.57 + p * 0.1);
-                    freqs[p] = voice.currentFreq * (harmonicIndex + stretch);
-
-                    // Timbre Morphing (10 distinct shapes with baseline floor)
-                    const getSpectralShape = (p, harmonicIndex, shapeIndex) => {
-                        let rawVal = 0.0;
-                        switch (shapeIndex) {
-                            case 0: // 1. Warm Triangle/Saw
-                                rawVal = 1.0 / Math.pow(harmonicIndex, 1.3); break;
-                            case 1: // 2. Hollow Square (Odd harmonics only)
-                                rawVal = (p % 2 === 0) ? (1.0 / harmonicIndex) : (0.08 / harmonicIndex); break;
-                            case 2: // 3. Comb Filter / Phased
-                                rawVal = (Math.sin(p * 0.22) * 0.4 + 0.6) / Math.sqrt(harmonicIndex); break;
-                            case 3: // 4. High Fizz (High-pass)
-                                rawVal = (0.1 + 0.9 * (p / 256.0)) * (1.0 / Math.sqrt(harmonicIndex)); break;
-                            case 4: // 5. Formant Vocal "Ooh" (Double peaks near H3 & H8)
-                                rawVal = Math.exp(-Math.pow(harmonicIndex - 3, 2) / 2)
-                                     + 0.5 * Math.exp(-Math.pow(harmonicIndex - 8, 2) / 8)
-                                     + 0.05 / harmonicIndex; break;
-                            case 5: // 6. Formant Vocal "Aah" (Double peaks near H6 & H14)
-                                rawVal = Math.exp(-Math.pow(harmonicIndex - 6, 2) / 4)
-                                     + 0.4 * Math.exp(-Math.pow(harmonicIndex - 14, 2) / 16)
-                                     + 0.05 / harmonicIndex; break;
-                            case 6: // 7. Octave Double (Even harmonics dominant)
-                                rawVal = (p % 2 === 1) ? (1.0 / Math.pow(harmonicIndex, 1.2)) : (0.15 / harmonicIndex); break;
-                            case 7: // 8. Metallic / Inharmonic (Golden ratio spacing)
-                                rawVal = (Math.sin(p * 1.618) * 0.4 + 0.6) / Math.pow(harmonicIndex, 0.7); break;
-                            case 8: // 9. Resonance Spike (Resonant peak at H12)
-                                rawVal = (p === 0) ? 1.0 : (0.08 + 0.92 * Math.exp(-Math.pow(harmonicIndex - 12, 2) / 2)); break;
-                            case 9: // 10. Grit (Deterministic noise-like hash)
-                                rawVal = (Math.sin(p * 123.456) * 0.3 + 0.7) / harmonicIndex; break;
-                            default:
-                                rawVal = 0.0; break;
+                        const scaledTimbre = timbreVal * 9.0;
+                        let timbreIdx = Math.floor(scaledTimbre);
+                        let timbreMix = scaledTimbre - timbreIdx;
+                        if (timbreIdx >= 9) {
+                            timbreIdx = 8;
+                            timbreMix = 1.0;
                         }
-                        
-                        const baseline = 0.05 / Math.sqrt(harmonicIndex);
-                        return rawVal * 0.90 + baseline;
-                    };
 
-                    const scaledTimbre = timbreVal * 9.0;
-                    let timbreIdx = Math.floor(scaledTimbre);
-                    let timbreMix = scaledTimbre - timbreIdx;
-                    if (timbreIdx >= 9) {
-                        timbreIdx = 8;
-                        timbreMix = 1.0;
+                        const baseAmp = getSpectralShape(p, harmonicIndex, timbreIdx) * (1 - timbreMix)
+                                      + getSpectralShape(p, harmonicIndex, timbreIdx + 1) * timbreMix;
+
+                        // Cutoff Filter
+                        const ratio = freqs[p] / cutoffFreq;
+                        const filterMult = 1.0 / (1.0 + Math.pow(ratio, 6.0));
+
+                        // Space (Organic LFO drift)
+                        const lfoDrift = Math.sin(this.time * 1.2 + voice.phaseDrifts[p]) * spaceVal * 0.3;
+
+                        targetAmps[p] = baseAmp * filterMult * (1.0 + lfoDrift);
+
+                        // Precalculate phase delta and panning
+                        phaseDeltas[p] = freqs[p] / sampleRate;
+
+                        if (p === 0) {
+                            pL_block[p] = voice.panLeft[p] * (1 - spaceVal) + 0.707 * spaceVal;
+                            pR_block[p] = voice.panRight[p] * (1 - spaceVal) + 0.707 * spaceVal;
+                        } else if (p % 2 === 0) {
+                            pL_block[p] = voice.panLeft[p] * (1 - spaceVal) + 1.0 * spaceVal;
+                            pR_block[p] = voice.panRight[p] * (1 - spaceVal) + 0.0 * spaceVal;
+                        } else {
+                            pL_block[p] = voice.panLeft[p] * (1 - spaceVal) + 0.0 * spaceVal;
+                            pR_block[p] = voice.panRight[p] * (1 - spaceVal) + 1.0 * spaceVal;
+                        }
+
+                        // Collect active partials
+                        if (targetAmps[p] >= 0.0001 || voice.smoothedAmps[p] >= 0.0001) {
+                            voice.activePartials.push(p);
+                        }
                     }
+                }
 
-                    const baseAmp = getSpectralShape(p, harmonicIndex, timbreIdx) * (1 - timbreMix)
-                                  + getSpectralShape(p, harmonicIndex, timbreIdx + 1) * timbreMix;
+                // Decay time and algorithmic routing precomputations
+                const decayTimeSeconds = 0.1 + sizeVal * sizeVal * 5.9;
+                const decayAlpha = -6.91 / (decayTimeSeconds * sampleRate);
+                const centerHarmonic = sweepVal * 255.0;
+                const sendWidth = 35.0;
 
-                    // Cutoff Filter
-                    const ratio = freqs[p] / cutoffFreq;
-                    const filterMult = 1.0 / (1.0 + Math.pow(ratio, 6.0));
+                for (let idx = 0; idx < voice.activePartials.length; idx++) {
+                    const p = voice.activePartials[idx];
+                    
+                    // 1. Slow LFO chorus modulation on room sizes
+                    const chorusLfo = Math.sin(this.time * 1.5 + voice.phaseDrifts[p]) * 6.0;
+                    voice.p_delay_samples[p] = Math.max(1.0, Math.min(4095.0, voice.p_base_delay[p] + chorusLfo));
 
-                    // Space (Organic LFO drift)
-                    const lfoDrift = Math.sin(this.time * 1.2 + voice.phaseDrifts[p]) * spaceVal * 0.3;
+                    // 2. Send amount based on sweep Gaussian
+                    const distance = p - centerHarmonic;
+                    const sendAmp = Math.exp(-(distance * distance) / (2.0 * sendWidth * sendWidth));
+                    voice.p_send_gain[p] = cloudVal * sendAmp * 1.2;
 
-                    targetAmps[p] = baseAmp * filterMult * (1.0 + lfoDrift);
-
-                    // Precalculate phase delta and panning
-                    phaseDeltas[p] = freqs[p] / sampleRate;
-
-                    if (p === 0) {
-                        pL_block[p] = voice.panLeft[p] * (1 - spaceVal) + 0.707 * spaceVal;
-                        pR_block[p] = voice.panRight[p] * (1 - spaceVal) + 0.707 * spaceVal;
-                    } else if (p % 2 === 0) {
-                        pL_block[p] = voice.panLeft[p] * (1 - spaceVal) + 1.0 * spaceVal;
-                        pR_block[p] = voice.panRight[p] * (1 - spaceVal) + 0.0 * spaceVal;
-                    } else {
-                        pL_block[p] = voice.panLeft[p] * (1 - spaceVal) + 0.0 * spaceVal;
-                        pR_block[p] = voice.panRight[p] * (1 - spaceVal) + 1.0 * spaceVal;
-                    }
-
-                    // Reverb time-constant (alpha) per partial (sample-rate independent)
-                    const alpha = 1.0 / (sampleRate * decayTimeSeconds);
-                    alpha_block[p] = (alpha > 1.0) ? 1.0 : alpha;
-
-                    // Write current envelope modulated amplitude to history
-                    voice.envHistory[p][voice.histWriteIdx] = targetAmps[p] * voice.lastEnvVal;
-
-                    // Query delayed wet amplitude from history (block rate query)
-                    const delayBlocks = Math.floor(voice.p_delay_scale[p] * cloudVal * (voice.envHistSize - 2));
-                    const readIdx = (voice.histWriteIdx - delayBlocks + voice.envHistSize) % voice.envHistSize;
-                    voice.delayedWetAmps[p] = voice.envHistory[p][readIdx];
-
-                    // Collect active partials
-                    const maxExpectedAmp = Math.max(targetAmps[p] * voice.lastEnvVal, voice.delayedWetAmps[p]);
-                    if (maxExpectedAmp >= 0.0001 || voice.smoothedAmps[p] >= 0.0001) {
-                        activePartials.push(p);
-                    }
+                    // 3. Reverb decay feedback
+                    const feedback = Math.exp(decayAlpha * voice.p_delay_samples[p]);
+                    voice.p_feedback[p] = Math.max(0.0, Math.min(0.98, feedback));
                 }
 
                 // Sample loop
@@ -348,20 +370,10 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     let sumR = 0.0;
                     let prevVal = 0.0;
 
-                    for (let idx = 0; idx < activePartials.length; idx++) {
-                        const p = activePartials[idx];
-                        const dry_target = targetAmps[p] * currentAmp;
-                        const wet_target = voice.delayedWetAmps[p];
-
-                        // Blend dry and wet targets based on cloudVal
-                        const target_a = dry_target * (1.0 - cloudVal * 0.5) + wet_target * (cloudVal * 1.2);
-
-                        // Apply decay smoothing conditionally: instant tracking on attack, slow tracking on decay
-                        let alpha = 1.0;
-                        if (target_a < voice.smoothedAmps[p]) {
-                            alpha = alpha_block[p];
-                        }
-                        voice.smoothedAmps[p] += (target_a - voice.smoothedAmps[p]) * alpha;
+                    for (let idx = 0; idx < voice.activePartials.length; idx++) {
+                        const p = voice.activePartials[idx];
+                        const dry_target = targetAmps[p] * (voice.isReleasingReverb ? 0.0 : currentAmp);
+                        voice.smoothedAmps[p] += (dry_target - voice.smoothedAmps[p]) * 0.15;
                         const a = voice.smoothedAmps[p];
 
                         // Increment phase
@@ -372,7 +384,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
 
                         let modPhase = voice.phases[p];
                         if (idx > 0) {
-                            const p_prev = activePartials[idx - 1];
+                            const p_prev = voice.activePartials[idx - 1];
                             const distance = Math.abs(freqs[p] - freqs[p_prev]);
                             const normDistance = distance / voice.currentFreq;
                             let modIndex = (alterVal * alterVal * 1.5 * voice.smoothedAmps[p_prev]) / (normDistance + 0.05);
@@ -387,8 +399,23 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                         const val = SINE_TABLE[sineIdx];
                         prevVal = val;
 
-                        sumL += val * a * pL_block[p];
-                        sumR += val * a * pR_block[p];
+                        const dryVal = val * a;
+
+                        // Comb filter processing
+                        const writeIdx = voice.delayIndices[p];
+                        const readIdx = (writeIdx - (voice.p_delay_samples[p] | 0)) & 4095;
+                        const delayedVal = voice.delayBuffers[p][readIdx];
+
+                        const wetVal = dryVal * voice.p_send_gain[p] + voice.p_feedback[p] * delayedVal;
+                        voice.delayBuffers[p][writeIdx] = wetVal;
+                        voice.delayIndices[p] = (writeIdx + 1) & 4095;
+
+                        // Blend dry and wet signals based on cloudVal
+                        const dryMix = 1.0 - cloudVal * 0.3;
+                        const mixedVal = dryVal * dryMix + wetVal;
+
+                        sumL += mixedVal * pL_block[p];
+                        sumR += mixedVal * pR_block[p];
                     }
 
                     leftChannel[i] += sumL * scaleFactor;
@@ -396,8 +423,6 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
 
                     this.time += 1.0 / sampleRate;
                 }
-
-                voice.lastEnvVal = currentAmp;
             }
 
             // Output limiting (saturation) to prevent digital clipping
@@ -610,8 +635,8 @@ class KronosSynth {
             cutoff: 0.75,
             space: 0.30,
             alter: 0.00,
-            param6: 0.25,
-            param7: 0.50,
+            size: 0.50,
+            sweep: 0.50,
             cloud: 0.30,
             attack: 0.80,
             decay: 0.30,
@@ -626,8 +651,8 @@ class KronosSynth {
             cutoff: new CustomSlider('slider-cutoff', 0, 1, this.values.cutoff, 0.001, (v) => this.onSliderChange('cutoff', v)),
             space: new CustomSlider('slider-space', 0, 1, this.values.space, 0.001, (v) => this.onSliderChange('space', v)),
             alter: new CustomSlider('slider-alter', 0, 1, this.values.alter, 0.001, (v) => this.onSliderChange('alter', v)),
-            param6: new CustomSlider('slider-param6', 0, 1, this.values.param6, 0.001, (v) => this.onSliderChange('param6', v)),
-            param7: new CustomSlider('slider-param7', 0, 1, this.values.param7, 0.001, (v) => this.onSliderChange('param7', v)),
+            size: new CustomSlider('slider-size', 0, 1, this.values.size, 0.001, (v) => this.onSliderChange('size', v)),
+            sweep: new CustomSlider('slider-sweep', 0, 1, this.values.sweep, 0.001, (v) => this.onSliderChange('sweep', v)),
             cloud: new CustomSlider('slider-cloud', 0, 1, this.values.cloud, 0.001, (v) => this.onSliderChange('cloud', v)),
         };
 

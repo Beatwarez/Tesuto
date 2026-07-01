@@ -10,8 +10,6 @@ extern float sineTable[32768];
 class KronosVoice : public juce::MPESynthesiserVoice {
 public:
   KronosVoice() {
-    histWriteIdx = 0;
-    lastEnvVal = 0.0f;
     for (int p = 0; p < 256; ++p) {
       phases[p] = 0.0f;
       phaseDrifts[p] = juce::Random::getSystemRandom().nextFloat() *
@@ -20,14 +18,17 @@ public:
       panLeft[p] = std::sqrt(1.0f - basePan);
       panRight[p] = std::sqrt(basePan);
 
-      // Inharmonic golden-ratio scattered delays (upward sweep)
-      float scatter = std::sin((float)p * 1.618f) * 0.15f;
-      p_delay_scale[p] = std::max(0.0f, std::min(1.0f, (float)p / 255.0f + scatter));
-
-      for (int h = 0; h < envHistSize; ++h) {
-        envHistory[p][h] = 0.0f;
+      // Algorithmic inharmonic base delay length pre-computation (room size)
+      float scatter = std::sin((float)p * 1.618f) * 0.5f + 0.5f;
+      p_base_delay[p] = 400.0f + 3200.0f * (std::sqrt((float)p / 255.0f) * 0.7f + scatter * 0.3f);
+      
+      for (int d = 0; d < delayBufferSize; ++d) {
+        delayBuffers[p][d] = 0.0f;
       }
-      delayedWetAmps[p] = 0.0f;
+      delayIndices[p] = 0;
+      p_delay_samples[p] = 0.0f;
+      p_feedback[p] = 0.0f;
+      p_send_gain[p] = 0.0f;
     }
   }
 
@@ -40,15 +41,11 @@ public:
     for (int p = 0; p < 256; ++p) {
       phases[p] = 0.0f;
       smoothedAmps[p] = 0.0f;
-      delayedWetAmps[p] = 0.0f;
-      for (int h = 0; h < envHistSize; ++h) {
-        envHistory[p][h] = 0.0f;
+      for (int d = 0; d < delayBufferSize; ++d) {
+        delayBuffers[p][d] = 0.0f;
       }
+      delayIndices[p] = 0;
     }
-    histWriteIdx = 0;
-    lastEnvVal = 0.0f;
-
-    targetAmp = currentlyPlayingNote.noteOnVelocity.asUnsignedFloat();
     voiceActive = true;
     localTimbreMod = currentlyPlayingNote.timbre.asUnsignedFloat() * 0.4f;
 
@@ -82,12 +79,14 @@ public:
 
   void noteKeyStateChanged() override {}
 
-  void updateParams(float detune, float timbre, float cutoff, float space, float cloud) {
+  void updateParams(float detune, float timbre, float cutoff, float space, float cloud, float size, float sweep) {
     detuneVal = detune;
     timbreVal = timbre;
     cutoffVal = cutoff;
     spaceVal = space;
     cloudVal = cloud;
+    sizeVal = size;
+    sweepVal = sweep;
   }
 
   void updateAlter(float alter) {
@@ -106,18 +105,23 @@ public:
                        int numSamples) override {
     bool adsrActive = adsr.isActive();
     
-    // Check if both ADSR is inactive and the reverb tail has fully decayed
+    // Check if the voice is in reverb decay release phase
     if (! adsrActive) {
-      float maxAmp = 0.0f;
-      for (int p = 0; p < 256; ++p) {
-        if (smoothedAmps[p] > maxAmp)
-          maxAmp = smoothedAmps[p];
+      if (! isReleasingReverb) {
+        isReleasingReverb = true;
+        float decayTimeSeconds = 0.1f + sizeVal * sizeVal * 5.9f;
+        reverbReleaseSamplesLeft = static_cast<int>(decayTimeSeconds * currentSampleRate);
       }
-      if (maxAmp <= 0.001f) {
+      reverbReleaseSamplesLeft -= numSamples;
+      if (reverbReleaseSamplesLeft <= 0) {
         clearCurrentNote();
         voiceActive = false;
+        isReleasingReverb = false;
         return;
       }
+    } else {
+      isReleasingReverb = false;
+      reverbReleaseSamplesLeft = 0;
     }
 
     currentSampleRate = getSampleRate();
@@ -133,7 +137,6 @@ public:
     float phaseDeltas[256];
     float pL_block[256];
     float pR_block[256];
-    float alpha_block[256];
 
     int activePartials[256];
     int numActivePartials = 0;
@@ -193,93 +196,94 @@ public:
       timbreMix = 1.0f;
     }
 
-    // CLOUD decay time in seconds (0.5s at min, up to 15.0s at max)
-    float decayTimeSeconds = 0.5f + cloudVal * cloudVal * 14.5f;
+    // CLOUD decay time in seconds (0.1s at min, up to 6.0s at max)
+    float decayTimeSeconds = 0.1f + sizeVal * sizeVal * 5.9f;
 
-    // Update circular history at block rate using envelope value of the last block
-    histWriteIdx = (histWriteIdx + 1) % envHistSize;
+    // Exact decay coefficient factor based on sample rate and target RT60 decay time
+    float decayAlpha = -6.91f / (decayTimeSeconds * currentSampleRate);
+    
+    float centerHarmonic = sweepVal * 255.0f;
+    float sendWidth = 35.0f; // Width of the swept bandpass zone
 
-    for (int p = 0; p < 256; ++p) {
-      int harmonicIndex = p + 1;
+    if (! isReleasingReverb) {
+      numActivePartials = 0;
+      for (int p = 0; p < 256; ++p) {
+        int harmonicIndex = p + 1;
 
-      // Detune / Inharmonic Warp
-      float stretch =
-          (p == 0) ? 0.0f
-                   : (detuneVal * detuneVal * 3.5f *
-                      std::sin((float)harmonicIndex * 1.57f + (float)p * 0.1f));
-      freqs[p] = currentFundamentalFreq * ((float)harmonicIndex + stretch);
+        // Detune / Inharmonic Warp
+        float stretch =
+            (p == 0) ? 0.0f
+                     : (detuneVal * detuneVal * 3.5f *
+                        std::sin((float)harmonicIndex * 1.57f + (float)p * 0.1f));
+        freqs[p] = currentFundamentalFreq * ((float)harmonicIndex + stretch);
 
-      // Timbre Morphing
-      float baseAmp = getSpectralShape (p, harmonicIndex, timbreIdx) * (1.0f - timbreMix)
-                    + getSpectralShape (p, harmonicIndex, timbreIdx + 1) * timbreMix;
+        // Timbre Morphing
+        float baseAmp = getSpectralShape (p, harmonicIndex, timbreIdx) * (1.0f - timbreMix)
+                      + getSpectralShape (p, harmonicIndex, timbreIdx + 1) * timbreMix;
 
-      // Cutoff limiter
-      float ratio = freqs[p] / cutoffFreq;
-      float filterMult = 1.0f / (1.0f + std::pow(ratio, 6.0f));
+        // Cutoff limiter
+        float ratio = freqs[p] / cutoffFreq;
+        float filterMult = 1.0f / (1.0f + std::pow(ratio, 6.0f));
 
-      // Space (Organic LFO drift)
-      float lfoDrift =
-          std::sin((float)voiceTime * 1.2f + phaseDrifts[p]) * spaceVal * 0.3f;
+        // Space (Organic LFO drift)
+        float lfoDrift =
+            std::sin((float)voiceTime * 1.2f + phaseDrifts[p]) * spaceVal * 0.3f;
 
-      targetAmps[p] = baseAmp * filterMult * targetAmp * (1.0f + lfoDrift);
+        targetAmps[p] = baseAmp * filterMult * targetAmp * (1.0f + lfoDrift);
 
-      // Precalculate phase delta and panning
-      phaseDeltas[p] = freqs[p] / (float)currentSampleRate;
+        // Precalculate phase delta and panning
+        phaseDeltas[p] = freqs[p] / (float)currentSampleRate;
+        
+        if (p == 0) {
+          pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
+          pR_block[p] = panRight[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
+        } else if (p % 2 == 0) {
+          pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
+          pR_block[p] = panRight[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
+        } else {
+          pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
+          pR_block[p] = panRight[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
+        }
+
+        // Collect active partials: active if target is audible OR if envelope is still active
+        if (targetAmps[p] >= 0.0001f || smoothedAmps[p] >= 0.0001f) {
+          activePartials[numActivePartials++] = p;
+        }
+      }
+    }
+    
+    // We update delay samples, feedback, and send gains at block rate for active partials
+    for (int i = 0; i < numActivePartials; ++i) {
+      int p = activePartials[i];
+      // 1. Slow LFO chorus modulation on room sizes
+      float chorusLfo = std::sin(voiceTime * 1.5f + phaseDrifts[p]) * 6.0f;
+      p_delay_samples[p] = std::max(1.0f, std::min(4095.0f, p_base_delay[p] + chorusLfo));
       
-      if (p == 0) {
-        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
-        pR_block[p] = panRight[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
-      } else if (p % 2 == 0) {
-        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
-        pR_block[p] = panRight[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
-      } else {
-        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
-        pR_block[p] = panRight[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
-      }
-
-      // Reverb time-constant (alpha) per partial (sample-rate independent)
-      float alpha = 1.0f / (currentSampleRate * decayTimeSeconds);
-      alpha_block[p] = (alpha > 1.0f) ? 1.0f : alpha;
-
-      // Write target amplitude modulated by last envelope to history
-      envHistory[p][histWriteIdx] = targetAmps[p] * lastEnvVal;
-
-      // Query delayed wet amplitude from history (block rate query)
-      int delayBlocks = static_cast<int>(p_delay_scale[p] * cloudVal * (envHistSize - 2));
-      int readIdx = (histWriteIdx - delayBlocks + envHistSize) % envHistSize;
-      delayedWetAmps[p] = envHistory[p][readIdx];
-
-      // Collect active partials: active if target is audible OR if reverb tail is still ringing
-      float maxExpectedAmp = std::max(targetAmps[p] * lastEnvVal, delayedWetAmps[p]);
-      if (maxExpectedAmp >= 0.0001f || smoothedAmps[p] >= 0.0001f) {
-        activePartials[numActivePartials++] = p;
-      }
+      // 2. Algorithmic send amount based on SWEEP Gaussian bandpass
+      float distance = (float)p - centerHarmonic;
+      float sendAmp = std::exp(-(distance * distance) / (2.0f * sendWidth * sendWidth));
+      p_send_gain[p] = cloudVal * sendAmp * 1.2f;
+      
+      // 3. Reverb decay feedback scaled to match target decayTimeSeconds uniformly
+      float feedback = std::exp(decayAlpha * p_delay_samples[p]);
+      p_feedback[p] = std::max(0.0f, std::min(0.98f, feedback));
     }
 
     // Mix into output buffers
     float scaleFactor = 0.045f; // Level normalization per voice
-    float envVal = 0.0f;
 
     for (int s = 0; s < numSamples; ++s) {
-      envVal = adsr.getNextSample();
+      float envVal = adsrActive ? adsr.getNextSample() : 0.0f;
       float sampleL = 0.0f;
       float sampleR = 0.0f;
       float prevVal = 0.0f;
 
       for (int i = 0; i < numActivePartials; ++i) {
         int p = activePartials[i];
-        float dry_target = targetAmps[p] * envVal;
-        float wet_target = delayedWetAmps[p];
         
-        // Blend dry and wet targets based on cloudVal
-        float target_a = dry_target * (1.0f - cloudVal * 0.5f) + wet_target * (cloudVal * 1.2f);
-
-        // Apply decay smoothing conditionally: instant tracking on attack, slow tracking on decay
-        float alpha = 1.0f;
-        if (target_a < smoothedAmps[p]) {
-          alpha = alpha_block[p];
-        }
-        smoothedAmps[p] += (target_a - smoothedAmps[p]) * alpha;
+        // Track the dry target amplitude envelope smoothly (15ms time-constant)
+        float dry_target = targetAmps[p] * envVal;
+        smoothedAmps[p] += (dry_target - smoothedAmps[p]) * 0.15f;
         float a = smoothedAmps[p];
 
         phases[p] += phaseDeltas[p];
@@ -302,8 +306,23 @@ public:
         float val = sineTable[idx];
         prevVal = val;
 
-        sampleL += val * a * pL_block[p];
-        sampleR += val * a * pR_block[p];
+        float dryVal = val * a;
+
+        // Comb filter processing
+        int writeIdx = delayIndices[p];
+        int readIdx = (writeIdx - static_cast<int>(p_delay_samples[p])) & delayBufferMask;
+        float delayedVal = delayBuffers[p][readIdx];
+
+        float wetVal = dryVal * p_send_gain[p] + p_feedback[p] * delayedVal;
+        delayBuffers[p][writeIdx] = wetVal;
+        delayIndices[p] = (writeIdx + 1) & delayBufferMask;
+
+        // Blend dry and wet signals based on cloudVal
+        float dryMix = 1.0f - cloudVal * 0.3f;
+        float mixedVal = dryVal * dryMix + wetVal;
+
+        sampleL += mixedVal * pL_block[p];
+        sampleR += mixedVal * pR_block[p];
       }
 
       outputBuffer.addSample(0, startSample + s, sampleL * scaleFactor);
@@ -311,8 +330,6 @@ public:
 
       voiceTime += 1.0 / currentSampleRate;
     }
-
-    lastEnvVal = envVal;
 
     if (! adsr.isActive()) {
       clearCurrentNote();
@@ -344,16 +361,22 @@ private:
   float cutoffVal = 0.75f;
   float spaceVal = 0.30f;
   float alterVal = 0.0f;
+  float sizeVal = 0.5f;
+  float sweepVal = 0.5f;
 
   float localTimbreMod = 0.0f;
   double voiceTime = 0.0;
 
-  static constexpr int envHistSize = 128;
-  float envHistory[256][envHistSize];
-  int histWriteIdx = 0;
-  float p_delay_scale[256];
-  float delayedWetAmps[256];
-  float lastEnvVal = 0.0f;
+  static constexpr int delayBufferSize = 4096;
+  static constexpr int delayBufferMask = 4095;
+  float delayBuffers[256][delayBufferSize];
+  int delayIndices[256];
+  float p_base_delay[256];
+  float p_delay_samples[256];
+  float p_feedback[256];
+  float p_send_gain[256];
+  bool isReleasingReverb = false;
+  int reverbReleaseSamplesLeft = 0;
 };
 
 // ==========================================================================
