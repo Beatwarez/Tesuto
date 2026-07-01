@@ -51,14 +51,44 @@ All backups are saved as zipped archives inside the workspace under the `.\backu
 * **Build #45**: Successful cloud build containing per-partial chorused send reverb with SIZE and SWEEP.
 * **Build #47**: Build containing silent output issue due to missing targetAmp assignment in noteStarted.
 * **Build #48**: Successful cloud build containing targetAmp fix to restore audio output.
-* **Build #50**: Cloud build triggered containing 8-channel global FDN send reverb with Householder mixing and per-partial routing.
+* **Build #50**: Successful cloud build containing 8-channel global FDN send reverb with Householder mixing and per-partial routing.
+* **Build #51**: Successful cloud build containing rescaled CLOUD range (max send gain 0.2) and boosted synth output volume scaleFactor.
+* **Build #52**: Successful cloud build containing Web visualizer extensions: ALTER geometric web (Concept 3) and CLOUD concentric ripples (Concept 2) with SWEEP hue color tracking.
+* **Build #53**: Cloud build triggered containing production release of visualizer extensions: ALTER geometric web (Concept 3) and CLOUD background smokey pulsation (Concept 2 - Revised) with SWEEP hue color tracking.
 
 ---
 
 ## 4. Current Status & Next Steps
 * **Status**: Clean compile and code pushed to GitHub.
-* **Next Steps**: Await build completion for Build #50, download the VST3, and manually verify that:
-  1. Triggering notes with `CLOUD` at maximum has an instant, punchy dry onset, and a warm, wide stereo reverb.
-  2. `SIZE` controls the decay tail length smoothly up to a massive 6 seconds.
-  3. `SWEEP` slides the excited frequency zone in the reverb tail.
-  4. CPU consumption remains extremely low (~1.5% per voice).
+* **Next Steps**: Await build completion for Build #53, download the VST3, and manually verify that:
+  1. Turning up `ALTER` draws a dense, glowing geometric web between harmonics.
+  2. Turning up `CLOUD` draws the soft, blurry, glowing smokey sphere in the background.
+  3. The glow pulsates organically over time and shifts color with `SWEEP`.
+  4. The glow decays slowly when keys are released matching the `SIZE` decay parameter.
+  5. Overall volume boost (+6dB) is preserved.
+
+---
+
+## 5. Detailed Implementation Plans History
+
+### Implementation Plan #50 - 8-Channel Global FDN Reverb
+
+* **Goal**: Replaced per-partial delay lines with a global 8-channel Feedback Delay Network (FDN) to generate lush, professional stereo reverberation with proper diffusion.
+* **C++ DSP Changes**:
+  * Removed 256 circular buffers from `KronosVoice` to save memory.
+  * Added `globalSendAccum` write pointers inside voices.
+  * Inside `renderNextBlock`, active sines accumulate their wet signal directly to the global FDN send channels based on harmonic index `route = 7 - (p / 32)`.
+  * Added an 8-channel global FDN reverb in `processBlock` with prime-length delay lines `[997, 1201, 1439, 1753, 2053, 2411, 2851, 3307]`.
+  * Multiplied outputs by a Householder mixing matrix at every sample to achieve dense, unitary spatial diffusion.
+  * Decayed FDN lines matching the `SIZE` decay parameter ($0.1\text{s}$ to $6.0\text{s}$).
+* **JS Worklet Changes**:
+  * Mirrored the same 8-channel FDN circular buffers and Householder feedback processing inside the browser AudioWorklet script (`app.js`).
+
+### Implementation Plan #53 - Visualizer Extensions Release
+
+* **Goal**: Implemented rich visualizer feedback for `ALTER` and `CLOUD` controls to match the audio logic.
+* **JS/HTML Changes**:
+  * Created a custom visual reverb envelope `visualReverbEnv` tracking the active key state but decaying slowly according to `size` values to match the exact duration of the audio tail decay.
+  * **ALTER (Concept 3)**: When `ALTER` is active, draws thin glowing connections between distant harmonics (e.g. connecting node `i` to `(i + 47) % length`). Web opacity scales dynamically with the `alter` parameter.
+  * **CLOUD (Concept 2 - Revised)**: When `CLOUD` is active, renders a large, blurry, pulsating radial gradient background glow. Hues shift with `SWEEP` and size/intensity pulsate organically and decay slowly according to `SIZE`.
+
