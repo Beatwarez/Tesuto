@@ -627,6 +627,7 @@ class KronosSynth {
         this.activeKeys = new Set();
         this.notesDown = {};
         this.visualEnvelope = 0.0;
+        this.visualReverbEnv = 0.0;
 
         // 12 Param Values (including new right-hand sliders and ADSR knobs)
         this.values = {
@@ -1067,8 +1068,12 @@ class KronosSynth {
         const targetEnvelope = this.activeKeys.size > 0 ? 1.0 : 0.0;
         if (targetEnvelope > this.visualEnvelope) {
             this.visualEnvelope += (targetEnvelope - this.visualEnvelope) * 0.025;
+            this.visualReverbEnv += (targetEnvelope - this.visualReverbEnv) * 0.08;
         } else {
             this.visualEnvelope += (targetEnvelope - this.visualEnvelope) * 0.012;
+            const decayTimeSeconds = 0.1 + this.values.size * this.values.size * 5.9;
+            const decayCoef = 1.0 - (1.0 / (decayTimeSeconds * 60.0));
+            this.visualReverbEnv *= Math.max(0.9, Math.min(0.998, decayCoef));
         }
         const activeRatio = this.visualEnvelope;
 
@@ -1115,6 +1120,29 @@ class KronosSynth {
             this.ctx.arc(targetX, targetY, 3, 0, Math.PI * 2);
             this.ctx.fill();
         });
+
+        // 1.5 Draw CLOUD background ripples (Concept 2)
+        const cloud = this.values.cloud;
+        const sweep = this.values.sweep;
+        const haloOpacity = cloud * this.visualReverbEnv * 0.15;
+        if (haloOpacity > 0.001) {
+            const sweepHue = (sweep * 360) % 360;
+            this.ctx.lineWidth = 2.0 + cloud * 4.0;
+            for (let k = 0; k < 3; k++) {
+                const baseRadius = maxRadius * (0.35 + k * 0.25);
+                const r = baseRadius;
+                this.ctx.strokeStyle = `hsla(${sweepHue}, 80%, 55%, ${haloOpacity * (1.0 - k * 0.25)})`;
+                this.ctx.beginPath();
+                for (let angle = 0; angle <= Math.PI * 2 + 0.1; angle += 0.08) {
+                    const warp = Math.sin(angle * 4 + Date.now() * 0.0012 + k) * (18 * cloud);
+                    const x = centerX + (r + warp) * Math.cos(angle);
+                    const y = centerY + (r + warp) * Math.sin(angle);
+                    if (angle === 0) this.ctx.moveTo(x, y);
+                    else this.ctx.lineTo(x, y);
+                }
+                this.ctx.stroke();
+            }
+        }
 
         // 2. Draw geometric grid background
         const gridCount = 6;
@@ -1217,6 +1245,23 @@ class KronosSynth {
                 this.ctx.moveTo(prevX, prevY);
                 this.ctx.lineTo(x, y);
                 this.ctx.stroke();
+            }
+
+            // 4. Draw ALTER cross-connecting laser web (Concept 3)
+            const alterVal = this.values.alter;
+            const webOpacity = alterVal * (0.015 + activeRatio * 0.05) * amp;
+            if (webOpacity > 0.001) {
+                const targetIdx = (i + 47) % this.particles.length;
+                const pTarget = this.particles[targetIdx];
+                if (pTarget.history && pTarget.history.length > 0) {
+                    const targetPos = pTarget.history[pTarget.history.length - 1];
+                    this.ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${light + 10}%, ${webOpacity})`;
+                    this.ctx.lineWidth = 0.5 + alterVal * 0.8;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, y);
+                    this.ctx.lineTo(targetPos.x, targetPos.y);
+                    this.ctx.stroke();
+                }
             }
 
             prevX = x;
