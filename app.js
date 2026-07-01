@@ -1121,27 +1121,29 @@ class KronosSynth {
             this.ctx.fill();
         });
 
-        // 1.5 Draw CLOUD background ripples (Concept 2)
+        // 1.5 Draw CLOUD background smokey light pulsation (Concept 2 - Revised)
         const cloud = this.values.cloud;
         const sweep = this.values.sweep;
-        const haloOpacity = cloud * this.visualReverbEnv * 0.15;
-        if (haloOpacity > 0.001) {
+        const intensity = cloud * this.visualReverbEnv;
+        if (intensity > 0.001) {
             const sweepHue = (sweep * 360) % 360;
-            this.ctx.lineWidth = 2.0 + cloud * 4.0;
-            for (let k = 0; k < 3; k++) {
-                const baseRadius = maxRadius * (0.35 + k * 0.25);
-                const r = baseRadius;
-                this.ctx.strokeStyle = `hsla(${sweepHue}, 80%, 55%, ${haloOpacity * (1.0 - k * 0.25)})`;
-                this.ctx.beginPath();
-                for (let angle = 0; angle <= Math.PI * 2 + 0.1; angle += 0.08) {
-                    const warp = Math.sin(angle * 4 + Date.now() * 0.0012 + k) * (18 * cloud);
-                    const x = centerX + (r + warp) * Math.cos(angle);
-                    const y = centerY + (r + warp) * Math.sin(angle);
-                    if (angle === 0) this.ctx.moveTo(x, y);
-                    else this.ctx.lineTo(x, y);
-                }
-                this.ctx.stroke();
-            }
+            
+            // Calculate organic slow pulse based on time and space drift speed
+            const pulse = 1.0 + Math.sin(Date.now() * 0.003 + Math.sin(Date.now() * 0.0008) * 2) * 0.12 * (1.0 + space * 1.5);
+            const radius = maxRadius * 0.95 * pulse * intensity;
+            
+            // Create a radial gradient for the "smokey light glow"
+            const grad = this.ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+            
+            // Soft pastel aura color morphing dynamically
+            grad.addColorStop(0.0, `hsla(${sweepHue}, 65%, 45%, ${intensity * 0.22})`);
+            grad.addColorStop(0.4, `hsla(${(sweepHue + 30) % 360}, 55%, 35%, ${intensity * 0.09})`);
+            grad.addColorStop(1.0, `rgba(37, 37, 40, 0.0)`); // Blends into the visualizer dark background
+            
+            this.ctx.fillStyle = grad;
+            this.ctx.beginPath();
+            this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            this.ctx.fill();
         }
 
         // 2. Draw geometric grid background
