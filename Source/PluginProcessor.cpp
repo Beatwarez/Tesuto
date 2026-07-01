@@ -38,6 +38,14 @@ KronosAudioProcessor::KronosAudioProcessor()
     for (int i = 0; i < 128; ++i)
         activeMidiNotes[i] = false;
 
+    // Reset FDN reverb buffers
+    for (int i = 0; i < fdnSize; ++i) {
+        for (int d = 0; d < 4096; ++d) {
+            fdnBuffers[i][d] = 0.0f;
+        }
+        fdnIndices[i] = 0;
+    }
+
     synth.clearVoices();
     for (int i = 0; i < 8; ++i)
         synth.addVoice (new KronosVoice());
@@ -113,9 +121,17 @@ void KronosAudioProcessor::changeProgramName (int, const juce::String&)
 // ==========================================================================
 // Lifecycle Methods
 // ==========================================================================
-void KronosAudioProcessor::prepareToPlay (double sampleRate, int)
+void KronosAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     synth.setCurrentPlaybackSampleRate (sampleRate);
+    
+    // Reset FDN reverb buffers on sample rate changes
+    for (int i = 0; i < fdnSize; ++i) {
+        for (int d = 0; d < 4096; ++d) {
+            fdnBuffers[i][d] = 0.0f;
+        }
+        fdnIndices[i] = 0;
+    }
 }
 
 void KronosAudioProcessor::releaseResources()
@@ -170,6 +186,10 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     float sustain = *apvts.getRawParameterValue ("sustain");
     float release = *apvts.getRawParameterValue ("release");
 
+    int numSamples = buffer.getNumSamples();
+    sendBuffers.setSize (8, numSamples, false, true, true);
+    sendBuffers.clear();
+
     for (int i = 0; i < synth.getNumVoices(); ++i)
     {
         if (auto* voice = dynamic_cast<KronosVoice*> (synth.getVoice (i)))
@@ -177,6 +197,16 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             voice->updateParams (detune, timbre, cutoff, space, cloud, size, sweep);
             voice->updateAlter (alter);
             voice->updateAdsr (attack, decay, sustain, release);
+            voice->setGlobalSendAccum(
+                sendBuffers.getWritePointer(0),
+                sendBuffers.getWritePointer(1),
+                sendBuffers.getWritePointer(2),
+                sendBuffers.getWritePointer(3),
+                sendBuffers.getWritePointer(4),
+                sendBuffers.getWritePointer(5),
+                sendBuffers.getWritePointer(6),
+                sendBuffers.getWritePointer(7)
+            );
         }
     }
 
@@ -243,6 +273,50 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
     // Render Synth voices
     synth.renderNextBlock (buffer, midiMessages, 0, buffer.getNumSamples());
+
+    // Process 8-Channel Global FDN Reverb
+    float decayTimeSeconds = 0.1f + size * size * 5.9f;
+    float decayAlpha = -6.91f / (decayTimeSeconds * getSampleRate());
+    float fdnGains[8];
+    for (int i = 0; i < 8; ++i) {
+        fdnGains[i] = std::max(0.0f, std::min(0.98f, std::exp(decayAlpha * fdnDelayLengths[i])));
+    }
+
+    auto* mainL = buffer.getWritePointer(0);
+    auto* mainR = buffer.getWritePointer(1);
+
+    for (int s = 0; s < numSamples; ++s) {
+        float outputs[8];
+        // 1. Read delay line outputs
+        for (int i = 0; i < 8; ++i) {
+            int readIdx = (fdnIndices[i] - fdnDelayLengths[i]) & fdnMask;
+            outputs[i] = fdnBuffers[i][readIdx];
+        }
+
+        // 2. Householder mixing matrix multiplication (lossless unitary diffusion)
+        float sum = 0.0f;
+        for (int i = 0; i < 8; ++i) sum += outputs[i];
+        float mixTerm = 0.25f * sum; // 2 / N = 2 / 8 = 0.25
+
+        float inputs[8];
+        for (int i = 0; i < 8; ++i) {
+            inputs[i] = outputs[i] - mixTerm;
+        }
+
+        // 3. Write feedback + input send to delay lines
+        for (int i = 0; i < 8; ++i) {
+            float sendIn = sendBuffers.getSample(i, s);
+            fdnBuffers[i][fdnIndices[i]] = sendIn + inputs[i] * fdnGains[i];
+            fdnIndices[i] = (fdnIndices[i] + 1) & fdnMask;
+        }
+
+        // 4. Mix outputs to stereo: odd/even split
+        float wetL = (outputs[0] + outputs[2] + outputs[4] + outputs[6]) * 0.35f;
+        float wetR = (outputs[1] + outputs[3] + outputs[5] + outputs[7]) * 0.35f;
+
+        mainL[s] += wetL;
+        mainR[s] += wetR;
+    }
 
     // Master Saturation (tanh) to prevent clipping
     for (int channel = 0; channel < totalNumOutputChannels; ++channel)

@@ -17,17 +17,6 @@ public:
       float basePan = (p == 0) ? 0.5f : ((p % 2 == 0) ? 0.25f : 0.75f);
       panLeft[p] = std::sqrt(1.0f - basePan);
       panRight[p] = std::sqrt(basePan);
-
-      // Algorithmic inharmonic base delay length pre-computation (room size)
-      float scatter = std::sin((float)p * 1.618f) * 0.5f + 0.5f;
-      p_base_delay[p] = 400.0f + 3200.0f * (std::sqrt((float)p / 255.0f) * 0.7f + scatter * 0.3f);
-      
-      for (int d = 0; d < delayBufferSize; ++d) {
-        delayBuffers[p][d] = 0.0f;
-      }
-      delayIndices[p] = 0;
-      p_delay_samples[p] = 0.0f;
-      p_feedback[p] = 0.0f;
       p_send_gain[p] = 0.0f;
     }
   }
@@ -41,10 +30,6 @@ public:
     for (int p = 0; p < 256; ++p) {
       phases[p] = 0.0f;
       smoothedAmps[p] = 0.0f;
-      for (int d = 0; d < delayBufferSize; ++d) {
-        delayBuffers[p][d] = 0.0f;
-      }
-      delayIndices[p] = 0;
     }
     voiceActive = true;
     targetAmp = currentlyPlayingNote.noteOnVelocity.asUnsignedFloat();
@@ -102,27 +87,19 @@ public:
     adsr.setParameters(adsrParams);
   }
 
+  void setGlobalSendAccum(float* s0, float* s1, float* s2, float* s3, float* s4, float* s5, float* s6, float* s7) {
+    globalSendAccum[0] = s0; globalSendAccum[1] = s1; globalSendAccum[2] = s2; globalSendAccum[3] = s3;
+    globalSendAccum[4] = s4; globalSendAccum[5] = s5; globalSendAccum[6] = s6; globalSendAccum[7] = s7;
+  }
+
   void renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int startSample,
                        int numSamples) override {
     bool adsrActive = adsr.isActive();
     
-    // Check if the voice is in reverb decay release phase
     if (! adsrActive) {
-      if (! isReleasingReverb) {
-        isReleasingReverb = true;
-        float decayTimeSeconds = 0.1f + sizeVal * sizeVal * 5.9f;
-        reverbReleaseSamplesLeft = static_cast<int>(decayTimeSeconds * currentSampleRate);
-      }
-      reverbReleaseSamplesLeft -= numSamples;
-      if (reverbReleaseSamplesLeft <= 0) {
-        clearCurrentNote();
-        voiceActive = false;
-        isReleasingReverb = false;
-        return;
-      }
-    } else {
-      isReleasingReverb = false;
-      reverbReleaseSamplesLeft = 0;
+      clearCurrentNote();
+      voiceActive = false;
+      return;
     }
 
     currentSampleRate = getSampleRate();
@@ -197,84 +174,64 @@ public:
       timbreMix = 1.0f;
     }
 
-    // CLOUD decay time in seconds (0.1s at min, up to 6.0s at max)
-    float decayTimeSeconds = 0.1f + sizeVal * sizeVal * 5.9f;
-
-    // Exact decay coefficient factor based on sample rate and target RT60 decay time
-    float decayAlpha = -6.91f / (decayTimeSeconds * currentSampleRate);
-    
     float centerHarmonic = sweepVal * 255.0f;
     float sendWidth = 35.0f; // Width of the swept bandpass zone
 
-    if (! isReleasingReverb) {
-      numActivePartials = 0;
-      for (int p = 0; p < 256; ++p) {
-        int harmonicIndex = p + 1;
+    numActivePartials = 0;
+    for (int p = 0; p < 256; ++p) {
+      int harmonicIndex = p + 1;
 
-        // Detune / Inharmonic Warp
-        float stretch =
-            (p == 0) ? 0.0f
-                     : (detuneVal * detuneVal * 3.5f *
-                        std::sin((float)harmonicIndex * 1.57f + (float)p * 0.1f));
-        freqs[p] = currentFundamentalFreq * ((float)harmonicIndex + stretch);
+      // Detune / Inharmonic Warp
+      float stretch =
+          (p == 0) ? 0.0f
+                   : (detuneVal * detuneVal * 3.5f *
+                      std::sin((float)harmonicIndex * 1.57f + (float)p * 0.1f));
+      freqs[p] = currentFundamentalFreq * ((float)harmonicIndex + stretch);
 
-        // Timbre Morphing
-        float baseAmp = getSpectralShape (p, harmonicIndex, timbreIdx) * (1.0f - timbreMix)
-                      + getSpectralShape (p, harmonicIndex, timbreIdx + 1) * timbreMix;
+      // Timbre Morphing
+      float baseAmp = getSpectralShape (p, harmonicIndex, timbreIdx) * (1.0f - timbreMix)
+                    + getSpectralShape (p, harmonicIndex, timbreIdx + 1) * timbreMix;
 
-        // Cutoff limiter
-        float ratio = freqs[p] / cutoffFreq;
-        float filterMult = 1.0f / (1.0f + std::pow(ratio, 6.0f));
+      // Cutoff limiter
+      float ratio = freqs[p] / cutoffFreq;
+      float filterMult = 1.0f / (1.0f + std::pow(ratio, 6.0f));
 
-        // Space (Organic LFO drift)
-        float lfoDrift =
-            std::sin((float)voiceTime * 1.2f + phaseDrifts[p]) * spaceVal * 0.3f;
+      // Space (Organic LFO drift)
+      float lfoDrift =
+          std::sin((float)voiceTime * 1.2f + phaseDrifts[p]) * spaceVal * 0.3f;
 
-        targetAmps[p] = baseAmp * filterMult * targetAmp * (1.0f + lfoDrift);
+      targetAmps[p] = baseAmp * filterMult * targetAmp * (1.0f + lfoDrift);
 
-        // Precalculate phase delta and panning
-        phaseDeltas[p] = freqs[p] / (float)currentSampleRate;
-        
-        if (p == 0) {
-          pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
-          pR_block[p] = panRight[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
-        } else if (p % 2 == 0) {
-          pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
-          pR_block[p] = panRight[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
-        } else {
-          pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
-          pR_block[p] = panRight[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
-        }
-
-        // Collect active partials: active if target is audible OR if envelope is still active
-        if (targetAmps[p] >= 0.0001f || smoothedAmps[p] >= 0.0001f) {
-          activePartials[numActivePartials++] = p;
-        }
-      }
-    }
-    
-    // We update delay samples, feedback, and send gains at block rate for active partials
-    for (int i = 0; i < numActivePartials; ++i) {
-      int p = activePartials[i];
-      // 1. Slow LFO chorus modulation on room sizes
-      float chorusLfo = std::sin(voiceTime * 1.5f + phaseDrifts[p]) * 6.0f;
-      p_delay_samples[p] = std::max(1.0f, std::min(4095.0f, p_base_delay[p] + chorusLfo));
+      // Precalculate phase delta and panning
+      phaseDeltas[p] = freqs[p] / (float)currentSampleRate;
       
-      // 2. Algorithmic send amount based on SWEEP Gaussian bandpass
+      if (p == 0) {
+        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
+        pR_block[p] = panRight[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
+      } else if (p % 2 == 0) {
+        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
+        pR_block[p] = panRight[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
+      } else {
+        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
+        pR_block[p] = panRight[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
+      }
+
+      // Algorithmic send amount based on SWEEP Gaussian bandpass
       float distance = (float)p - centerHarmonic;
       float sendAmp = std::exp(-(distance * distance) / (2.0f * sendWidth * sendWidth));
       p_send_gain[p] = cloudVal * sendAmp * 1.2f;
-      
-      // 3. Reverb decay feedback scaled to match target decayTimeSeconds uniformly
-      float feedback = std::exp(decayAlpha * p_delay_samples[p]);
-      p_feedback[p] = std::max(0.0f, std::min(0.98f, feedback));
+
+      // Collect active partials: active if target is audible OR if envelope is still active
+      if (targetAmps[p] >= 0.0001f || smoothedAmps[p] >= 0.0001f) {
+        activePartials[numActivePartials++] = p;
+      }
     }
 
     // Mix into output buffers
     float scaleFactor = 0.045f; // Level normalization per voice
 
     for (int s = 0; s < numSamples; ++s) {
-      float envVal = adsrActive ? adsr.getNextSample() : 0.0f;
+      float envVal = adsr.getNextSample();
       float sampleL = 0.0f;
       float sampleR = 0.0f;
       float prevVal = 0.0f;
@@ -309,21 +266,18 @@ public:
 
         float dryVal = val * a;
 
-        // Comb filter processing
-        int writeIdx = delayIndices[p];
-        int readIdx = (writeIdx - static_cast<int>(p_delay_samples[p])) & delayBufferMask;
-        float delayedVal = delayBuffers[p][readIdx];
+        // FDN send routing based on harmonic index p
+        int route = 7 - (p / 32);
+        if (route < 0) route = 0;
+        if (route > 7) route = 7;
+        if (globalSendAccum[route] != nullptr) {
+          globalSendAccum[route][startSample + s] += dryVal * p_send_gain[p];
+        }
 
-        float wetVal = dryVal * p_send_gain[p] + p_feedback[p] * delayedVal;
-        delayBuffers[p][writeIdx] = wetVal;
-        delayIndices[p] = (writeIdx + 1) & delayBufferMask;
-
-        // Blend dry and wet signals based on cloudVal
+        // Blend dry signal output
         float dryMix = 1.0f - cloudVal * 0.3f;
-        float mixedVal = dryVal * dryMix + wetVal;
-
-        sampleL += mixedVal * pL_block[p];
-        sampleR += mixedVal * pR_block[p];
+        sampleL += dryVal * dryMix * pL_block[p];
+        sampleR += dryVal * dryMix * pR_block[p];
       }
 
       outputBuffer.addSample(0, startSample + s, sampleL * scaleFactor);
@@ -368,16 +322,8 @@ private:
   float localTimbreMod = 0.0f;
   double voiceTime = 0.0;
 
-  static constexpr int delayBufferSize = 4096;
-  static constexpr int delayBufferMask = 4095;
-  float delayBuffers[256][delayBufferSize];
-  int delayIndices[256];
-  float p_base_delay[256];
-  float p_delay_samples[256];
-  float p_feedback[256];
   float p_send_gain[256];
-  bool isReleasingReverb = false;
-  int reverbReleaseSamplesLeft = 0;
+  float* globalSendAccum[8] = { nullptr };
 };
 
 // ==========================================================================
@@ -427,6 +373,14 @@ public:
 
 private:
   juce::MPESynthesiser synth;
+
+  static constexpr int fdnSize = 8;
+  static constexpr int fdnMask = 4095;
+  float fdnBuffers[fdnSize][4096];
+  int fdnIndices[fdnSize];
+  int fdnDelayLengths[fdnSize] = { 997, 1201, 1439, 1753, 2053, 2411, 2851, 3307 };
+  
+  juce::AudioBuffer<float> sendBuffers;
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(KronosAudioProcessor)
 };
