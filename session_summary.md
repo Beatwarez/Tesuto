@@ -48,13 +48,15 @@ All backups are saved as zipped archives inside the workspace under the `.\backu
 * **Build #42**: Successful cloud build containing TIMBRE morph sheen floor, pitch-independent ALTER PM, and JS worklet sync.
 * **Build #43**: Successful cloud build containing conditional CLOUD decay smoothing.
 * **Build #44**: Successful cloud build containing block-rate optimized Concept 1: Spectral Rain reverb.
-* **Build #45**: Cloud build triggered containing per-partial chorused send reverb with SIZE and SWEEP.
+* **Build #45**: Successful cloud build containing per-partial chorused send reverb with SIZE and SWEEP.
+* **Build #47**: Build containing silent output issue due to missing targetAmp assignment in noteStarted.
+* **Build #48**: Cloud build triggered containing targetAmp fix to restore audio output.
 
 ---
 
 ## 4. Current Status & Next Steps
 * **Status**: Clean compile and code pushed to GitHub.
-* **Next Steps**: Await build completion for Build #45, download the VST3, and manually verify that:
+* **Next Steps**: Await build completion for Build #48, download the VST3, and manually verify that:
   1. Triggering notes with `CLOUD` at maximum has an instant, punchy dry onset, and a warm, chorused reverb tail.
   2. `SIZE` controls the decay tail length smoothly up to a massive 6 seconds.
   3. `SWEEP` slides the excited frequency zone in the reverb tail, creating a beautiful spectral movement.
