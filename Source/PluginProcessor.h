@@ -219,7 +219,7 @@ public:
       // Algorithmic send amount based on SWEEP Gaussian bandpass
       float distance = (float)p - centerHarmonic;
       float sendAmp = std::exp(-(distance * distance) / (2.0f * sendWidth * sendWidth));
-      p_send_gain[p] = cloudVal * sendAmp * 1.2f;
+      p_send_gain[p] = cloudVal * sendAmp * 0.2f;
 
       // Collect active partials: active if target is audible OR if envelope is still active
       if (targetAmps[p] >= 0.0001f || smoothedAmps[p] >= 0.0001f) {
@@ -228,7 +228,7 @@ public:
     }
 
     // Mix into output buffers
-    float scaleFactor = 0.045f; // Level normalization per voice
+    float scaleFactor = 0.090f; // Level normalization per voice
 
     for (int s = 0; s < numSamples; ++s) {
       float envVal = adsr.getNextSample();

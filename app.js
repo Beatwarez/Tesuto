@@ -161,7 +161,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             }
             
             // Clear output if no active voices, but still run FDN tail decay!
-            const scaleFactor = activeVoicesCount > 0 ? (0.07 / Math.sqrt(activeVoicesCount)) : 0.07;
+            const scaleFactor = activeVoicesCount > 0 ? (0.14 / Math.sqrt(activeVoicesCount)) : 0.14;
 
             // Read parameter values for the current block
             const detuneVal = parameters.detune[0];
@@ -325,7 +325,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     // Send amount based on sweep Gaussian
                     const distance = p - centerHarmonic;
                     const sendAmp = Math.exp(-(distance * distance) / (2.0 * sendWidth * sendWidth));
-                    voice.p_send_gain[p] = cloudVal * sendAmp * 1.2;
+                    voice.p_send_gain[p] = cloudVal * sendAmp * 0.2;
                 }
 
                 // Sample loop
