@@ -32,8 +32,10 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
         this.time = 0;
         
         // Initialize 8 voices
+        this.envHistSize = 128;
         this.voices = [];
         for (let i = 0; i < MAX_VOICES; i++) {
+            const envHistory = Array.from({ length: MAX_PARTIALS }, () => new Float32Array(this.envHistSize));
             this.voices.push({
                 active: false,
                 note: -1,
@@ -46,7 +48,12 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 phaseDrifts: new Float32Array(MAX_PARTIALS),
                 panLeft: new Float32Array(MAX_PARTIALS),
                 panRight: new Float32Array(MAX_PARTIALS),
-                smoothedAmps: new Float32Array(MAX_PARTIALS)
+                smoothedAmps: new Float32Array(MAX_PARTIALS),
+                delayedWetAmps: new Float32Array(MAX_PARTIALS),
+                envHistory: envHistory,
+                histWriteIdx: 0,
+                p_delay_scale: new Float32Array(MAX_PARTIALS),
+                lastEnvVal: 0.0
             });
             for (let p = 0; p < MAX_PARTIALS; p++) {
                 this.voices[i].phases[p] = 0.0;
@@ -54,6 +61,10 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 const basePan = p === 0 ? 0.5 : (p % 2 === 0 ? 0.25 : 0.75);
                 this.voices[i].panLeft[p] = Math.sqrt(1 - basePan);
                 this.voices[i].panRight[p] = Math.sqrt(basePan);
+                
+                // golden ratio scattered delay mapping
+                const scatter = Math.sin(p * 1.618) * 0.15;
+                this.voices[i].p_delay_scale[p] = Math.max(0.0, Math.min(1.0, p / (MAX_PARTIALS - 1) + scatter));
             }
         }
 
@@ -98,7 +109,11 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             for (let p = 0; p < MAX_PARTIALS; p++) {
                 voice.phases[p] = 0.0;
                 voice.smoothedAmps[p] = 0.0;
+                voice.delayedWetAmps[p] = 0.0;
+                voice.envHistory[p].fill(0.0);
             }
+            voice.histWriteIdx = 0;
+            voice.lastEnvVal = 0.0;
         } else {
             // Pitch glide if reusing active voice
             voice.freq = targetFreq;
@@ -225,21 +240,11 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 
                 const activePartials = [];
 
-                // CLOUD decay time in seconds (0.1s at min, up to 15.0s at max)
-                const decayTimeSeconds = 0.1 + cloudVal * cloudVal * 14.9;
-                const p_start = Math.floor(MAX_PARTIALS * (1.0 - cloudVal));
+                // CLOUD decay time in seconds (0.5s at min, up to 15.0s at max)
+                const decayTimeSeconds = 0.5 + cloudVal * cloudVal * 14.5;
 
-                // 1. Apply Spectral Diffusion (amplitude blur across adjacent harmonics) at block rate
-                if (cloudVal > 0.01) {
-                    const diffusion = cloudVal * 0.15;
-                    let prevAmp = voice.smoothedAmps[0];
-                    for (let p = 0; p < MAX_PARTIALS; p++) {
-                        const currentAmp = voice.smoothedAmps[p];
-                        const nextAmp = (p < MAX_PARTIALS - 1) ? voice.smoothedAmps[p + 1] : currentAmp;
-                        voice.smoothedAmps[p] = (1.0 - diffusion) * currentAmp + diffusion * 0.5 * (prevAmp + nextAmp);
-                        prevAmp = currentAmp;
-                    }
-                }
+                // Update circular history write index once per block
+                voice.histWriteIdx = (voice.histWriteIdx + 1) % voice.envHistSize;
 
                 for (let p = 0; p < MAX_PARTIALS; p++) {
                     const harmonicIndex = p + 1;
@@ -319,15 +324,20 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     }
 
                     // Reverb time-constant (alpha) per partial (sample-rate independent)
-                    if (p >= p_start) {
-                        const alpha = 1.0 / (sampleRate * decayTimeSeconds);
-                        alpha_block[p] = (alpha > 1.0) ? 1.0 : alpha;
-                    } else {
-                        alpha_block[p] = 1.0;
-                    }
+                    const alpha = 1.0 / (sampleRate * decayTimeSeconds);
+                    alpha_block[p] = (alpha > 1.0) ? 1.0 : alpha;
+
+                    // Write current envelope modulated amplitude to history
+                    voice.envHistory[p][voice.histWriteIdx] = targetAmps[p] * voice.lastEnvVal;
+
+                    // Query delayed wet amplitude from history (block rate query)
+                    const delayBlocks = Math.floor(voice.p_delay_scale[p] * cloudVal * (voice.envHistSize - 2));
+                    const readIdx = (voice.histWriteIdx - delayBlocks + voice.envHistSize) % voice.envHistSize;
+                    voice.delayedWetAmps[p] = voice.envHistory[p][readIdx];
 
                     // Collect active partials
-                    if (targetAmps[p] * currentAmp >= 0.0001 || voice.smoothedAmps[p] >= 0.0001) {
+                    const maxExpectedAmp = Math.max(targetAmps[p] * voice.lastEnvVal, voice.delayedWetAmps[p]);
+                    if (maxExpectedAmp >= 0.0001 || voice.smoothedAmps[p] >= 0.0001) {
                         activePartials.push(p);
                     }
                 }
@@ -340,7 +350,11 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
 
                     for (let idx = 0; idx < activePartials.length; idx++) {
                         const p = activePartials[idx];
-                        const target_a = targetAmps[p] * currentAmp;
+                        const dry_target = targetAmps[p] * currentAmp;
+                        const wet_target = voice.delayedWetAmps[p];
+
+                        // Blend dry and wet targets based on cloudVal
+                        const target_a = dry_target * (1.0 - cloudVal * 0.5) + wet_target * (cloudVal * 1.2);
 
                         // Apply decay smoothing conditionally: instant tracking on attack, slow tracking on decay
                         let alpha = 1.0;
@@ -382,6 +396,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
 
                     this.time += 1.0 / sampleRate;
                 }
+
+                voice.lastEnvVal = currentAmp;
             }
 
             // Output limiting (saturation) to prevent digital clipping

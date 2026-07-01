@@ -10,6 +10,8 @@ extern float sineTable[32768];
 class KronosVoice : public juce::MPESynthesiserVoice {
 public:
   KronosVoice() {
+    histWriteIdx = 0;
+    lastEnvVal = 0.0f;
     for (int p = 0; p < 256; ++p) {
       phases[p] = 0.0f;
       phaseDrifts[p] = juce::Random::getSystemRandom().nextFloat() *
@@ -17,6 +19,15 @@ public:
       float basePan = (p == 0) ? 0.5f : ((p % 2 == 0) ? 0.25f : 0.75f);
       panLeft[p] = std::sqrt(1.0f - basePan);
       panRight[p] = std::sqrt(basePan);
+
+      // Inharmonic golden-ratio scattered delays (upward sweep)
+      float scatter = std::sin((float)p * 1.618f) * 0.15f;
+      p_delay_scale[p] = std::max(0.0f, std::min(1.0f, (float)p / 255.0f + scatter));
+
+      for (int h = 0; h < envHistSize; ++h) {
+        envHistory[p][h] = 0.0f;
+      }
+      delayedWetAmps[p] = 0.0f;
     }
   }
 
@@ -29,7 +40,13 @@ public:
     for (int p = 0; p < 256; ++p) {
       phases[p] = 0.0f;
       smoothedAmps[p] = 0.0f;
+      delayedWetAmps[p] = 0.0f;
+      for (int h = 0; h < envHistSize; ++h) {
+        envHistory[p][h] = 0.0f;
+      }
     }
+    histWriteIdx = 0;
+    lastEnvVal = 0.0f;
 
     targetAmp = currentlyPlayingNote.noteOnVelocity.asUnsignedFloat();
     voiceActive = true;
@@ -176,21 +193,11 @@ public:
       timbreMix = 1.0f;
     }
 
-    // CLOUD decay time in seconds (0.1s at min, up to 15.0s at max)
-    float decayTimeSeconds = 0.1f + cloudVal * cloudVal * 14.9f;
-    int p_start = static_cast<int>(256.0f * (1.0f - cloudVal));
+    // CLOUD decay time in seconds (0.5s at min, up to 15.0s at max)
+    float decayTimeSeconds = 0.5f + cloudVal * cloudVal * 14.5f;
 
-    // 1. Apply Spectral Diffusion (amplitude blur across adjacent harmonics) at block rate
-    if (cloudVal > 0.01f) {
-      float diffusion = cloudVal * 0.15f;
-      float prevAmp = smoothedAmps[0];
-      for (int p = 0; p < 256; ++p) {
-        float currentAmp = smoothedAmps[p];
-        float nextAmp = (p < 255) ? smoothedAmps[p + 1] : currentAmp;
-        smoothedAmps[p] = (1.0f - diffusion) * currentAmp + diffusion * 0.5f * (prevAmp + nextAmp);
-        prevAmp = currentAmp;
-      }
-    }
+    // Update circular history at block rate using envelope value of the last block
+    histWriteIdx = (histWriteIdx + 1) % envHistSize;
 
     for (int p = 0; p < 256; ++p) {
       int harmonicIndex = p + 1;
@@ -231,31 +238,41 @@ public:
       }
 
       // Reverb time-constant (alpha) per partial (sample-rate independent)
-      if (p >= p_start) {
-        float alpha = 1.0f / (currentSampleRate * decayTimeSeconds);
-        alpha_block[p] = (alpha > 1.0f) ? 1.0f : alpha;
-      } else {
-        alpha_block[p] = 1.0f; // Instant response
-      }
+      float alpha = 1.0f / (currentSampleRate * decayTimeSeconds);
+      alpha_block[p] = (alpha > 1.0f) ? 1.0f : alpha;
+
+      // Write target amplitude modulated by last envelope to history
+      envHistory[p][histWriteIdx] = targetAmps[p] * lastEnvVal;
+
+      // Query delayed wet amplitude from history (block rate query)
+      int delayBlocks = static_cast<int>(p_delay_scale[p] * cloudVal * (envHistSize - 2));
+      int readIdx = (histWriteIdx - delayBlocks + envHistSize) % envHistSize;
+      delayedWetAmps[p] = envHistory[p][readIdx];
 
       // Collect active partials: active if target is audible OR if reverb tail is still ringing
-      if (targetAmps[p] >= 0.0001f || smoothedAmps[p] >= 0.0001f) {
+      float maxExpectedAmp = std::max(targetAmps[p] * lastEnvVal, delayedWetAmps[p]);
+      if (maxExpectedAmp >= 0.0001f || smoothedAmps[p] >= 0.0001f) {
         activePartials[numActivePartials++] = p;
       }
     }
 
     // Mix into output buffers
     float scaleFactor = 0.045f; // Level normalization per voice
+    float envVal = 0.0f;
 
     for (int s = 0; s < numSamples; ++s) {
-      float envVal = adsr.getNextSample();
+      envVal = adsr.getNextSample();
       float sampleL = 0.0f;
       float sampleR = 0.0f;
       float prevVal = 0.0f;
 
       for (int i = 0; i < numActivePartials; ++i) {
         int p = activePartials[i];
-        float target_a = targetAmps[p] * envVal;
+        float dry_target = targetAmps[p] * envVal;
+        float wet_target = delayedWetAmps[p];
+        
+        // Blend dry and wet targets based on cloudVal
+        float target_a = dry_target * (1.0f - cloudVal * 0.5f) + wet_target * (cloudVal * 1.2f);
 
         // Apply decay smoothing conditionally: instant tracking on attack, slow tracking on decay
         float alpha = 1.0f;
@@ -295,6 +312,8 @@ public:
       voiceTime += 1.0 / currentSampleRate;
     }
 
+    lastEnvVal = envVal;
+
     if (! adsr.isActive()) {
       clearCurrentNote();
       voiceActive = false;
@@ -328,6 +347,13 @@ private:
 
   float localTimbreMod = 0.0f;
   double voiceTime = 0.0;
+
+  static constexpr int envHistSize = 128;
+  float envHistory[256][envHistSize];
+  int histWriteIdx = 0;
+  float p_delay_scale[256];
+  float delayedWetAmps[256];
+  float lastEnvVal = 0.0f;
 };
 
 // ==========================================================================
