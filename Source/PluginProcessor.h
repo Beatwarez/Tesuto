@@ -47,6 +47,7 @@ public:
       delayIndices[p] = 0;
     }
     voiceActive = true;
+    targetAmp = currentlyPlayingNote.noteOnVelocity.asUnsignedFloat();
     localTimbreMod = currentlyPlayingNote.timbre.asUnsignedFloat() * 0.4f;
 
     adsr.setSampleRate (getSampleRate() > 0.0 ? getSampleRate() : 44100.0);
