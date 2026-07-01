@@ -50,14 +50,15 @@ All backups are saved as zipped archives inside the workspace under the `.\backu
 * **Build #44**: Successful cloud build containing block-rate optimized Concept 1: Spectral Rain reverb.
 * **Build #45**: Successful cloud build containing per-partial chorused send reverb with SIZE and SWEEP.
 * **Build #47**: Build containing silent output issue due to missing targetAmp assignment in noteStarted.
-* **Build #48**: Cloud build triggered containing targetAmp fix to restore audio output.
+* **Build #48**: Successful cloud build containing targetAmp fix to restore audio output.
+* **Build #50**: Cloud build triggered containing 8-channel global FDN send reverb with Householder mixing and per-partial routing.
 
 ---
 
 ## 4. Current Status & Next Steps
 * **Status**: Clean compile and code pushed to GitHub.
-* **Next Steps**: Await build completion for Build #48, download the VST3, and manually verify that:
-  1. Triggering notes with `CLOUD` at maximum has an instant, punchy dry onset, and a warm, chorused reverb tail.
+* **Next Steps**: Await build completion for Build #50, download the VST3, and manually verify that:
+  1. Triggering notes with `CLOUD` at maximum has an instant, punchy dry onset, and a warm, wide stereo reverb.
   2. `SIZE` controls the decay tail length smoothly up to a massive 6 seconds.
-  3. `SWEEP` slides the excited frequency zone in the reverb tail, creating a beautiful spectral movement.
-  4. CPU consumption remains extremely low (~2% per voice).
+  3. `SWEEP` slides the excited frequency zone in the reverb tail.
+  4. CPU consumption remains extremely low (~1.5% per voice).
