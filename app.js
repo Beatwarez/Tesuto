@@ -1093,6 +1093,7 @@ class KronosSynth {
         const timbre = this.values.timbre;
         const cutoff = this.values.cutoff;
         const space = this.values.space;
+        const pitch = this.values.pitch;
 
         // Smoothly update visual envelope matching the DSP ADSR (0.8s attack, 1.5s release)
         const targetEnvelope = this.activeKeys.size > 0 ? 1.0 : 0.0;
@@ -1201,8 +1202,9 @@ class KronosSynth {
         for (let i = 0; i < this.particles.length; i++) {
             const p = this.particles[i];
 
-            // Speed up drift when space is high
-            p.phase += p.speed * (1.0 + space * 2.5);
+            // Speed up drift when space is high, and scale with pitch transposition
+            const pitchSpeedFactor = Math.pow(2.0, (pitch - 0.5) * 2.0);
+            p.phase += p.speed * (1.0 + space * 2.5) * pitchSpeedFactor;
 
             // Angle warp caused by form slider (harmonic to chaotic Moiré)
             const angleWarp = Math.sin(i * 0.12 + p.phase * 0.05) * form * form * 5.0;
@@ -1228,7 +1230,8 @@ class KronosSynth {
                 amp *= Math.max(0, 1.0 - (i - filterCutoffIndex) / 24.0);
             }
 
-            const dist = maxRadius * (0.15 + 0.85 * (i / this.particles.length));
+            const pitchScale = Math.pow(2.0, (pitch - 0.5) * 0.6);
+            const dist = maxRadius * (0.15 + 0.85 * (i / this.particles.length)) * pitchScale;
             // Tiny continuous orbit modulation even when silent, morphing to deep active waves
             const modulationScale = 8.0 + activeRatio * 37.0;
             const amplitudeScale = amp * modulationScale;
