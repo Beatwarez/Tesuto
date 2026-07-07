@@ -65,15 +65,15 @@ public:
 
   void noteKeyStateChanged() override {}
 
-  void updateParams(float detune, float timbre, float cutoff, float space, float cloud, float size, float sweep, float param7) {
-    detuneVal = detune;
+  void updateParams(float form, float timbre, float cutoff, float space, float cloud, float size, float sweep, float pitch) {
+    formVal = form;
     timbreVal = timbre;
     cutoffVal = cutoff;
     spaceVal = space;
     cloudVal = cloud;
     sizeVal = size;
     sweepVal = sweep;
-    param7Val = param7;
+    pitchVal = pitch;
   }
 
   void updateAlter(float alter) {
@@ -178,17 +178,17 @@ public:
     float centerHarmonic = sweepVal * 255.0f;
     float sendWidth = 35.0f; // Width of the swept bandpass zone
 
-    float pitchMultiplier = std::pow (2.0f, (param7Val - 0.5f) * 2.0f);
+    float pitchMultiplier = std::pow (2.0f, (pitchVal - 0.5f) * 2.0f);
     float pitchedFundamental = currentFundamentalFreq * pitchMultiplier;
 
     numActivePartials = 0;
     for (int p = 0; p < 256; ++p) {
       int harmonicIndex = p + 1;
 
-      // Detune / Inharmonic Warp
+      // Formant / Inharmonic Warp
       float stretch =
           (p == 0) ? 0.0f
-                   : (detuneVal * detuneVal * 3.5f *
+                   : (formVal * formVal * 3.5f *
                       std::sin((float)harmonicIndex * 1.57f + (float)p * 0.1f));
       freqs[p] = pitchedFundamental * ((float)harmonicIndex + stretch);
 
@@ -315,14 +315,14 @@ private:
   float smoothedAmps[256];
   float cloudVal = 0.0f;
 
-  float detuneVal = 0.0f;
+  float formVal = 0.0f;
   float timbreVal = 0.25f;
   float cutoffVal = 0.75f;
   float spaceVal = 0.30f;
   float alterVal = 0.0f;
   float sizeVal = 0.5f;
   float sweepVal = 0.5f;
-  float param7Val = 0.5f;
+  float pitchVal = 0.5f;
 
   float localTimbreMod = 0.0f;
   double voiceTime = 0.0;

@@ -17,7 +17,7 @@ for (let i = 0; i < SINE_TABLE_SIZE; i++) {
 class DroneSynthProcessor extends AudioWorkletProcessor {
     static get parameterDescriptors() {
         return [
-            { name: 'detune', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'form', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'timbre', defaultValue: 0.25, minValue: 0.0, maxValue: 1.0 },
             { name: 'cutoff', defaultValue: 0.75, minValue: 0.0, maxValue: 1.0 },
             { name: 'space', defaultValue: 0.3, minValue: 0.0, maxValue: 1.0 },
@@ -26,7 +26,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             { name: 'sweep', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
             { name: 'cloud', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'param6', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
-            { name: 'param7', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 }
+            { name: 'pitch', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 }
         ];
     }
 
@@ -167,7 +167,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             const scaleFactor = activeVoicesCount > 0 ? (0.14 / Math.sqrt(activeVoicesCount)) : 0.14;
 
             // Read parameter values for the current block
-            const detuneVal = parameters.detune[0];
+            const formVal = parameters.form[0];
             const timbreVal = parameters.timbre[0];
             const cutoffVal = parameters.cutoff[0];
             const spaceVal = parameters.space[0];
@@ -176,7 +176,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             const sweepVal = parameters.sweep ? parameters.sweep[0] : 0.5;
             const cloudVal = parameters.cloud ? parameters.cloud[0] : 0.0;
             const param6Val = parameters.param6 ? parameters.param6[0] : 0.5;
-            const param7Val = parameters.param7 ? parameters.param7[0] : 0.5;
+            const pitchVal = parameters.pitch ? parameters.pitch[0] : 0.5;
 
             // Correctly scale envelope step sizes for block-rate updates (128 samples per block)
             // Drone envelopes: smooth attack (approx 0.8s), longer release (approx 1.5s)
@@ -238,15 +238,15 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 const pR_block = new Float32Array(MAX_PARTIALS);
 
                 // Pitch Transposition Logic
-                const pitchMultiplier = Math.pow(2.0, (param7Val - 0.5) * 2.0);
+                const pitchMultiplier = Math.pow(2.0, (pitchVal - 0.5) * 2.0);
                 const pitchedFundamental = voice.currentFreq * pitchMultiplier;
 
                 voice.activePartials = [];
                 for (let p = 0; p < MAX_PARTIALS; p++) {
                     const harmonicIndex = p + 1;
 
-                    // Detune / Inharmonic Warp
-                    const stretch = detuneVal * detuneVal * 3.5 * Math.sin(harmonicIndex * 1.57 + p * 0.1);
+                    // Formant / Inharmonic Warp
+                    const stretch = formVal * formVal * 3.5 * Math.sin(harmonicIndex * 1.57 + p * 0.1);
                     freqs[p] = pitchedFundamental * (harmonicIndex + stretch);
 
                     // Timbre Morphing (10 distinct shapes with baseline floor)
@@ -640,7 +640,7 @@ class KronosSynth {
 
         // 12 Param Values (including new right-hand sliders and ADSR knobs)
         this.values = {
-            detune: 0.00,
+            form: 0.00,
             timbre: 0.25,
             cutoff: 0.75,
             space: 0.30,
@@ -653,18 +653,18 @@ class KronosSynth {
             sustain: 0.80,
             release: 1.50,
             param6: 0.50,
-            param7: 0.50
+            pitch: 0.50
         };
 
         // Initialize Custom Sliders (Left and Right symmetric panels)
         this.sliders = {
-            detune: new CustomSlider('slider-detune', 0, 1, this.values.detune, 0.001, (v) => this.onSliderChange('detune', v)),
+            form: new CustomSlider('slider-form', 0, 1, this.values.form, 0.001, (v) => this.onSliderChange('form', v)),
             timbre: new CustomSlider('slider-timbre', 0, 1, this.values.timbre, 0.001, (v) => this.onSliderChange('timbre', v)),
             cutoff: new CustomSlider('slider-cutoff', 0, 1, this.values.cutoff, 0.001, (v) => this.onSliderChange('cutoff', v)),
             space: new CustomSlider('slider-space', 0, 1, this.values.space, 0.001, (v) => this.onSliderChange('space', v)),
             alter: new CustomSlider('slider-alter', 0, 1, this.values.alter, 0.001, (v) => this.onSliderChange('alter', v)),
             param6: new CustomSlider('slider-param6', 0, 1, this.values.param6, 0.001, (v) => this.onSliderChange('param6', v)),
-            param7: new CustomSlider('slider-param7', 0, 1, this.values.param7, 0.001, (v) => this.onSliderChange('param7', v)),
+            pitch: new CustomSlider('slider-pitch', 0, 1, this.values.pitch, 0.001, (v) => this.onSliderChange('pitch', v)),
             cloud: new CustomSlider('slider-cloud', 0, 1, this.values.cloud, 0.001, (v) => this.onSliderChange('cloud', v)),
         };
 
@@ -766,7 +766,7 @@ class KronosSynth {
         this.values[param] = val;
         const displayEl = document.getElementById(`val-${param}`);
         if (displayEl) {
-            if (param === 'param7') {
+            if (param === 'pitch') {
                 const pitchVal = (val - 0.5) * 24.0;
                 displayEl.textContent = (pitchVal > 0 ? '+' : '') + pitchVal.toFixed(2);
             } else {
@@ -812,7 +812,7 @@ class KronosSynth {
             this.values[param] = val;
             const valDisplay = document.getElementById(`val-${param}`);
             if (valDisplay) {
-                if (param === 'param7') {
+                if (param === 'pitch') {
                     const pitchVal = (val - 0.5) * 24.0;
                     valDisplay.textContent = (pitchVal > 0 ? '+' : '') + pitchVal.toFixed(2);
                 } else {
@@ -1089,7 +1089,7 @@ class KronosSynth {
         const centerY = h / 2;
         const maxRadius = Math.min(w * 0.42, h * 0.42);
 
-        const detune = this.values.detune;
+        const form = this.values.form;
         const timbre = this.values.timbre;
         const cutoff = this.values.cutoff;
         const space = this.values.space;
@@ -1127,8 +1127,8 @@ class KronosSynth {
             const targetX = centerX + anchorRadius * Math.cos(t);
             const targetY = centerY + anchorRadius * Math.sin(t);
 
-            // Drag rope wobble based on detune/space macro
-            const wobbleY = Math.sin(Date.now() * 0.002 + index * 2) * (detune * 25);
+            // Drag rope wobble based on form/space macro
+            const wobbleY = Math.sin(Date.now() * 0.002 + index * 2) * (form * 25);
 
             // Draw curved light-gray visual guide line (always visible, floats cleanly)
             const guideOpacity = 0.45 + activeRatio * 0.55;
@@ -1184,7 +1184,7 @@ class KronosSynth {
             this.ctx.strokeStyle = `rgba(255, 255, 255, ${0.015 + (1.0 - space * 0.5) * 0.025})`;
             this.ctx.beginPath();
             for (let angle = 0; angle <= Math.PI * 2; angle += 0.05) {
-                const warp = Math.sin(angle * 5 + Date.now() * 0.0008) * detune * 14 * (i / gridCount);
+                const warp = Math.sin(angle * 5 + Date.now() * 0.0008) * form * 14 * (i / gridCount);
                 const x = centerX + (rad + warp) * Math.cos(angle);
                 const y = centerY + (rad + warp) * Math.sin(angle);
                 if (angle === 0) this.ctx.moveTo(x, y);
@@ -1204,8 +1204,8 @@ class KronosSynth {
             // Speed up drift when space is high
             p.phase += p.speed * (1.0 + space * 2.5);
 
-            // Angle warp caused by detune slider (harmonic to chaotic Moiré)
-            const angleWarp = Math.sin(i * 0.12 + p.phase * 0.05) * detune * detune * 5.0;
+            // Angle warp caused by form slider (harmonic to chaotic Moiré)
+            const angleWarp = Math.sin(i * 0.12 + p.phase * 0.05) * form * form * 5.0;
             const theta = (i * 0.22) + p.phase * 0.08 + angleWarp;
 
             // Amplitude envelope shape calculation
@@ -1252,7 +1252,7 @@ class KronosSynth {
 
             const headOpacity = 0.45 + activeRatio * 0.45; // 0.45 (idle) to 0.90 (bright)
             const trailOpacity = 0.10 + activeRatio * 0.12; // 0.10 (idle) to 0.22 (bright)
-            const lineOpacity = (0.08 + activeRatio * 0.12) * (1.0 - detune * 0.5); // 0.08 (idle) to 0.20 (bright)
+            const lineOpacity = (0.08 + activeRatio * 0.12) * (1.0 - form * 0.5); // 0.08 (idle) to 0.20 (bright)
 
             // Render fading trails from history
             for (let hIdx = 0; hIdx < p.history.length; hIdx++) {

@@ -10,6 +10,7 @@ class KronosWebView : public juce::WebBrowserComponent
 {
 public:
     float localParams[14] = { -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f };
+    bool localActiveNotes[128] = { false };
 
     static void logToFile (const juce::String& message)
     {
@@ -68,6 +69,8 @@ public:
                     {
                         for (int i = 0; i < 14; ++i)
                             webViewInstance->localParams[i] = -1.0f;
+                        for (int i = 0; i < 128; ++i)
+                            webViewInstance->localActiveNotes[i] = false;
                     }
                     else if (paramName == "noteon")
                     {
@@ -128,7 +131,6 @@ public:
 private:
     KronosAudioProcessor& audioProcessor;
     KronosWebView webView;
-    bool localActiveNotes[128] = { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KronosAudioProcessorEditor)
 };

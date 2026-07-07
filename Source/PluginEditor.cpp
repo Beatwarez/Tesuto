@@ -48,9 +48,9 @@ void KronosAudioProcessorEditor::timerCallback()
     for (int i = 0; i < 128; ++i)
     {
         bool isMidiActive = audioProcessor.activeMidiNotes[i].load();
-        if (isMidiActive != localActiveNotes[i])
+        if (isMidiActive != webView.localActiveNotes[i])
         {
-            localActiveNotes[i] = isMidiActive;
+            webView.localActiveNotes[i] = isMidiActive;
             if (isMidiActive)
             {
                 webView.evaluateJavascript ("if (window.kronosSynth) window.kronosSynth.triggerNoteOn(" + juce::String (i) + ", 100);");
@@ -63,7 +63,7 @@ void KronosAudioProcessorEditor::timerCallback()
     }
 
     // 2. Sync DAW-automated/saved parameters from C++ APVTS back to JS UI Sliders
-    juce::String paramIDs[14] = { "detune", "timbre", "cutoff", "space", "alter", "size", "sweep", "cloud", "attack", "decay", "sustain", "release", "param6", "param7" };
+    juce::String paramIDs[14] = { "form", "timbre", "cutoff", "space", "alter", "size", "sweep", "cloud", "attack", "decay", "sustain", "release", "param6", "pitch" };
     for (int p = 0; p < 14; ++p)
     {
         if (auto* rawVal = audioProcessor.apvts.getRawParameterValue (paramIDs[p]))
