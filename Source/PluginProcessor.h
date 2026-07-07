@@ -192,7 +192,7 @@ public:
                    : (formVal * formVal * 3.5f *
                       std::sin((float)harmonicIndex * 1.57f + (float)p * 0.1f));
       freqs[p] = pitchedFundamental * ((float)harmonicIndex + stretch);
-      float syncMultiplier = 1.0f + deSyncVal * 3.0f;
+      float syncMultiplier = 1.0f + deSyncVal * 1.0f;
       if (p > 0)
         freqs[p] *= syncMultiplier;
 

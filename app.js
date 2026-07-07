@@ -251,7 +251,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     const stretch = formVal * formVal * 3.5 * Math.sin(harmonicIndex * 1.57 + p * 0.1);
                     freqs[p] = pitchedFundamental * (harmonicIndex + stretch);
 
-                    const syncMultiplier = 1.0 + deSyncVal * 3.0;
+                    const syncMultiplier = 1.0 + deSyncVal * 1.0;
                     if (p > 0) {
                         freqs[p] *= syncMultiplier;
                     }
