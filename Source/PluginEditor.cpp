@@ -63,7 +63,7 @@ void KronosAudioProcessorEditor::timerCallback()
     }
 
     // 2. Sync DAW-automated/saved parameters from C++ APVTS back to JS UI Sliders
-    juce::String paramIDs[14] = { "form", "timbre", "cutoff", "space", "alter", "size", "sweep", "cloud", "attack", "decay", "sustain", "release", "param6", "pitch" };
+    juce::String paramIDs[14] = { "form", "timbre", "cutoff", "space", "alter", "size", "sweep", "cloud", "attack", "decay", "sustain", "release", "desync", "pitch" };
     for (int p = 0; p < 14; ++p)
     {
         if (auto* rawVal = audioProcessor.apvts.getRawParameterValue (paramIDs[p]))

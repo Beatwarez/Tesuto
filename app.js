@@ -25,7 +25,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             { name: 'size', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
             { name: 'sweep', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
             { name: 'cloud', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
-            { name: 'param6', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
+            { name: 'param6', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 }, // (unused placeholder)
+            { name: 'desync', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'pitch', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 }
         ];
     }
@@ -175,7 +176,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             const sizeVal = parameters.size ? parameters.size[0] : 0.5;
             const sweepVal = parameters.sweep ? parameters.sweep[0] : 0.5;
             const cloudVal = parameters.cloud ? parameters.cloud[0] : 0.0;
-            const param6Val = parameters.param6 ? parameters.param6[0] : 0.5;
+            const param6Val = parameters.param6 ? parameters.param6[0] : 0.5; // (unused placeholder)
+            const deSyncVal = parameters.desync ? parameters.desync[0] : 0.0;
             const pitchVal = parameters.pitch ? parameters.pitch[0] : 0.5;
 
             // Correctly scale envelope step sizes for block-rate updates (128 samples per block)
@@ -356,6 +358,10 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                         }
 
                         let modPhase = voice.phases[p];
+                        
+                        // Additive Phase Dispersal (DE-SYNC)
+                        modPhase += deSyncVal * p * p * 0.0002;
+
                         if (idx > 0) {
                             const p_prev = voice.activePartials[idx - 1];
                             const distance = Math.abs(freqs[p] - freqs[p_prev]);
@@ -469,6 +475,7 @@ class CustomSlider {
         this.min = min;
         this.max = max;
         this.value = defaultValue;
+        this.defaultValue = defaultValue;
         this.step = step;
         this.onChange = onChange;
         this.isDragging = false;
@@ -479,6 +486,12 @@ class CustomSlider {
         this.element.addEventListener('pointerdown', (e) => this.onPointerDown(e));
         window.addEventListener('pointermove', (e) => this.onPointerMove(e));
         window.addEventListener('pointerup', () => this.onPointerUp());
+
+        // Reset to default on double-click
+        this.element.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            this.setValue(this.defaultValue);
+        });
     }
 
     setValue(val) {
@@ -548,6 +561,7 @@ class CustomKnob {
         this.min = min;
         this.max = max;
         this.value = defaultValue;
+        this.defaultValue = defaultValue;
         this.isSeconds = isSeconds;
         this.isLogarithmic = isLogarithmic;
         this.onChange = onChange;
@@ -562,6 +576,12 @@ class CustomKnob {
         this.element.addEventListener('pointerdown', (e) => this.onPointerDown(e));
         window.addEventListener('pointermove', (e) => this.onPointerMove(e));
         window.addEventListener('pointerup', () => this.onPointerUp());
+
+        // Reset to default on double-click
+        this.element.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            this.setValue(this.defaultValue);
+        });
     }
 
     setValue(val) {
@@ -652,7 +672,7 @@ class KronosSynth {
             decay: 0.30,
             sustain: 0.80,
             release: 1.50,
-            param6: 0.50,
+            desync: 0.00,
             pitch: 0.50
         };
 
@@ -663,7 +683,7 @@ class KronosSynth {
             cutoff: new CustomSlider('slider-cutoff', 0, 1, this.values.cutoff, 0.001, (v) => this.onSliderChange('cutoff', v)),
             space: new CustomSlider('slider-space', 0, 1, this.values.space, 0.001, (v) => this.onSliderChange('space', v)),
             alter: new CustomSlider('slider-alter', 0, 1, this.values.alter, 0.001, (v) => this.onSliderChange('alter', v)),
-            param6: new CustomSlider('slider-param6', 0, 1, this.values.param6, 0.001, (v) => this.onSliderChange('param6', v)),
+            desync: new CustomSlider('slider-desync', 0, 1, this.values.desync, 0.001, (v) => this.onSliderChange('desync', v)),
             pitch: new CustomSlider('slider-pitch', 0, 1, this.values.pitch, 0.001, (v) => this.onSliderChange('pitch', v)),
             cloud: new CustomSlider('slider-cloud', 0, 1, this.values.cloud, 0.001, (v) => this.onSliderChange('cloud', v)),
         };
@@ -1094,6 +1114,7 @@ class KronosSynth {
         const cutoff = this.values.cutoff;
         const space = this.values.space;
         const pitch = this.values.pitch;
+        const desync = this.values.desync;
 
         // Smoothly update visual envelope matching the DSP ADSR (0.8s attack, 1.5s release)
         const targetEnvelope = this.activeKeys.size > 0 ? 1.0 : 0.0;
@@ -1208,7 +1229,8 @@ class KronosSynth {
 
             // Angle warp caused by form slider (harmonic to chaotic Moiré)
             const angleWarp = Math.sin(i * 0.12 + p.phase * 0.05) * form * form * 5.0;
-            const theta = (i * 0.22) + p.phase * 0.08 + angleWarp;
+            const phaseDeSync = desync * i * i * 0.00015;
+            const theta = (i * 0.22) + (p.phase + phaseDeSync) * 0.08 + angleWarp;
 
             // Amplitude envelope shape calculation
             let amp = 1.0;

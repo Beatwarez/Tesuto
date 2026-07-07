@@ -26,7 +26,7 @@ KronosAudioProcessor::KronosAudioProcessor()
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("size", 1), "Size",   0.0f, 1.0f, 0.50f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("sweep", 1), "Sweep",  0.0f, 1.0f, 0.50f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("cloud", 1), "Cloud",  0.0f, 1.0f, 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("param6", 1), "Param6", 0.0f, 1.0f, 0.50f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("desync", 1), "De-Sync", 0.0f, 1.0f, 0.0f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("pitch", 1), "Pitch", 0.0f, 1.0f, 0.50f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("attack", 1), "Attack", juce::NormalisableRange<float> (0.01f, 5.0f, 0.01f, 0.35f), 0.20f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("decay", 1), "Decay",  juce::NormalisableRange<float> (0.01f, 5.0f, 0.01f, 0.35f), 0.30f),
@@ -183,7 +183,7 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     float size   = *apvts.getRawParameterValue ("size");
     float sweep  = *apvts.getRawParameterValue ("sweep");
     float cloud  = *apvts.getRawParameterValue ("cloud");
-    float param6 = *apvts.getRawParameterValue ("param6");
+    float desync = *apvts.getRawParameterValue ("desync");
     float pitch  = *apvts.getRawParameterValue ("pitch");
     float attack = *apvts.getRawParameterValue ("attack");
     float decay  = *apvts.getRawParameterValue ("decay");
@@ -198,7 +198,7 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     {
         if (auto* voice = dynamic_cast<KronosVoice*> (synth.getVoice (i)))
         {
-            voice->updateParams (form, timbre, cutoff, space, cloud, size, sweep, pitch);
+            voice->updateParams (form, timbre, cutoff, space, cloud, size, sweep, desync, pitch);
             voice->updateAlter (alter);
             voice->updateAdsr (attack, decay, sustain, release);
             voice->setGlobalSendAccum(
@@ -259,7 +259,7 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             }
             else if (ccNumber == 6)
             {
-                if (auto* rawVal = apvts.getRawParameterValue ("param6"))
+                if (auto* rawVal = apvts.getRawParameterValue ("desync"))
                     rawVal->store (ccValue);
             }
             else if (ccNumber == 7)

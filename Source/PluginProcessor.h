@@ -65,7 +65,7 @@ public:
 
   void noteKeyStateChanged() override {}
 
-  void updateParams(float form, float timbre, float cutoff, float space, float cloud, float size, float sweep, float pitch) {
+  void updateParams(float form, float timbre, float cutoff, float space, float cloud, float size, float sweep, float desync, float pitch) {
     formVal = form;
     timbreVal = timbre;
     cutoffVal = cutoff;
@@ -73,6 +73,7 @@ public:
     cloudVal = cloud;
     sizeVal = size;
     sweepVal = sweep;
+    deSyncVal = desync;
     pitchVal = pitch;
   }
 
@@ -253,6 +254,10 @@ public:
           phases[p] -= 1.0f;
 
         float modPhase = phases[p];
+
+        // Additive Phase Dispersal (DE-SYNC)
+        modPhase += deSyncVal * (float)(p * p) * 0.0002f;
+
         if (i > 0) {
           int p_prev = activePartials[i - 1];
           float distance = std::abs (freqs[p] - freqs[p_prev]);
@@ -322,6 +327,7 @@ private:
   float alterVal = 0.0f;
   float sizeVal = 0.5f;
   float sweepVal = 0.5f;
+  float deSyncVal = 0.0f;
   float pitchVal = 0.5f;
 
   float localTimbreMod = 0.0f;
