@@ -65,7 +65,7 @@ public:
 
   void noteKeyStateChanged() override {}
 
-  void updateParams(float detune, float timbre, float cutoff, float space, float cloud, float size, float sweep) {
+  void updateParams(float detune, float timbre, float cutoff, float space, float cloud, float size, float sweep, float param7) {
     detuneVal = detune;
     timbreVal = timbre;
     cutoffVal = cutoff;
@@ -73,6 +73,7 @@ public:
     cloudVal = cloud;
     sizeVal = size;
     sweepVal = sweep;
+    param7Val = param7;
   }
 
   void updateAlter(float alter) {
@@ -177,6 +178,9 @@ public:
     float centerHarmonic = sweepVal * 255.0f;
     float sendWidth = 35.0f; // Width of the swept bandpass zone
 
+    float pitchMultiplier = std::pow (2.0f, (param7Val - 0.5f) * 2.0f);
+    float pitchedFundamental = currentFundamentalFreq * pitchMultiplier;
+
     numActivePartials = 0;
     for (int p = 0; p < 256; ++p) {
       int harmonicIndex = p + 1;
@@ -186,7 +190,7 @@ public:
           (p == 0) ? 0.0f
                    : (detuneVal * detuneVal * 3.5f *
                       std::sin((float)harmonicIndex * 1.57f + (float)p * 0.1f));
-      freqs[p] = currentFundamentalFreq * ((float)harmonicIndex + stretch);
+      freqs[p] = pitchedFundamental * ((float)harmonicIndex + stretch);
 
       // Timbre Morphing
       float baseAmp = getSpectralShape (p, harmonicIndex, timbreIdx) * (1.0f - timbreMix)
@@ -253,7 +257,7 @@ public:
           int p_prev = activePartials[i - 1];
           float distance = std::abs (freqs[p] - freqs[p_prev]);
           // Normalize the distance by the fundamental frequency to make it pitch-independent
-          float normDistance = distance / currentFundamentalFreq;
+          float normDistance = distance / pitchedFundamental;
           float modIndex = (alterVal * alterVal * 1.5f * smoothedAmps[p_prev]) / (normDistance + 0.05f);
           if (modIndex > 2.0f) modIndex = 2.0f;
           modPhase += modIndex * prevVal;
@@ -318,6 +322,7 @@ private:
   float alterVal = 0.0f;
   float sizeVal = 0.5f;
   float sweepVal = 0.5f;
+  float param7Val = 0.5f;
 
   float localTimbreMod = 0.0f;
   double voiceTime = 0.0;

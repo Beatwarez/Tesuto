@@ -522,3 +522,41 @@ body {
     font-size: 0.7vw;
     color: var(--fg-muted);
 }
+
+/* ==========================================================================
+   Reverb (Size/Sweep) Knobs System
+   ========================================================================== */
+.cloud-knobs-container {
+    width: 100%;
+    border-top: none;
+    padding-top: 2vh;
+    margin-top: 2vh;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end; /* Right-align to sit under Cloud slider */
+}
+
+.cloud-knobs-title {
+    font-family: var(--font-mono);
+    font-size: 0.75vw;
+    color: var(--fg-muted);
+    letter-spacing: 0.08vw;
+    margin-bottom: 1.5vh;
+    text-transform: uppercase;
+    text-align: right;
+}
+
+.cloud-knobs-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end; /* Right-align the knobs */
+    gap: 1.6vw;
+    width: 100%;
+}
+
+.small-knob {
+    width: 1.5vw !important;
+    height: 1.5vw !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+}

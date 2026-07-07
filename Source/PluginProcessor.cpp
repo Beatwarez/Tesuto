@@ -17,20 +17,22 @@ KronosAudioProcessor::KronosAudioProcessor()
                      #endif
                        ),
 #endif
-       apvts (*this, nullptr, "PARAMETERS", {
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("detune", 1), "Detune", 0.0f, 1.0f, 0.0f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("timbre", 1), "Timbre", 0.0f, 1.0f, 0.25f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("cutoff", 1), "Cutoff", 0.0f, 1.0f, 0.75f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("space", 1), "Space",  0.0f, 1.0f, 0.30f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("alter", 1), "Alter",  0.0f, 1.0f, 0.0f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("size", 1), "Size",   0.0f, 1.0f, 0.50f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("sweep", 1), "Sweep",  0.0f, 1.0f, 0.50f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("cloud", 1), "Cloud",  0.0f, 1.0f, 0.0f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("attack", 1), "Attack", juce::NormalisableRange<float> (0.01f, 5.0f, 0.01f, 0.35f), 0.20f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("decay", 1), "Decay",  juce::NormalisableRange<float> (0.01f, 5.0f, 0.01f, 0.35f), 0.30f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("sustain", 1), "Sustain", 0.0f, 1.0f, 0.80f),
-           std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("release", 1), "Release", juce::NormalisableRange<float> (0.01f, 8.0f, 0.01f, 0.35f), 1.00f)
-       })
+        apvts (*this, nullptr, "PARAMETERS", {
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("detune", 1), "Detune", 0.0f, 1.0f, 0.0f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("timbre", 1), "Timbre", 0.0f, 1.0f, 0.25f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("cutoff", 1), "Cutoff", 0.0f, 1.0f, 0.75f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("space", 1), "Space",  0.0f, 1.0f, 0.30f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("alter", 1), "Alter",  0.0f, 1.0f, 0.0f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("size", 1), "Size",   0.0f, 1.0f, 0.50f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("sweep", 1), "Sweep",  0.0f, 1.0f, 0.50f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("cloud", 1), "Cloud",  0.0f, 1.0f, 0.0f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("param6", 1), "Param6", 0.0f, 1.0f, 0.50f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("param7", 1), "Param7", 0.0f, 1.0f, 0.50f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("attack", 1), "Attack", juce::NormalisableRange<float> (0.01f, 5.0f, 0.01f, 0.35f), 0.20f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("decay", 1), "Decay",  juce::NormalisableRange<float> (0.01f, 5.0f, 0.01f, 0.35f), 0.30f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("sustain", 1), "Sustain", 0.0f, 1.0f, 0.80f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("release", 1), "Release", juce::NormalisableRange<float> (0.01f, 8.0f, 0.01f, 0.35f), 1.00f)
+        })
 {
     for (int i = 0; i < 32768; ++i)
         sineTable[i] = std::sin (((float)i / 32768.0f) * juce::MathConstants<float>::twoPi);
@@ -181,6 +183,8 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     float size   = *apvts.getRawParameterValue ("size");
     float sweep  = *apvts.getRawParameterValue ("sweep");
     float cloud  = *apvts.getRawParameterValue ("cloud");
+    float param6 = *apvts.getRawParameterValue ("param6");
+    float param7 = *apvts.getRawParameterValue ("param7");
     float attack = *apvts.getRawParameterValue ("attack");
     float decay  = *apvts.getRawParameterValue ("decay");
     float sustain = *apvts.getRawParameterValue ("sustain");
@@ -194,7 +198,7 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     {
         if (auto* voice = dynamic_cast<KronosVoice*> (synth.getVoice (i)))
         {
-            voice->updateParams (detune, timbre, cutoff, space, cloud, size, sweep);
+            voice->updateParams (detune, timbre, cutoff, space, cloud, size, sweep, param7);
             voice->updateAlter (alter);
             voice->updateAdsr (attack, decay, sustain, release);
             voice->setGlobalSendAccum(
@@ -255,12 +259,12 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             }
             else if (ccNumber == 6)
             {
-                if (auto* rawVal = apvts.getRawParameterValue ("size"))
+                if (auto* rawVal = apvts.getRawParameterValue ("param6"))
                     rawVal->store (ccValue);
             }
             else if (ccNumber == 7)
             {
-                if (auto* rawVal = apvts.getRawParameterValue ("sweep"))
+                if (auto* rawVal = apvts.getRawParameterValue ("param7"))
                     rawVal->store (ccValue);
             }
             else if (ccNumber == 8)
