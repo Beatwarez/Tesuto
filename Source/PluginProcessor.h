@@ -192,6 +192,9 @@ public:
                    : (formVal * formVal * 3.5f *
                       std::sin((float)harmonicIndex * 1.57f + (float)p * 0.1f));
       freqs[p] = pitchedFundamental * ((float)harmonicIndex + stretch);
+      float syncMultiplier = 1.0f + deSyncVal * 3.0f;
+      if (p > 0)
+        freqs[p] *= syncMultiplier;
 
       // Timbre Morphing
       float baseAmp = getSpectralShape (p, harmonicIndex, timbreIdx) * (1.0f - timbreMix)
@@ -241,6 +244,14 @@ public:
       float sampleR = 0.0f;
       float prevVal = 0.0f;
 
+      // 1. Update master phase first
+      bool masterWrapped = false;
+      phases[0] += phaseDeltas[0];
+      if (phases[0] >= 1.0f) {
+        phases[0] -= 1.0f;
+        masterWrapped = true;
+      }
+
       for (int i = 0; i < numActivePartials; ++i) {
         int p = activePartials[i];
         
@@ -249,15 +260,17 @@ public:
         smoothedAmps[p] += (dry_target - smoothedAmps[p]) * 0.15f;
         float a = smoothedAmps[p];
 
-        phases[p] += phaseDeltas[p];
-        if (phases[p] >= 1.0f)
-          phases[p] -= 1.0f;
+        // 2. Update phase for partial p
+        if (p > 0) {
+          phases[p] += phaseDeltas[p];
+          if (deSyncVal > 0.0f && masterWrapped) {
+            phases[p] = 0.0f; // Hard-sync reset!
+          } else if (phases[p] >= 1.0f) {
+            phases[p] -= 1.0f;
+          }
+        }
 
         float modPhase = phases[p];
-
-        // Additive Phase Dispersal (DE-SYNC) - dynamic phase modulation
-        float deSyncMod = std::sin (static_cast<float>(voiceTime) * (0.2f + (float)p * 0.015f)) * deSyncVal * 0.35f;
-        modPhase += deSyncMod;
 
         if (i > 0) {
           int p_prev = activePartials[i - 1];

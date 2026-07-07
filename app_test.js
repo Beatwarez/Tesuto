@@ -251,6 +251,11 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     const stretch = formVal * formVal * 3.5 * Math.sin(harmonicIndex * 1.57 + p * 0.1);
                     freqs[p] = pitchedFundamental * (harmonicIndex + stretch);
 
+                    const syncMultiplier = 1.0 + deSyncVal * 3.0;
+                    if (p > 0) {
+                        freqs[p] *= syncMultiplier;
+                    }
+
                     // Timbre Morphing (10 distinct shapes with baseline floor)
                     const getSpectralShape = (p, harmonicIndex, shapeIndex) => {
                         let rawVal = 0.0;
@@ -345,6 +350,14 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     let sumR = 0.0;
                     let prevVal = 0.0;
 
+                    // 1. Update master phase first
+                    let masterWrapped = false;
+                    voice.phases[0] += phaseDeltas[0];
+                    if (voice.phases[0] >= 1.0) {
+                        voice.phases[0] -= 1.0;
+                        masterWrapped = true;
+                    }
+
                     for (let idx = 0; idx < voice.activePartials.length; idx++) {
                         const p = voice.activePartials[idx];
                         const dry_target = targetAmps[p] * currentAmp;
@@ -357,11 +370,17 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                             voice.phases[p] -= 1.0;
                         }
 
+                        // 2. Update phase for partial p
+                        if (p > 0) {
+                            voice.phases[p] += phaseDeltas[p];
+                            if (deSyncVal > 0.0 && masterWrapped) {
+                                voice.phases[p] = 0.0; // Hard-sync reset!
+                            } else if (voice.phases[p] >= 1.0) {
+                                voice.phases[p] -= 1.0;
+                            }
+                        }
+
                         let modPhase = voice.phases[p];
-                        
-                        // Additive Phase Dispersal (DE-SYNC) - dynamic phase modulation
-                        const deSyncMod = Math.sin(this.time * (0.2 + p * 0.015)) * deSyncVal * 0.35;
-                        modPhase += deSyncMod;
 
                         if (idx > 0) {
                             const p_prev = voice.activePartials[idx - 1];
@@ -1217,6 +1236,18 @@ class KronosSynth {
             this.ctx.stroke();
         }
 
+        // Draw expanding hard-sync shockwave ring
+        if (desync > 0.1 && this.activeKeys.size > 0) {
+            const syncTime = (Date.now() * 0.004) % 1.0;
+            const syncRadius = maxRadius * syncTime * 1.1;
+            const syncOpacity = (1.0 - syncTime) * desync * 0.18;
+            this.ctx.strokeStyle = `rgba(255, 255, 255, ${syncOpacity})`;
+            this.ctx.lineWidth = 1.5;
+            this.ctx.beginPath();
+            this.ctx.arc(centerX, centerY, syncRadius, 0, Math.PI * 2);
+            this.ctx.stroke();
+        }
+
         // 3. Draw 256 partials mandala with fading trails
         let prevX = 0;
         let prevY = 0;
@@ -1230,8 +1261,16 @@ class KronosSynth {
 
             // Angle warp caused by form slider (harmonic to chaotic Moiré)
             const angleWarp = Math.sin(i * 0.12 + p.phase * 0.05) * form * form * 5.0;
-            const phaseDeSync = desync * i * i * 0.0004;
-            const theta = (i * 0.22) + p.phase * 0.08 + phaseDeSync + angleWarp;
+            const theta = (i * 0.22) + p.phase * 0.08 + angleWarp;
+
+            let polyFactor = 1.0;
+            if (desync > 0.05) {
+                const N = 3 + (i % 3); // Crystalline mix of triangles, squares, pentagons
+                const alpha = (2 * Math.PI) / N;
+                const thetaRel = ((theta % alpha) + alpha) % alpha - (alpha / 2);
+                const targetPolyFactor = Math.cos(alpha / 2) / Math.cos(thetaRel);
+                polyFactor = 1.0 * (1.0 - desync) + targetPolyFactor * desync;
+            }
 
             // Amplitude envelope shape calculation
             let amp = 1.0;
@@ -1260,7 +1299,7 @@ class KronosSynth {
             const amplitudeScale = amp * modulationScale;
             const modulation = Math.sin(p.phase + i * 0.4) * amplitudeScale;
 
-            const r = dist + modulation;
+            const r = dist * polyFactor + modulation;
             const x = centerX + r * Math.cos(theta);
             const y = centerY + r * Math.sin(theta);
 
