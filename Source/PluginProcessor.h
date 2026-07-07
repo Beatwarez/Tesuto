@@ -255,8 +255,9 @@ public:
 
         float modPhase = phases[p];
 
-        // Additive Phase Dispersal (DE-SYNC)
-        modPhase += deSyncVal * (float)(p * p) * 0.0002f;
+        // Additive Phase Dispersal (DE-SYNC) - dynamic phase modulation
+        float deSyncMod = std::sin (static_cast<float>(voiceTime) * (0.2f + (float)p * 0.015f)) * deSyncVal * 0.35f;
+        modPhase += deSyncMod;
 
         if (i > 0) {
           int p_prev = activePartials[i - 1];

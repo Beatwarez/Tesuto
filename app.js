@@ -359,8 +359,9 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
 
                         let modPhase = voice.phases[p];
                         
-                        // Additive Phase Dispersal (DE-SYNC)
-                        modPhase += deSyncVal * p * p * 0.0002;
+                        // Additive Phase Dispersal (DE-SYNC) - dynamic phase modulation
+                        const deSyncMod = Math.sin(this.time * (0.2 + p * 0.015)) * deSyncVal * 0.35;
+                        modPhase += deSyncMod;
 
                         if (idx > 0) {
                             const p_prev = voice.activePartials[idx - 1];
@@ -1229,8 +1230,8 @@ class KronosSynth {
 
             // Angle warp caused by form slider (harmonic to chaotic Moiré)
             const angleWarp = Math.sin(i * 0.12 + p.phase * 0.05) * form * form * 5.0;
-            const phaseDeSync = desync * i * i * 0.00015;
-            const theta = (i * 0.22) + (p.phase + phaseDeSync) * 0.08 + angleWarp;
+            const phaseDeSync = desync * i * i * 0.0004;
+            const theta = (i * 0.22) + p.phase * 0.08 + phaseDeSync + angleWarp;
 
             // Amplitude envelope shape calculation
             let amp = 1.0;
