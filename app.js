@@ -221,8 +221,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             };
 
             // Map filter exponentially (50Hz to 12000Hz)
-            const cutoffA_norm = Math.min(1.0, Math.max(0.0, filterVal - filterOffsetVal * 0.5));
-            const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.5));
+            const cutoffA_norm = Math.min(1.0, Math.max(0.0, filterVal - filterOffsetVal * 0.165));
+            const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.165));
             const fcA = 50.0 * Math.pow(2, cutoffA_norm * 8.0);
             const fcB = 50.0 * Math.pow(2, cutoffB_norm * 8.0);
             const Q = 0.707 * Math.exp(filterResoVal * 3.0);
@@ -589,7 +589,7 @@ class CustomSlider {
         const endX = center + radius * Math.cos(angle);
         const endY = center + radius * Math.sin(angle);
         
-        const largeArcFlag = Math.abs(val) > (135/270) ? 1 : 0; // if magnitude > 0.5, large arc is 1
+        const largeArcFlag = 0; // Arc is never > 180 degrees because max is 135 degrees
         const sweepFlag = val > 0 ? 1 : 0;
         
         if (Math.abs(val) < 0.01) {
@@ -599,11 +599,7 @@ class CustomSlider {
             this.modArc.setAttribute('d', d);
         }
         
-        if (val < 0) {
-            this.modArc.style.stroke = '#3b82f6'; // Blue for negative
-        } else {
-            this.modArc.style.stroke = 'var(--accent)'; // Orange for positive
-        }
+        this.modArc.style.stroke = 'var(--accent)';
     }
 
     updateUI() {
@@ -760,7 +756,7 @@ class CustomKnob {
         const endX = center + radius * Math.cos(angle);
         const endY = center + radius * Math.sin(angle);
         
-        const largeArcFlag = Math.abs(val) > (135/270) ? 1 : 0; // if magnitude > 0.5, large arc is 1
+        const largeArcFlag = 0; // Arc is never > 180 degrees because max is 135 degrees
         const sweepFlag = val > 0 ? 1 : 0;
         
         if (Math.abs(val) < 0.01) {
@@ -770,11 +766,7 @@ class CustomKnob {
             this.modArc.setAttribute('d', d);
         }
         
-        if (val < 0) {
-            this.modArc.style.stroke = '#3b82f6'; // Blue for negative
-        } else {
-            this.modArc.style.stroke = 'var(--accent)'; // Orange for positive
-        }
+        this.modArc.style.stroke = 'var(--accent)';
     }
 
     updateUI() {
@@ -1447,8 +1439,8 @@ class KronosSynth {
         const typeB = this.values.filterTypeB;
         const morph = this.values.filterMorph;
         
-        const cutoffA_norm = Math.min(1.0, Math.max(0.0, filterVal - filterOffsetVal * 0.5));
-        const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.5));
+        const cutoffA_norm = Math.min(1.0, Math.max(0.0, filterVal - filterOffsetVal * 0.165));
+        const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.165));
         const fcA = 50.0 * Math.pow(2, cutoffA_norm * 8.0);
         const fcB = 50.0 * Math.pow(2, cutoffB_norm * 8.0);
         const Q = 0.707 * Math.exp(filterResoVal * 3.0);

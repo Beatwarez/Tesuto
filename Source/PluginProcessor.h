@@ -130,8 +130,8 @@ public:
       currentSampleRate = 44100.0;
 
     // Exponential mapping for filter frequency (50Hz to 12000Hz)
-    float cutoffA_norm = std::clamp(filterVal - filterOffsetVal * 0.5f, 0.0f, 1.0f);
-    float cutoffB_norm = std::clamp(filterVal + filterOffsetVal * 0.5f, 0.0f, 1.0f);
+    float cutoffA_norm = std::clamp(filterVal - filterOffsetVal * 0.165f, 0.0f, 1.0f);
+    float cutoffB_norm = std::clamp(filterVal + filterOffsetVal * 0.165f, 0.0f, 1.0f);
     float fcA = 50.0f * std::pow(2.0f, cutoffA_norm * 8.0f);
     float fcB = 50.0f * std::pow(2.0f, cutoffB_norm * 8.0f);
     float Q = 0.707f * std::exp(filterResoVal * 3.0f);
