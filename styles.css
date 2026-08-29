@@ -670,6 +670,7 @@ body {
 }
 
 .morph-slider-container {
+    position: relative;
     flex: 1;
     display: flex;
     justify-content: center;
@@ -772,4 +773,36 @@ body {
     min-width: 18px !important;
     min-height: 18px !important;
     margin-bottom: 0.5vh;
+}
+
+.mod-line-container {
+    width: 100%;
+    height: 20px;
+    position: absolute;
+    top: -15px;
+    left: 0;
+    cursor: ew-resize;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+}
+
+.mod-line-bg {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    position: absolute;
+    pointer-events: none;
+}
+
+.mod-line-fill {
+    height: 4px;
+    background: var(--accent);
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 50%;
+    width: 0%;
+    pointer-events: none;
+    transition: none;
 }

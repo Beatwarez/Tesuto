@@ -23,6 +23,8 @@ KronosAudioProcessor::KronosAudioProcessor()
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterTypeA", 1), "FilterTypeA", 0.0f, 3.0f, 0.0f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterTypeB", 1), "FilterTypeB", 0.0f, 3.0f, 0.0f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterMorph", 1), "FilterMorph", 0.0f, 1.0f, 0.0f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterMorphMod", 1), "FilterMorphMod", -1.0f, 1.0f, 0.0f),
+
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterOffset", 1), "FilterOffset", -1.0f, 1.0f, 0.0f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterReso", 1), "FilterReso", 0.0f, 1.0f, 0.2f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterSlope", 1), "FilterSlope", 0.0f, 1.0f, 0.5f),
@@ -186,6 +188,8 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     float filterTypeA = *apvts.getRawParameterValue ("filterTypeA");
     float filterTypeB = *apvts.getRawParameterValue ("filterTypeB");
     float filterMorph = *apvts.getRawParameterValue ("filterMorph");
+    float filterMorphMod = *apvts.getRawParameterValue ("filterMorphMod");
+
     float filterOffset = *apvts.getRawParameterValue ("filterOffset");
     float filterReso = *apvts.getRawParameterValue ("filterReso");
     float filterSlope = *apvts.getRawParameterValue ("filterSlope");
@@ -210,7 +214,7 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     {
         if (auto* voice = dynamic_cast<KronosVoice*> (synth.getVoice (i)))
         {
-            voice->updateParams (form, timbre, filterTypeA, filterTypeB, filterMorph, filterOffset, filterReso, filterSlope, filter, space, cloud, size, sweep, desync, pitch);
+            voice->updateParams (form, timbre, filterTypeA, filterTypeB, filterMorph, filterMorphMod, filterOffset, filterReso, filterSlope, filter, space, cloud, size, sweep, desync, pitch);
             voice->updateAlter (alter);
             voice->updateAdsr (attack, decay, sustain, release);
             voice->setGlobalSendAccum(

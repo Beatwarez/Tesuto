@@ -238,7 +238,11 @@
                     <span class="type-cycle cycle-right">&gt;</span>
                 </div>
                 <div class="morph-slider-container" data-param="filterMorph">
-                    <div class="custom-slider horizontal" id="slider-filterMorph">
+                    <div class="mod-line-container" data-mod-param="filterMorphMod">
+                        <div class="mod-line-bg"></div>
+                        <div class="mod-line-fill"></div>
+                    </div>
+                    <div class="custom-slider horizontal" id="slider-filterMorph" data-mod-param="filterMorphMod">
                         <div class="slider-track horizontal-track">
                             <div class="slider-fill horizontal-fill"></div>
                             <div class="slider-thumb horizontal-thumb"></div>
@@ -309,5 +313,18 @@
     </div>
     
     <script src="app.js?v=1788029963"></script>
+<script>
+  setTimeout(() => {
+    const el = document.querySelector('.mod-line-container');
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      console.log('DEBUG_RECT:', JSON.stringify(rect));
+      const clickTarget = document.elementFromPoint(rect.x + rect.width/2, rect.y + rect.height/2);
+      console.log('DEBUG_TARGET:', clickTarget ? clickTarget.tagName + '.' + clickTarget.className : 'null');
+    } else {
+      console.log('DEBUG_RECT: NOT_FOUND');
+    }
+  }, 1000);
+</script>
 </body>
 </html>

@@ -21,7 +21,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             { name: 'timbre', defaultValue: 0.25, minValue: 0.0, maxValue: 1.0 },
             { name: 'filterTypeA', defaultValue: 0.0, minValue: 0.0, maxValue: 3.0 },
             { name: 'filterTypeB', defaultValue: 0.0, minValue: 0.0, maxValue: 3.0 },
-            { name: 'filterMorph', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+                        { name: 'filterMorph', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'filterMorphMod', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
             { name: 'filterOffset', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
             { name: 'filterCutoff', defaultValue: 0.75, minValue: 0.0, maxValue: 1.0 },
             { name: 'filterCutoffMod', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
@@ -184,7 +185,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             const timbreVal = parameters.timbre[0];
             const filterTypeAVal = parameters.filterTypeA ? parameters.filterTypeA[0] : 0.0;
             const filterTypeBVal = parameters.filterTypeB ? parameters.filterTypeB[0] : 0.0;
-            const filterMorphVal = parameters.filterMorph ? parameters.filterMorph[0] : 0.0;
+                        const filterMorphVal = Math.max(0.0, Math.min(1.0, (parameters.filterMorph ? parameters.filterMorph[0] : 0.0) + filterSliderVal * (parameters.filterMorphMod ? parameters.filterMorphMod[0] : 0.0)));
             const filterOffsetVal = parameters.filterOffset ? parameters.filterOffset[0] : 0.0;
             const filterResoVal = parameters.filterReso ? parameters.filterReso[0] : 0.2;
             const filterSlopeVal = parameters.filterSlope ? parameters.filterSlope[0] : 0.5;
@@ -554,6 +555,54 @@ class CustomSlider {
             e.stopPropagation();
             this.setValue(this.defaultValue);
         });
+        
+        this.modParam = this.element.getAttribute('data-mod-param');
+        if (this.modParam) {
+            // Find container, mod-line-bg, mod-line-fill
+            const container = this.element.parentElement;
+            this.modBg = container.querySelector('.mod-line-bg') || this.element.querySelector('.mod-line-bg');
+            this.modFill = container.querySelector('.mod-line-fill') || this.element.querySelector('.mod-line-fill');
+            
+            if (container.classList.contains('mod-line-container')) {
+                this.modBg = container;
+                this.modFill = container.querySelector('.mod-line-fill');
+            } else if (container.querySelector('.mod-line-container')) {
+                const mc = container.querySelector('.mod-line-container');
+                this.modBg = mc;
+                this.modFill = mc.querySelector('.mod-line-fill');
+            }
+            
+            if (this.modBg) {
+                this.modBg.addEventListener('pointerdown', (e) => {
+                    e.stopPropagation();
+                    this.isModDragging = true;
+                    this.startModX = e.clientX;
+                    this.startModVal = window.kronosSynth.values[this.modParam];
+                });
+                
+                window.addEventListener('pointermove', (e) => {
+                    if (!this.isModDragging) return;
+                    const deltaX = e.clientX - this.startModX;
+                    let newVal = this.startModVal + (deltaX / 100.0);
+                    newVal = Math.max(-1.0, Math.min(1.0, newVal));
+                    window.kronosSynth.values[this.modParam] = newVal;
+                    if (window.kronosSynth.onSliderChange) window.kronosSynth.onSliderChange(this.modParam, newVal);
+                    this.updateModLine();
+                });
+                
+                window.addEventListener('pointerup', (e) => {
+                    this.isModDragging = false;
+                });
+                
+                this.modBg.addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                    window.kronosSynth.values[this.modParam] = 0.0;
+                    if (window.kronosSynth.onSliderChange) window.kronosSynth.onSliderChange(this.modParam, 0.0);
+                    this.updateModLine();
+                });
+            }
+        }
+
     }
 
     setValue(val) {
@@ -601,6 +650,24 @@ class CustomSlider {
         
         this.modArc.style.stroke = 'var(--accent)';
     }
+
+    
+    
+    updateModLine() {
+        const app = window.kronosSynth;
+        if (!this.modParam || !this.modFill || !app) return;
+        const val = app.values[this.modParam];
+        // val is -1 to 1
+        // Center is 50%. Width is up to 50%.
+        if (val < 0) {
+            this.modFill.style.left = (50 + val * 50) + '%';
+            this.modFill.style.width = (Math.abs(val) * 50) + '%';
+        } else {
+            this.modFill.style.left = '50%';
+            this.modFill.style.width = (val * 50) + '%';
+        }
+    }
+
 
     updateUI() {
         const percentage = (this.value - this.min) / (this.max - this.min);
@@ -676,7 +743,7 @@ class CustomKnob {
         
         this.startY = 0;
         this.startValue = defaultValue;
-        this.app = window.kronosSynth; // Access to main app state
+         // Access to main app state
         this.modParam = this.element.getAttribute('data-mod-param');
         if (this.modParam) {
             this.modBg = this.element.querySelector('.mod-ring-bg');
@@ -686,7 +753,7 @@ class CustomKnob {
                     e.stopPropagation();
                     this.isModDragging = true;
                     this.startModY = e.clientY;
-                    this.startModVal = this.app.values[this.modParam];
+                    this.startModVal = window.kronosSynth.values[this.modParam];
                 });
                 
                 window.addEventListener('pointermove', (e) => {
@@ -694,8 +761,8 @@ class CustomKnob {
                     const deltaY = this.startModY - e.clientY;
                     let newVal = this.startModVal + (deltaY / 100.0);
                     newVal = Math.max(-1.0, Math.min(1.0, newVal));
-                    this.app.values[this.modParam] = newVal;
-                    if (this.app.onSliderChange) this.app.onSliderChange(this.modParam, newVal);
+                    window.kronosSynth.values[this.modParam] = newVal;
+                    if (window.kronosSynth.onSliderChange) window.kronosSynth.onSliderChange(this.modParam, newVal);
                     this.updateModArc();
                 });
                 
@@ -705,8 +772,8 @@ class CustomKnob {
                 
                 this.modBg.addEventListener('dblclick', (e) => {
                     e.stopPropagation();
-                    this.app.values[this.modParam] = 0.0;
-                    if (this.app.onSliderChange) this.app.onSliderChange(this.modParam, 0.0);
+                    window.kronosSynth.values[this.modParam] = 0.0;
+                    if (window.kronosSynth.onSliderChange) window.kronosSynth.onSliderChange(this.modParam, 0.0);
                     this.updateModArc();
                 });
             }
@@ -725,6 +792,54 @@ class CustomKnob {
             e.stopPropagation();
             this.setValue(this.defaultValue);
         });
+        
+        this.modParam = this.element.getAttribute('data-mod-param');
+        if (this.modParam) {
+            // Find container, mod-line-bg, mod-line-fill
+            const container = this.element.parentElement;
+            this.modBg = container.querySelector('.mod-line-bg') || this.element.querySelector('.mod-line-bg');
+            this.modFill = container.querySelector('.mod-line-fill') || this.element.querySelector('.mod-line-fill');
+            
+            if (container.classList.contains('mod-line-container')) {
+                this.modBg = container;
+                this.modFill = container.querySelector('.mod-line-fill');
+            } else if (container.querySelector('.mod-line-container')) {
+                const mc = container.querySelector('.mod-line-container');
+                this.modBg = mc;
+                this.modFill = mc.querySelector('.mod-line-fill');
+            }
+            
+            if (this.modBg) {
+                this.modBg.addEventListener('pointerdown', (e) => {
+                    e.stopPropagation();
+                    this.isModDragging = true;
+                    this.startModY = e.clientY;
+                    this.startModVal = window.kronosSynth.values[this.modParam];
+                });
+                
+                window.addEventListener('pointermove', (e) => {
+                    if (!this.isModDragging) return;
+                    const deltaY = this.startModY - e.clientY;
+                    let newVal = this.startModVal + (deltaY / 100.0);
+                    newVal = Math.max(-1.0, Math.min(1.0, newVal));
+                    window.kronosSynth.values[this.modParam] = newVal;
+                    if (window.kronosSynth.onSliderChange) window.kronosSynth.onSliderChange(this.modParam, newVal);
+                    this.updateModLine();
+                });
+                
+                window.addEventListener('pointerup', (e) => {
+                    this.isModDragging = false;
+                });
+                
+                this.modBg.addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                    window.kronosSynth.values[this.modParam] = 0.0;
+                    if (window.kronosSynth.onSliderChange) window.kronosSynth.onSliderChange(this.modParam, 0.0);
+                    this.updateModLine();
+                });
+            }
+        }
+
     }
 
     setValue(val) {
@@ -768,6 +883,24 @@ class CustomKnob {
         
         this.modArc.style.stroke = 'var(--accent)';
     }
+
+    
+    
+    updateModLine() {
+        const app = window.kronosSynth;
+        if (!this.modParam || !this.modFill || !app) return;
+        const val = app.values[this.modParam];
+        // val is -1 to 1
+        // Center is 50%. Width is up to 50%.
+        if (val < 0) {
+            this.modFill.style.left = (50 + val * 50) + '%';
+            this.modFill.style.width = (Math.abs(val) * 50) + '%';
+        } else {
+            this.modFill.style.left = '50%';
+            this.modFill.style.width = (val * 50) + '%';
+        }
+    }
+
 
     updateUI() {
         let pct = 0;
@@ -847,7 +980,8 @@ class KronosSynth {
             timbre: 0.25,
             filterTypeA: 0.0,
             filterTypeB: 0.0,
-            filterMorph: 0.0,
+                        filterMorph: 0.0,
+            filterMorphMod: 0.0,
             filterOffset: 0.0,
             filterCutoff: 0.75,
             filterCutoffMod: 0.0,
@@ -906,6 +1040,7 @@ class KronosSynth {
         });
         
         this.sliders.filterMorph = new CustomSlider('slider-filterMorph', 0, 1, this.values.filterMorph, 0.001, (v) => this.onSliderChange('filterMorph', v), true);
+        this.sliders.filterMorph.updateModLine();
         
         this.filterTypes = ['LP', 'BP', 'HP', 'NOTCH'];
         this.setupFilterTypeSelectors();
@@ -1437,7 +1572,7 @@ class KronosSynth {
 
         const typeA = this.values.filterTypeA;
         const typeB = this.values.filterTypeB;
-        const morph = this.values.filterMorph;
+        const morph = Math.max(0.0, Math.min(1.0, (this.values.filterMorph || 0.0) + filterSliderVal * (this.values.filterMorphMod || 0.0)));
         
         const cutoffA_norm = Math.min(1.0, Math.max(0.0, filterVal - filterOffsetVal * 0.165));
         const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.165));

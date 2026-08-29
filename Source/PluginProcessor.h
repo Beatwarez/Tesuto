@@ -80,12 +80,14 @@ public:
       return 1.0f;
   }
 
-  void updateParams(float form, float timbre, float typeA, float typeB, float filterMorph, float filterOffset, float filterReso, float filterSlope, float filter, float space, float cloud, float size, float sweep, float desync, float pitch) {
+  void updateParams(float form, float timbre, float typeA, float typeB, float filterMorph, float filterMorphMod, float filterOffset, float filterReso, float filterSlope, float filter, float space, float cloud, float size, float sweep, float desync, float pitch) {
     formVal = form;
     timbreVal = timbre;
     filterTypeAVal = typeA;
     filterTypeBVal = typeB;
     filterMorphVal = filterMorph;
+    filterMorphModVal = filterMorphMod;
+
     filterOffsetVal = filterOffset;
     filterResoVal = filterReso;
     filterSlopeVal = filterSlope;
@@ -366,6 +368,7 @@ private:
   float filterTypeAVal = 0.0f;
   float filterTypeBVal = 0.0f;
   float filterMorphVal = 0.0f;
+  float filterMorphModVal = 0.0f;
   float filterOffsetVal = 0.0f;
   float filterResoVal = 0.2f;
   float filterSlopeVal = 0.5f;
