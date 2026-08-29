@@ -20,7 +20,13 @@ KronosAudioProcessor::KronosAudioProcessor()
         apvts (*this, nullptr, "PARAMETERS", {
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("form", 1), "Form", 0.0f, 1.0f, 0.0f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("timbre", 1), "Timbre", 0.0f, 1.0f, 0.25f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("cutoff", 1), "Cutoff", 0.0f, 1.0f, 0.75f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterTypeA", 1), "FilterTypeA", 0.0f, 3.0f, 0.0f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterTypeB", 1), "FilterTypeB", 0.0f, 3.0f, 0.0f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterMorph", 1), "FilterMorph", 0.0f, 1.0f, 0.0f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterOffset", 1), "FilterOffset", -1.0f, 1.0f, 0.0f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterReso", 1), "FilterReso", 0.0f, 1.0f, 0.2f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterSlope", 1), "FilterSlope", 0.0f, 1.0f, 0.5f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filter", 1), "filter", 0.0f, 1.0f, 0.75f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("space", 1), "Space",  0.0f, 1.0f, 0.30f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("alter", 1), "Alter",  0.0f, 1.0f, 0.0f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("size", 1), "Size",   0.0f, 1.0f, 0.50f),
@@ -177,7 +183,13 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     // Update voice parameters from host control values
     float form = *apvts.getRawParameterValue ("form");
     float timbre = *apvts.getRawParameterValue ("timbre");
-    float cutoff = *apvts.getRawParameterValue ("cutoff");
+    float filterTypeA = *apvts.getRawParameterValue ("filterTypeA");
+    float filterTypeB = *apvts.getRawParameterValue ("filterTypeB");
+    float filterMorph = *apvts.getRawParameterValue ("filterMorph");
+    float filterOffset = *apvts.getRawParameterValue ("filterOffset");
+    float filterReso = *apvts.getRawParameterValue ("filterReso");
+    float filterSlope = *apvts.getRawParameterValue ("filterSlope");
+    float filter = *apvts.getRawParameterValue ("filter");
     float space  = *apvts.getRawParameterValue ("space");
     float alter  = *apvts.getRawParameterValue ("alter");
     float size   = *apvts.getRawParameterValue ("size");
@@ -198,7 +210,7 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     {
         if (auto* voice = dynamic_cast<KronosVoice*> (synth.getVoice (i)))
         {
-            voice->updateParams (form, timbre, cutoff, space, cloud, size, sweep, desync, pitch);
+            voice->updateParams (form, timbre, filterTypeA, filterTypeB, filterMorph, filterOffset, filterReso, filterSlope, filter, space, cloud, size, sweep, desync, pitch);
             voice->updateAlter (alter);
             voice->updateAdsr (attack, decay, sustain, release);
             voice->setGlobalSendAccum(
@@ -227,52 +239,7 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             for (int i = 0; i < 128; ++i)
                 activeMidiNotes[i] = false;
         }
-        else if (msg.isController())
-        {
-            int ccNumber = msg.getControllerNumber();
-            float ccValue = (float) msg.getControllerValue() / 127.0f; // Normalized 0.0 to 1.0
-
-            if (ccNumber == 1)
-            {
-                if (auto* rawVal = apvts.getRawParameterValue ("form"))
-                    rawVal->store (ccValue);
-            }
-            else if (ccNumber == 2)
-            {
-                if (auto* rawVal = apvts.getRawParameterValue ("timbre"))
-                    rawVal->store (ccValue);
-            }
-            else if (ccNumber == 3)
-            {
-                if (auto* rawVal = apvts.getRawParameterValue ("cutoff"))
-                    rawVal->store (ccValue);
-            }
-            else if (ccNumber == 4)
-            {
-                if (auto* rawVal = apvts.getRawParameterValue ("space"))
-                    rawVal->store (ccValue);
-            }
-            else if (ccNumber == 5)
-            {
-                if (auto* rawVal = apvts.getRawParameterValue ("alter"))
-                    rawVal->store (ccValue);
-            }
-            else if (ccNumber == 6)
-            {
-                if (auto* rawVal = apvts.getRawParameterValue ("desync"))
-                    rawVal->store (ccValue);
-            }
-            else if (ccNumber == 7)
-            {
-                if (auto* rawVal = apvts.getRawParameterValue ("pitch"))
-                    rawVal->store (ccValue);
-            }
-            else if (ccNumber == 8)
-            {
-                if (auto* rawVal = apvts.getRawParameterValue ("cloud"))
-                    rawVal->store (ccValue);
-            }
-        }
+        // Removed MIDI CC handling per user request
     }
 
     // Render Synth voices

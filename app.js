@@ -19,7 +19,19 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
         return [
             { name: 'form', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'timbre', defaultValue: 0.25, minValue: 0.0, maxValue: 1.0 },
-            { name: 'cutoff', defaultValue: 0.75, minValue: 0.0, maxValue: 1.0 },
+            { name: 'filterTypeA', defaultValue: 0.0, minValue: 0.0, maxValue: 3.0 },
+            { name: 'filterTypeB', defaultValue: 0.0, minValue: 0.0, maxValue: 3.0 },
+            { name: 'filterMorph', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'filterOffset', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
+            { name: 'filterCutoff', defaultValue: 0.75, minValue: 0.0, maxValue: 1.0 },
+            { name: 'filterCutoffMod', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
+            { name: 'filterOffsetMod', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
+            { name: 'filterResoMod', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
+            { name: 'filterSlopeMod', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
+
+            { name: 'filterReso', defaultValue: 0.2, minValue: 0.0, maxValue: 1.0 },
+            { name: 'filterSlope', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
+            { name: 'filter', defaultValue: 0.75, minValue: 0.0, maxValue: 1.0 },
             { name: 'space', defaultValue: 0.3, minValue: 0.0, maxValue: 1.0 },
             { name: 'alter', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'size', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
@@ -170,7 +182,13 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             // Read parameter values for the current block
             const formVal = parameters.form[0];
             const timbreVal = parameters.timbre[0];
-            const cutoffVal = parameters.cutoff[0];
+            const filterTypeAVal = parameters.filterTypeA ? parameters.filterTypeA[0] : 0.0;
+            const filterTypeBVal = parameters.filterTypeB ? parameters.filterTypeB[0] : 0.0;
+            const filterMorphVal = parameters.filterMorph ? parameters.filterMorph[0] : 0.0;
+            const filterOffsetVal = parameters.filterOffset ? parameters.filterOffset[0] : 0.0;
+            const filterResoVal = parameters.filterReso ? parameters.filterReso[0] : 0.2;
+            const filterSlopeVal = parameters.filterSlope ? parameters.filterSlope[0] : 0.5;
+            const filterVal = parameters.filter[0];
             const spaceVal = parameters.space[0];
             const alterVal = parameters.alter ? parameters.alter[0] : 0.0;
             const sizeVal = parameters.size ? parameters.size[0] : 0.5;
@@ -186,8 +204,29 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             const attackStep = blockTime / 0.8;
             const releaseStep = blockTime / 1.5;
 
-            // Map Cutoff exponentially (50Hz to 12000Hz)
-            const cutoffFreq = 50.0 * Math.pow(2, cutoffVal * 8.0);
+
+            const calculateFilterMult = (freq, fc, q, n, type) => {
+                if (fc < 1.0) return 0.0;
+                const x = freq / fc;
+                const x2 = x * x;
+                const D = (1.0 - x2) * (1.0 - x2) + (x2 / (q * q));
+                let denom = Math.pow(D, n * 0.5);
+                if (denom < 0.000001) denom = 0.000001;
+                
+                if (type === 0) return 1.0 / denom; // LP
+                if (type === 1) return Math.pow(x / q, n) / denom; // BP
+                if (type === 2) return Math.pow(x2, n) / denom; // HP
+                if (type === 3) return Math.pow(Math.abs(1.0 - x2), n) / denom; // Notch
+                return 1.0;
+            };
+
+            // Map filter exponentially (50Hz to 12000Hz)
+            const cutoffA_norm = Math.min(1.0, Math.max(0.0, filterVal - filterOffsetVal * 0.5));
+            const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.5));
+            const fcA = 50.0 * Math.pow(2, cutoffA_norm * 8.0);
+            const fcB = 50.0 * Math.pow(2, cutoffB_norm * 8.0);
+            const Q = 0.707 * Math.exp(filterResoVal * 3.0);
+            const N = 1.0 + filterSlopeVal * 3.0;
 
             // Initialize output channels to zero
             for (let i = 0; i < bufferLength; i++) {
@@ -303,9 +342,10 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     const baseAmp = getSpectralShape(p, harmonicIndex, timbreIdx) * (1 - timbreMix)
                                   + getSpectralShape(p, harmonicIndex, timbreIdx + 1) * timbreMix;
 
-                    // Cutoff Filter
-                    const ratio = freqs[p] / cutoffFreq;
-                    const filterMult = 1.0 / (1.0 + Math.pow(ratio, 6.0));
+                    // filter Filter
+                    const multA = calculateFilterMult(freqs[p], fcA, Q, N, Math.round(filterTypeAVal));
+                    const multB = calculateFilterMult(freqs[p], fcB, Q, N, Math.round(filterTypeBVal));
+                    const filterMult = multA * (1.0 - filterMorphVal) + multB * filterMorphVal;
 
                     // Space (Organic LFO drift)
                     const lfoDrift = Math.sin(this.time * 1.2 + voice.phaseDrifts[p]) * spaceVal * 0.3;
@@ -486,8 +526,9 @@ registerProcessor('drone-synth-processor', DroneSynthProcessor);
 // 2. Custom Slider Pointer Event Manager Class
 // ==========================================================================
 class CustomSlider {
-    constructor(id, min, max, defaultValue, step, onChange) {
+    constructor(id, min, max, defaultValue, step, onChange, isHorizontal = false) {
         this.element = document.getElementById(id);
+        if (!this.element) { console.error('MISSING ELEMENT SLIDER:', id); }
         this.track = this.element.querySelector('.slider-track');
         this.fill = this.element.querySelector('.slider-fill');
         this.thumb = this.element.querySelector('.slider-thumb');
@@ -498,6 +539,7 @@ class CustomSlider {
         this.defaultValue = defaultValue;
         this.step = step;
         this.onChange = onChange;
+        this.isHorizontal = isHorizontal;
         this.isDragging = false;
 
         this.updateUI();
@@ -525,13 +567,56 @@ class CustomSlider {
         if (this.onChange) this.onChange(this.value);
     }
 
+        updateModArc() {
+        if (!this.modParam || !this.modArc || !this.app) return;
+        const val = this.app.values[this.modParam];
+        // val is -1 to 1
+        const radius = 46;
+        const center = 50;
+        // Arc from bottom-left (135 deg = 2.356 rad) clockwise.
+        // Wait, standard UI is 0 is top. Our knob is -135 to 135 (0 is top).
+        // SVGs 0 angle is 3 o'clock. 
+        // Top is -90 deg. Bottom left is 135 deg.
+        // For bipolar mod ring: 0 modulation = top center ( -90 deg ).
+        // Pos mod = clockwise. Neg mod = counter-clockwise.
+        
+        const startAngle = -Math.PI / 2; // -90 deg (12 o'clock)
+        const range = Math.PI * 1.5; // 270 degrees total
+        const angle = startAngle + val * (range / 2);
+        
+        const startX = center + radius * Math.cos(startAngle);
+        const startY = center + radius * Math.sin(startAngle);
+        const endX = center + radius * Math.cos(angle);
+        const endY = center + radius * Math.sin(angle);
+        
+        const largeArcFlag = Math.abs(val) > (135/270) ? 1 : 0; // if magnitude > 0.5, large arc is 1
+        const sweepFlag = val > 0 ? 1 : 0;
+        
+        if (Math.abs(val) < 0.01) {
+            this.modArc.setAttribute('d', ''); // Hide if 0
+        } else {
+            const d = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${endX} ${endY}`;
+            this.modArc.setAttribute('d', d);
+        }
+        
+        if (val < 0) {
+            this.modArc.style.stroke = '#3b82f6'; // Blue for negative
+        } else {
+            this.modArc.style.stroke = 'var(--accent)'; // Orange for positive
+        }
+    }
+
     updateUI() {
         const percentage = (this.value - this.min) / (this.max - this.min);
-        // Map percentage to CSS styles
-        this.fill.style.height = `${percentage * 100}%`;
-        // Offset center of thumb dynamically
-        const halfThumbHeight = (this.thumb.offsetHeight || 14) / 2;
-        this.thumb.style.bottom = `calc(${percentage * 100}% - ${halfThumbHeight}px)`;
+        if (this.isHorizontal) {
+            this.fill.style.width = `${percentage * 100}%`;
+            const halfThumbWidth = (this.thumb.offsetWidth || 10) / 2;
+            this.thumb.style.left = `calc(${percentage * 100}% - ${halfThumbWidth}px)`;
+        } else {
+            this.fill.style.height = `${percentage * 100}%`;
+            const halfThumbHeight = (this.thumb.offsetHeight || 14) / 2;
+            this.thumb.style.bottom = `calc(${percentage * 100}% - ${halfThumbHeight}px)`;
+        }
     }
 
     onPointerDown(e) {
@@ -551,9 +636,14 @@ class CustomSlider {
 
     handlePointer(e) {
         const rect = this.track.getBoundingClientRect();
-        // Calculate Y relative to bottom of track
-        const relativeY = rect.bottom - e.clientY;
-        const percentage = Math.max(0, Math.min(1, relativeY / rect.height));
+        let percentage = 0;
+        if (this.isHorizontal) {
+            const relativeX = e.clientX - rect.left;
+            percentage = Math.max(0, Math.min(1, relativeX / rect.width));
+        } else {
+            const relativeY = rect.bottom - e.clientY;
+            percentage = Math.max(0, Math.min(1, relativeY / rect.height));
+        }
         
         const val = this.min + percentage * (this.max - this.min);
         this.setValue(val);
@@ -576,6 +666,7 @@ class CustomSlider {
 class CustomKnob {
     constructor(id, min, max, defaultValue, isSeconds, isLogarithmic, onChange) {
         this.element = document.getElementById(id);
+        if (!this.element) { console.error('MISSING ELEMENT SLIDER:', id); }
         this.dial = this.element.querySelector('.knob-dial');
         
         this.min = min;
@@ -589,6 +680,42 @@ class CustomKnob {
         
         this.startY = 0;
         this.startValue = defaultValue;
+        this.app = window.kronosSynth; // Access to main app state
+        this.modParam = this.element.getAttribute('data-mod-param');
+        if (this.modParam) {
+            this.modBg = this.element.querySelector('.mod-ring-bg');
+            this.modArc = this.element.querySelector('.mod-ring-arc');
+            if (this.modBg) {
+                this.modBg.addEventListener('pointerdown', (e) => {
+                    e.stopPropagation();
+                    this.isModDragging = true;
+                    this.startModY = e.clientY;
+                    this.startModVal = this.app.values[this.modParam];
+                });
+                
+                window.addEventListener('pointermove', (e) => {
+                    if (!this.isModDragging) return;
+                    const deltaY = this.startModY - e.clientY;
+                    let newVal = this.startModVal + (deltaY / 100.0);
+                    newVal = Math.max(-1.0, Math.min(1.0, newVal));
+                    this.app.values[this.modParam] = newVal;
+                    if (this.app.onSliderChange) this.app.onSliderChange(this.modParam, newVal);
+                    this.updateModArc();
+                });
+                
+                window.addEventListener('pointerup', (e) => {
+                    this.isModDragging = false;
+                });
+                
+                this.modBg.addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                    this.app.values[this.modParam] = 0.0;
+                    if (this.app.onSliderChange) this.app.onSliderChange(this.modParam, 0.0);
+                    this.updateModArc();
+                });
+            }
+        }
+
 
         this.updateUI();
 
@@ -609,6 +736,45 @@ class CustomKnob {
         this.value = clamped;
         this.updateUI();
         if (this.onChange) this.onChange(this.value);
+    }
+
+        updateModArc() {
+        if (!this.modParam || !this.modArc || !this.app) return;
+        const val = this.app.values[this.modParam];
+        // val is -1 to 1
+        const radius = 46;
+        const center = 50;
+        // Arc from bottom-left (135 deg = 2.356 rad) clockwise.
+        // Wait, standard UI is 0 is top. Our knob is -135 to 135 (0 is top).
+        // SVGs 0 angle is 3 o'clock. 
+        // Top is -90 deg. Bottom left is 135 deg.
+        // For bipolar mod ring: 0 modulation = top center ( -90 deg ).
+        // Pos mod = clockwise. Neg mod = counter-clockwise.
+        
+        const startAngle = -Math.PI / 2; // -90 deg (12 o'clock)
+        const range = Math.PI * 1.5; // 270 degrees total
+        const angle = startAngle + val * (range / 2);
+        
+        const startX = center + radius * Math.cos(startAngle);
+        const startY = center + radius * Math.sin(startAngle);
+        const endX = center + radius * Math.cos(angle);
+        const endY = center + radius * Math.sin(angle);
+        
+        const largeArcFlag = Math.abs(val) > (135/270) ? 1 : 0; // if magnitude > 0.5, large arc is 1
+        const sweepFlag = val > 0 ? 1 : 0;
+        
+        if (Math.abs(val) < 0.01) {
+            this.modArc.setAttribute('d', ''); // Hide if 0
+        } else {
+            const d = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${endX} ${endY}`;
+            this.modArc.setAttribute('d', d);
+        }
+        
+        if (val < 0) {
+            this.modArc.style.stroke = '#3b82f6'; // Blue for negative
+        } else {
+            this.modArc.style.stroke = 'var(--accent)'; // Orange for positive
+        }
     }
 
     updateUI() {
@@ -673,6 +839,11 @@ class KronosSynth {
         this.ctx = this.canvas.getContext('2d');
 
         // State variables
+        this.activeLeftFocus = null;
+        this.activeRightFocus = null;
+        this.leftFocusParams = ['form', 'timbre', 'filter', 'space'];
+        this.rightFocusParams = ['alter', 'size', 'sweep', 'cloud', 'desync', 'pitch'];
+        
         this.activeKeys = new Set();
         this.notesDown = {};
         this.visualEnvelope = 0.0;
@@ -682,7 +853,19 @@ class KronosSynth {
         this.values = {
             form: 0.00,
             timbre: 0.25,
-            cutoff: 0.75,
+            filterTypeA: 0.0,
+            filterTypeB: 0.0,
+            filterMorph: 0.0,
+            filterOffset: 0.0,
+            filterCutoff: 0.75,
+            filterCutoffMod: 0.0,
+            filterOffsetMod: 0.0,
+            filterResoMod: 0.0,
+            filterSlopeMod: 0.0,
+
+            filterReso: 0.2,
+            filterSlope: 0.5,
+            filter: 0.75,
             space: 0.30,
             alter: 0.00,
             size: 0.50,
@@ -700,7 +883,7 @@ class KronosSynth {
         this.sliders = {
             form: new CustomSlider('slider-form', 0, 1, this.values.form, 0.001, (v) => this.onSliderChange('form', v)),
             timbre: new CustomSlider('slider-timbre', 0, 1, this.values.timbre, 0.001, (v) => this.onSliderChange('timbre', v)),
-            cutoff: new CustomSlider('slider-cutoff', 0, 1, this.values.cutoff, 0.001, (v) => this.onSliderChange('cutoff', v)),
+            filter: new CustomSlider('slider-filter', 0, 1, this.values.filter, 0.001, (v) => this.onSliderChange('filter', v)),
             space: new CustomSlider('slider-space', 0, 1, this.values.space, 0.001, (v) => this.onSliderChange('space', v)),
             alter: new CustomSlider('slider-alter', 0, 1, this.values.alter, 0.001, (v) => this.onSliderChange('alter', v)),
             desync: new CustomSlider('slider-desync', 0, 1, this.values.desync, 0.001, (v) => this.onSliderChange('desync', v)),
@@ -715,8 +898,25 @@ class KronosSynth {
             sustain: new CustomKnob('knob-sustain', 0.0, 1.0, this.values.sustain, false, false, (v) => this.onKnobChange('sustain', v)),
             release: new CustomKnob('knob-release', 0.01, 8.0, this.values.release, true, true, (v) => this.onKnobChange('release', v)),
             size: new CustomKnob('knob-size', 0.0, 1.0, this.values.size, false, false, (v) => this.onKnobChange('size', v)),
-            sweep: new CustomKnob('knob-sweep', 0.0, 1.0, this.values.sweep, false, false, (v) => this.onKnobChange('sweep', v))
+            sweep: new CustomKnob('knob-sweep', 0.0, 1.0, this.values.sweep, false, false, (v) => this.onKnobChange('sweep', v)),
+            filterReso: new CustomKnob('knob-filterReso', 0.0, 1.0, this.values.filterReso, false, false, (v) => this.onKnobChange('filterReso', v)),
+            filterSlope: new CustomKnob('knob-filterSlope', 0.0, 1.0, this.values.filterSlope, false, false, (v) => this.onKnobChange('filterSlope', v)),
+            filterOffset: new CustomKnob('knob-filterOffset', -1.0, 1.0, this.values.filterOffset, false, false, (v) => this.onKnobChange('filterOffset', v)),
+            filterCutoff: new CustomKnob('knob-filterCutoff', 0.0, 1.0, this.values.filterCutoff, false, false, (v) => this.onKnobChange('filterCutoff', v))
         };
+        
+        // Init mod arcs with app reference
+        Object.keys(this.knobs).forEach(k => {
+            if (this.knobs[k].modParam) {
+                this.knobs[k].app = this;
+                this.knobs[k].updateModArc();
+            }
+        });
+        
+        this.sliders.filterMorph = new CustomSlider('slider-filterMorph', 0, 1, this.values.filterMorph, 0.001, (v) => this.onSliderChange('filterMorph', v), true);
+        
+        this.filterTypes = ['LP', 'BP', 'HP', 'NOTCH'];
+        this.setupFilterTypeSelectors();
 
         // Build UI overlays and canvas sizing
         this.resizeCanvas();
@@ -728,6 +928,8 @@ class KronosSynth {
         this.particles = [];
         this.initParticles();
         this.animate();
+        
+        this.setupFocusToggles();
 
         // Initialize Audio engine setup immediately
         this.initAudio();
@@ -769,6 +971,15 @@ class KronosSynth {
 
             // Set initial params
             this.updateNodeParameters();
+
+        // Init mod arcs
+        Object.keys(this.knobs).forEach(k => {
+            if (this.knobs[k].modParam) {
+                this.knobs[k].app = this;
+                this.knobs[k].updateModArc();
+            }
+        });
+
 
             // Connect
             this.synthNode.connect(this.audioContext.destination);
@@ -923,6 +1134,89 @@ class KronosSynth {
         
         // Notify C++ plugin of screen-released note
         this.sendParamToCpp("noteoff", note);
+    }
+
+    setupFocusToggles() {
+        const toggles = document.querySelectorAll('.dsp-edit-toggle');
+        toggles.forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                const target = toggle.getAttribute('data-target');
+                if (!target) return;
+                
+                const isLeft = this.leftFocusParams.includes(target);
+                
+                if (isLeft) {
+                    if (this.activeLeftFocus === target) {
+                        this.activeLeftFocus = null;
+                    } else {
+                        this.activeLeftFocus = target;
+                    }
+                } else {
+                    if (this.activeRightFocus === target) {
+                        this.activeRightFocus = null;
+                    } else {
+                        this.activeRightFocus = target;
+                    }
+                }
+                
+                this.updateFocusUI();
+            });
+        });
+    }
+
+    updateFocusUI() {
+        const toggles = document.querySelectorAll('.dsp-edit-toggle');
+        toggles.forEach(toggle => {
+            const target = toggle.getAttribute('data-target');
+            if (target === this.activeLeftFocus || target === this.activeRightFocus) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+        });
+        
+        const filterPanel = document.getElementById('filter-dsp-panel');
+        const leftArea = document.getElementById('dsp-area-left');
+        const rightArea = document.getElementById('dsp-area-right');
+        
+        if (this.activeLeftFocus === 'filter') {
+            leftArea.appendChild(filterPanel);
+            filterPanel.classList.remove('hidden');
+            this.initFilterCanvas();
+        } else if (this.activeRightFocus === 'filter') {
+            rightArea.appendChild(filterPanel);
+            filterPanel.classList.remove('hidden');
+            this.initFilterCanvas();
+        } else {
+            filterPanel.classList.add('hidden');
+            document.body.appendChild(filterPanel); // move it back out of flow
+        }
+    }
+
+    setupFilterTypeSelectors() {
+        const typeALabel = document.querySelector('#filter-type-a .type-label');
+        const typeBLabel = document.querySelector('#filter-type-b .type-label');
+        
+        document.querySelector('#filter-type-a .cycle-left').addEventListener('click', () => {
+            this.values.filterTypeA = (this.values.filterTypeA - 1 + 4) % 4;
+            typeALabel.textContent = this.filterTypes[this.values.filterTypeA];
+            this.onSliderChange('filterTypeA', this.values.filterTypeA);
+        });
+        document.querySelector('#filter-type-a .cycle-right').addEventListener('click', () => {
+            this.values.filterTypeA = (this.values.filterTypeA + 1) % 4;
+            typeALabel.textContent = this.filterTypes[this.values.filterTypeA];
+            this.onSliderChange('filterTypeA', this.values.filterTypeA);
+        });
+        document.querySelector('#filter-type-b .cycle-left').addEventListener('click', () => {
+            this.values.filterTypeB = (this.values.filterTypeB - 1 + 4) % 4;
+            typeBLabel.textContent = this.filterTypes[this.values.filterTypeB];
+            this.onSliderChange('filterTypeB', this.values.filterTypeB);
+        });
+        document.querySelector('#filter-type-b .cycle-right').addEventListener('click', () => {
+            this.values.filterTypeB = (this.values.filterTypeB + 1) % 4;
+            typeBLabel.textContent = this.filterTypes[this.values.filterTypeB];
+            this.onSliderChange('filterTypeB', this.values.filterTypeB);
+        });
     }
 
     // ==========================================================================
@@ -1111,6 +1405,98 @@ class KronosSynth {
     animate() {
         requestAnimationFrame(() => this.animate());
         this.draw();
+        this.drawFilterCanvas();
+    }
+    
+    initFilterCanvas() {
+        const canvas = document.getElementById('filter-ui-canvas');
+        if (!canvas) return;
+        const parent = canvas.parentElement;
+        const rect = parent.getBoundingClientRect();
+        canvas.width = rect.width * window.devicePixelRatio;
+        canvas.height = rect.height * window.devicePixelRatio;
+        this.filterCtx = canvas.getContext('2d');
+        this.filterCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    
+    drawFilterCanvas() {
+        const canvas = document.getElementById('filter-ui-canvas');
+        if (!canvas || !this.filterCtx) return;
+        if (document.getElementById('filter-dsp-panel').classList.contains('hidden')) return;
+        
+        const ctx = this.filterCtx;
+        const rect = canvas.getBoundingClientRect();
+        const w = rect.width;
+        const h = rect.height;
+        
+        ctx.clearRect(0, 0, w, h);
+        
+        
+        const filterSliderVal = this.values.filter; // Modulator
+        const baseCutoff = this.values.filterCutoff || 0.75;
+        const baseOffset = this.values.filterOffset;
+        const baseReso = this.values.filterReso;
+        const baseSlope = this.values.filterSlope;
+        
+        const filterVal = Math.max(0.0, Math.min(1.0, baseCutoff + filterSliderVal * (this.values.filterCutoffMod || 0.0)));
+        const filterOffsetVal = Math.max(-1.0, Math.min(1.0, baseOffset + filterSliderVal * (this.values.filterOffsetMod || 0.0)));
+        const filterResoVal = Math.max(0.0, Math.min(1.0, baseReso + filterSliderVal * (this.values.filterResoMod || 0.0)));
+        const filterSlopeVal = Math.max(0.0, Math.min(1.0, baseSlope + filterSliderVal * (this.values.filterSlopeMod || 0.0)));
+
+        const typeA = this.values.filterTypeA;
+        const typeB = this.values.filterTypeB;
+        const morph = this.values.filterMorph;
+        
+        const cutoffA_norm = Math.min(1.0, Math.max(0.0, filterVal - filterOffsetVal * 0.5));
+        const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.5));
+        const fcA = 50.0 * Math.pow(2, cutoffA_norm * 8.0);
+        const fcB = 50.0 * Math.pow(2, cutoffB_norm * 8.0);
+        const Q = 0.707 * Math.exp(filterResoVal * 3.0);
+        const N = 1.0 + filterSlopeVal * 3.0;
+        
+        const calculateFilterMult = (freq, fc, q, n, type) => {
+            if (fc < 1.0) return 0.0;
+            const x = freq / fc;
+            const x2 = x * x;
+            const D = (1.0 - x2) * (1.0 - x2) + (x2 / (q * q));
+            let denom = Math.pow(D, n * 0.5);
+            if (denom < 0.000001) denom = 0.000001;
+            if (type === 0) return 1.0 / denom;
+            if (type === 1) return Math.pow(x, n) / denom; // Unnormalized BP peaks at Q
+            if (type === 2) return Math.pow(x2, n) / denom;
+            if (type === 3) return Math.pow(Math.abs(1.0 - x2), n) / denom;
+            return 1.0;
+        };
+
+        const numLines = 24;
+        const barWidth = Math.max(1, w / (numLines * 2.5));
+        
+        ctx.fillStyle = '#d1d1d6';
+        
+        for (let i = 0; i < numLines; i++) {
+            const minFreq = 50.0;
+            const maxFreq = 12000.0;
+            const ratio = i / (numLines - 1);
+            const freq = minFreq * Math.pow(maxFreq / minFreq, ratio);
+            
+            const multA = calculateFilterMult(freq, fcA, Q, N, Math.round(typeA));
+            const multB = calculateFilterMult(freq, fcB, Q, N, Math.round(typeB));
+            const filterMult = multA * (1.0 - morph) + multB * morph;
+            
+            // Convert to Decibels for professional EQ visualization scaling
+            const dB = 20.0 * Math.log10(filterMult + 0.0001);
+            
+            // Map: -20dB = 0% height, 0dB = ~45% height, +24dB = 100% height
+            const mappedHeight = (dB + 20.0) / 44.0;
+            const magnitude = Math.max(0.0, Math.min(1.0, mappedHeight));
+            
+            const barHeight = Math.max(2, magnitude * h);
+            
+            const x = (w / numLines) * i + (w / numLines) / 2 - barWidth / 2;
+            const y = h - barHeight;
+            
+            ctx.fillRect(x, y, barWidth, barHeight);
+        }
     }
 
     // ==========================================================================
@@ -1131,7 +1517,7 @@ class KronosSynth {
 
         const form = this.values.form;
         const timbre = this.values.timbre;
-        const cutoff = this.values.cutoff;
+        const filter = this.values.filter;
         const space = this.values.space;
         const pitch = this.values.pitch;
         const desync = this.values.desync;
@@ -1151,8 +1537,10 @@ class KronosSynth {
 
         // 1. Draw slider organic connection lines (linked directly to slider thumb pixels)
         // Set to fade in/out with the ADSR envelope
-        const keys = Object.keys(this.sliders);
-        keys.forEach((key, index) => {
+        // Dynamically fetch the 8 main UI sliders by looking at the HTML structure
+        // This ensures the visualizer adapts if slider names/engines change in the future
+        const mainSliders = Array.from(document.querySelectorAll('.slider-wrapper')).map(el => el.getAttribute('data-param'));
+        mainSliders.forEach((key, index) => {
             const slider = this.sliders[key];
             const start = slider.getThumbCanvasPos(this.canvas);
             
@@ -1163,7 +1551,7 @@ class KronosSynth {
                 phaseOffset += Math.PI; // Connect to opposite/distinct side of orbits for right sliders
             }
             const t = Date.now() * 0.0004 + phaseOffset;
-            const anchorRadius = maxRadius * (0.2 + orbitIdx * 0.2) * (1.0 - cutoff * 0.1);
+            const anchorRadius = maxRadius * (0.2 + orbitIdx * 0.2) * (1.0 - filter * 0.1);
             
             // Rotate anchor target on grid
             const targetX = centerX + anchorRadius * Math.cos(t);
@@ -1222,7 +1610,7 @@ class KronosSynth {
         const gridCount = 6;
         this.ctx.lineWidth = 1.0;
         for (let i = 1; i <= gridCount; i++) {
-            const rad = maxRadius * (i / gridCount) * (1.0 - cutoff * 0.15);
+            const rad = maxRadius * (i / gridCount) * (1.0 - filter * 0.15);
             this.ctx.strokeStyle = `rgba(255, 255, 255, ${0.015 + (1.0 - space * 0.5) * 0.025})`;
             this.ctx.beginPath();
             for (let angle = 0; angle <= Math.PI * 2; angle += 0.05) {
@@ -1286,10 +1674,10 @@ class KronosSynth {
                 amp = ampB * (1 - mix) + ampC * mix;
             }
 
-            // Cutoff limiter
-            const filterCutoffIndex = cutoff * this.particles.length;
-            if (i > filterCutoffIndex) {
-                amp *= Math.max(0, 1.0 - (i - filterCutoffIndex) / 24.0);
+            // filter limiter
+            const filterfilterIndex = filter * this.particles.length;
+            if (i > filterfilterIndex) {
+                amp *= Math.max(0, 1.0 - (i - filterfilterIndex) / 24.0);
             }
 
             const pitchScale = Math.pow(2.0, (pitch - 0.5) * 0.6);

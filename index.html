@@ -40,6 +40,7 @@
                             <div class="slider-thumb"></div>
                         </div>
                     </div>
+                    <div class="dsp-edit-toggle" data-target="form"></div>
                 </div>
 
                 <div class="slider-wrapper" data-param="timbre">
@@ -54,20 +55,22 @@
                             <div class="slider-thumb"></div>
                         </div>
                     </div>
+                    <div class="dsp-edit-toggle" data-target="timbre"></div>
                 </div>
 
-                <div class="slider-wrapper" data-param="cutoff">
+                <div class="slider-wrapper" data-param="filter">
                     <div class="slider-header">
                         <span class="slider-num">03</span>
-                        <span class="slider-name">CUTOFF</span>
-                        <span class="slider-val" id="val-cutoff">0.75</span>
+                        <span class="slider-name">FILTER</span>
+                        <span class="slider-val" id="val-filter">0.75</span>
                     </div>
-                    <div class="custom-slider" id="slider-cutoff">
+                    <div class="custom-slider" id="slider-filter">
                         <div class="slider-track">
                             <div class="slider-fill"></div>
                             <div class="slider-thumb"></div>
                         </div>
                     </div>
+                    <div class="dsp-edit-toggle" data-target="filter"></div>
                 </div>
 
                 <div class="slider-wrapper" data-param="space">
@@ -82,8 +85,11 @@
                             <div class="slider-thumb"></div>
                         </div>
                     </div>
+                    <div class="dsp-edit-toggle" data-target="space"></div>
                 </div>
             </div>
+
+            <div class="dsp-edit-area" id="dsp-area-left"></div>
 
             <!-- Compact ADSR Outlined Knobs Panel -->
             <div class="adsr-container" style="display: none;">
@@ -144,6 +150,7 @@
                             <div class="slider-thumb"></div>
                         </div>
                     </div>
+                    <div class="dsp-edit-toggle" data-target="alter"></div>
                 </div>
 
                 <div class="slider-wrapper" data-param="desync">
@@ -158,6 +165,7 @@
                             <div class="slider-thumb"></div>
                         </div>
                     </div>
+                    <div class="dsp-edit-toggle" data-target="desync"></div>
                 </div>
 
                 <div class="slider-wrapper" data-param="pitch">
@@ -172,6 +180,7 @@
                             <div class="slider-thumb"></div>
                         </div>
                     </div>
+                    <div class="dsp-edit-toggle" data-target="pitch"></div>
                 </div>
 
                 <div class="slider-wrapper" data-param="cloud">
@@ -186,9 +195,12 @@
                             <div class="slider-thumb"></div>
                         </div>
                     </div>
+                    <div class="dsp-edit-toggle" data-target="cloud"></div>
                 </div>
             </div>
             
+            <div class="dsp-edit-area" id="dsp-area-right"></div>
+
             <!-- Reverb Size & Sweep Knobs under Cloud slider -->
             <div class="cloud-knobs-container" style="display: none;">
                 <div class="cloud-knobs-title">REVERB</div>
@@ -214,8 +226,88 @@
                 </div>
             </div>
         </section>
+
+        <div id="filter-dsp-panel" class="dsp-panel hidden">
+            <div class="filter-ui-canvas-container">
+                <canvas id="filter-ui-canvas"></canvas>
+            </div>
+            <div class="filter-morph-row">
+                <div class="filter-type" id="filter-type-a">
+                    <span class="type-cycle cycle-left">&lt;</span>
+                    <span class="type-label">LP</span>
+                    <span class="type-cycle cycle-right">&gt;</span>
+                </div>
+                <div class="morph-slider-container" data-param="filterMorph">
+                    <div class="custom-slider horizontal" id="slider-filterMorph">
+                        <div class="slider-track horizontal-track">
+                            <div class="slider-fill horizontal-fill"></div>
+                            <div class="slider-thumb horizontal-thumb"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="filter-type" id="filter-type-b">
+                    <span class="type-cycle cycle-left">&lt;</span>
+                    <span class="type-label">LP</span>
+                    <span class="type-cycle cycle-right">&gt;</span>
+                </div>
+            </div>
+            <div class="filter-params-row">
+                <div class="knob-wrapper" data-param="filterCutoff">
+                    <div class="custom-knob filter-knob has-mod" id="knob-filterCutoff" data-mod-param="filterCutoffMod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100">
+                            <path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" />
+                            <path class="mod-ring-arc" d="" />
+                        </svg>
+                        <div class="knob-dial">
+                            <div class="knob-marker"></div>
+                        </div>
+                    </div>
+                    <span class="knob-name">CUTOFF</span>
+                    <span class="knob-val" id="val-filterCutoff">0.75</span>
+                </div>
+                <div class="knob-wrapper" data-param="filterOffset">
+                    <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-filterOffset" data-bipolar="true" data-mod-param="filterOffsetMod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100">
+                            <path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" />
+                            <path class="mod-ring-arc" d="" />
+                        </svg>
+                        <div class="knob-dial">
+                            <div class="knob-marker"></div>
+                        </div>
+                    </div>
+                    <span class="knob-name">OFFSET</span>
+                    <span class="knob-val" id="val-filterOffset">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="filterReso">
+                    <div class="custom-knob filter-knob has-mod" id="knob-filterReso" data-mod-param="filterResoMod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100">
+                            <path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" />
+                            <path class="mod-ring-arc" d="" />
+                        </svg>
+                        <div class="knob-dial">
+                            <div class="knob-marker"></div>
+                        </div>
+                    </div>
+                    <span class="knob-name">RESO</span>
+                    <span class="knob-val" id="val-filterReso">0.20</span>
+                </div>
+                <div class="knob-wrapper" data-param="filterSlope">
+                    <div class="custom-knob filter-knob has-mod" id="knob-filterSlope" data-mod-param="filterSlopeMod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100">
+                            <path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" />
+                            <path class="mod-ring-arc" d="" />
+                        </svg>
+                        <div class="knob-dial">
+                            <div class="knob-marker"></div>
+                        </div>
+                    </div>
+                    <span class="knob-name">SLOPE</span>
+                    <span class="knob-val" id="val-filterSlope">0.50</span>
+                </div>
+            </div>
+        </div>
     </div>
     
-    <script src="app.js"></script>
+    <script src="app.js?v=1788029963"></script>
 </body>
 </html>

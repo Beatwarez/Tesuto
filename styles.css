@@ -246,6 +246,7 @@ body {
     flex-direction: column;
     align-items: center;
     height: 100%;
+    flex: 1;
 }
 
 .slider-header {
@@ -331,6 +332,33 @@ body {
     transform: translateX(-50%) scale(1.2);
     box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 }
+
+/* DSP Edit Toggle */
+.dsp-edit-toggle {
+    width: 0.8vw;
+    height: 0.8vw;
+    min-width: 12px;
+    min-height: 12px;
+    flex-shrink: 0;
+    aspect-ratio: 1 / 1;
+    border: 1px solid var(--accent);
+    border-radius: 50%;
+    margin-top: 2vh;
+    cursor: pointer;
+    background: transparent;
+    transition: all 0.2s ease;
+}
+
+.dsp-edit-toggle:hover {
+    border-color: #ffffff;
+    transform: scale(1.1);
+}
+
+.dsp-edit-toggle.active {
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(209, 209, 214, 0.4);
+}
+
 
 /* ==========================================================================
    Keyboard overlay
@@ -559,4 +587,189 @@ body {
     height: 1.5vw !important;
     min-width: 18px !important;
     min-height: 18px !important;
+}
+
+/* ==========================================================================
+   DSP Edit Area & Panels
+   ========================================================================== */
+.dsp-edit-area {
+    width: 100%;
+    height: 40%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    position: relative;
+    pointer-events: auto;
+}
+
+.dsp-panel {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: opacity 0.3s ease;
+}
+
+.dsp-panel.hidden {
+    display: none;
+    opacity: 0;
+}
+
+/* Filter Canvas */
+.filter-ui-canvas-container {
+    width: 100%;
+    height: 55%;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    margin-bottom: 2vh;
+    position: relative;
+}
+
+#filter-ui-canvas {
+    width: 100%;
+    height: 100%;
+}
+
+/* Morph Row */
+.filter-morph-row {
+    width: 100%;
+    height: 15%;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 1vw;
+    margin-bottom: 2vh;
+}
+
+.filter-type {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.9vw;
+    color: var(--accent);
+    cursor: pointer;
+}
+
+.type-cycle {
+    color: var(--fg-muted);
+    transition: color 0.2s ease;
+    padding: 0 0.5vw;
+}
+
+.type-cycle:hover {
+    color: #ffffff;
+}
+
+.type-label {
+    width: 2.5vw;
+    text-align: center;
+    font-weight: 700;
+}
+
+.morph-slider-container {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 1vw;
+}
+
+.custom-slider.horizontal {
+    width: 100%;
+    height: 2vh;
+}
+
+.slider-track.horizontal-track {
+    width: 100%;
+    height: 2px;
+    top: 50%;
+    left: 0;
+    bottom: auto;
+    transform: translateY(-50%);
+}
+
+.slider-fill.horizontal-fill {
+    height: 2px;
+    width: 0%; /* updated by JS */
+    left: 0;
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+}
+
+.slider-thumb.horizontal-thumb {
+    width: 0.8vw;
+    height: 0.8vw;
+    min-width: 10px;
+    min-height: 10px;
+    top: 50%;
+    left: 0%; /* updated by JS */
+    transform: translate(-50%, -50%);
+    bottom: auto;
+}
+
+.custom-slider.horizontal:hover .slider-thumb.horizontal-thumb {
+    transform: translate(-50%, -50%) scale(1.2);
+}
+
+/* Parameter Row (Knobs) */
+.filter-params-row {
+    width: 100%;
+    height: 25%;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start; /* Align to the left */
+    gap: 1.6vw; /* Equal placing */
+    align-items: flex-end;
+    padding-left: 2vw;
+}
+
+/* Mod Ring Outer SVG */
+.mod-ring-svg {
+    position: absolute;
+    top: -25%;
+    left: -25%;
+    width: 150%;
+    height: 150%;
+    z-index: 10;
+    pointer-events: none; /* Let clicks pass through empty space */
+}
+
+.mod-ring-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.08);
+    stroke-width: 12;
+    pointer-events: auto; /* Catch clicks on the path */
+    cursor: ns-resize;
+    transition: stroke 0.2s ease;
+}
+
+.mod-ring-bg:hover {
+    stroke: rgba(255, 255, 255, 0.3);
+}
+
+.mod-ring-arc {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 12;
+    stroke-linecap: round;
+    pointer-events: none;
+}
+.bipolar-arc-neg {
+    stroke: #3b82f6; /* Blue for negative modulation */
+}
+.bipolar-arc-pos {
+    stroke: #f97316; /* Orange for positive modulation */
+}
+
+/* Filter Custom Knobs for DSP area */
+.filter-knob {
+    width: 1.5vw !important;
+    height: 1.5vw !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+    margin-bottom: 0.5vh;
 }

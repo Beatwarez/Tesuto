@@ -65,10 +65,31 @@ public:
 
   void noteKeyStateChanged() override {}
 
-  void updateParams(float form, float timbre, float cutoff, float space, float cloud, float size, float sweep, float desync, float pitch) {
+
+  inline float calculateFilterMult(float freq, float fc, float q, float n, int type) {
+      if (fc < 1.0f) return 0.0f;
+      float x = freq / fc;
+      float x2 = x * x;
+      float D = (1.0f - x2) * (1.0f - x2) + (x2 / (q * q));
+      float denom = std::pow(D, n * 0.5f);
+      if (denom < 0.000001f) denom = 0.000001f;
+      if (type == 0) return 1.0f / denom;
+      if (type == 1) return std::pow(x / q, n) / denom;
+      if (type == 2) return std::pow(x2, n) / denom;
+      if (type == 3) return std::pow(std::abs(1.0f - x2), n) / denom;
+      return 1.0f;
+  }
+
+  void updateParams(float form, float timbre, float typeA, float typeB, float filterMorph, float filterOffset, float filterReso, float filterSlope, float filter, float space, float cloud, float size, float sweep, float desync, float pitch) {
     formVal = form;
     timbreVal = timbre;
-    cutoffVal = cutoff;
+    filterTypeAVal = typeA;
+    filterTypeBVal = typeB;
+    filterMorphVal = filterMorph;
+    filterOffsetVal = filterOffset;
+    filterResoVal = filterReso;
+    filterSlopeVal = filterSlope;
+    filterVal = filter;
     spaceVal = space;
     cloudVal = cloud;
     sizeVal = size;
@@ -108,8 +129,13 @@ public:
     if (currentSampleRate <= 0.0)
       currentSampleRate = 44100.0;
 
-    // Exponential mapping for cutoff frequency (50Hz to 12000Hz)
-    float cutoffFreq = 50.0f * std::pow(2.0f, cutoffVal * 8.0f);
+    // Exponential mapping for filter frequency (50Hz to 12000Hz)
+    float cutoffA_norm = std::clamp(filterVal - filterOffsetVal * 0.5f, 0.0f, 1.0f);
+    float cutoffB_norm = std::clamp(filterVal + filterOffsetVal * 0.5f, 0.0f, 1.0f);
+    float fcA = 50.0f * std::pow(2.0f, cutoffA_norm * 8.0f);
+    float fcB = 50.0f * std::pow(2.0f, cutoffB_norm * 8.0f);
+    float Q = 0.707f * std::exp(filterResoVal * 3.0f);
+    float N = 1.0f + filterSlopeVal * 3.0f;
 
     // Precompute partial amplitudes, frequencies, phase deltas, panning, and build active list
     float freqs[256];
@@ -200,9 +226,10 @@ public:
       float baseAmp = getSpectralShape (p, harmonicIndex, timbreIdx) * (1.0f - timbreMix)
                     + getSpectralShape (p, harmonicIndex, timbreIdx + 1) * timbreMix;
 
-      // Cutoff limiter
-      float ratio = freqs[p] / cutoffFreq;
-      float filterMult = 1.0f / (1.0f + std::pow(ratio, 6.0f));
+      // filter limiter
+      float multA = calculateFilterMult(freqs[p], fcA, Q, N, (int)filterTypeAVal);
+      float multB = calculateFilterMult(freqs[p], fcB, Q, N, (int)filterTypeBVal);
+      float filterMult = multA * (1.0f - filterMorphVal) + multB * filterMorphVal;
 
       // Space (Organic LFO drift)
       float lfoDrift =
@@ -336,7 +363,13 @@ private:
 
   float formVal = 0.0f;
   float timbreVal = 0.25f;
-  float cutoffVal = 0.75f;
+  float filterTypeAVal = 0.0f;
+  float filterTypeBVal = 0.0f;
+  float filterMorphVal = 0.0f;
+  float filterOffsetVal = 0.0f;
+  float filterResoVal = 0.2f;
+  float filterSlopeVal = 0.5f;
+  float filterVal = 0.75f;
   float spaceVal = 0.30f;
   float alterVal = 0.0f;
   float sizeVal = 0.5f;
