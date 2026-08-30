@@ -193,9 +193,9 @@ body {
    ========================================================================== */
 .control-panel-left {
     position: absolute;
-    top: 14vh;
+    top: 18vh;
     bottom: 4vh;
-    left: 0.8vw;
+    left: 1.5vw;
     width: 24vw;
     z-index: 5;
     display: flex;
