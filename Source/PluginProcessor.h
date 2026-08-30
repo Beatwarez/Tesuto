@@ -294,8 +294,8 @@ filterOffsetVal = filterOffset;
                     + getSpectralShape (p, harmonicIndex, timbreIdx + 1) * timbreMix;
 
       // filter limiter
-      float multA = calculateFilterMult(freqs[p], fcA, Q, N, (int)filterTypeAVal);
-      float multB = calculateFilterMult(freqs[p], fcB, Q, N, (int)filterTypeBVal);
+      float multA = calculateFilterMult(freqs[p], fcA, filterResoVal, filterSlopeVal, (int)filterTypeAVal);
+      float multB = calculateFilterMult(freqs[p], fcB, filterResoVal, filterSlopeVal, (int)filterTypeBVal);
       float filterMult = multA * (1.0f - filterMorphVal) + multB * filterMorphVal;
 
       // Space (Organic LFO drift)
