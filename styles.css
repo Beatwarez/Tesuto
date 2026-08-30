@@ -656,6 +656,7 @@ body {
     color: var(--fg-muted);
     transition: color 0.2s ease;
     padding: 0 0.5vw;
+    font-size: 1.4vw;
 }
 
 .type-cycle:hover {

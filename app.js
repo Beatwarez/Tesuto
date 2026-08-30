@@ -1275,6 +1275,23 @@ class KronosSynth {
             }
             this.knobs[param].value = val;
             this.knobs[param].updateUI();
+        } else if (param === 'filterTypeA') {
+            this.values.filterTypeA = val;
+            const typeALabel = document.querySelector('#filter-type-a .type-label');
+            if (typeALabel) typeALabel.textContent = this.filterTypes[Math.round(val)];
+            this.updateFilterLabels();
+        } else if (param === 'filterTypeB') {
+            this.values.filterTypeB = val;
+            const typeBLabel = document.querySelector('#filter-type-b .type-label');
+            if (typeBLabel) typeBLabel.textContent = this.filterTypes[Math.round(val)];
+            this.updateFilterLabels();
+        } else if (param === 'filterMorphMod') {
+            this.values.filterMorphMod = val;
+            if (this.sliders.filterMorph) this.sliders.filterMorph.updateModLine();
+        } else if (param.endsWith('Mod')) {
+            this.values[param] = val;
+            const baseParam = param.replace('Mod', '');
+            if (this.knobs[baseParam]) this.knobs[baseParam].updateModArc();
         }
 
         // Sync changes to the AudioWorklet node if active
