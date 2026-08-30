@@ -1560,7 +1560,7 @@ class KronosSynth {
         
         
         const filterSliderVal = this.values.filter; // Modulator
-        const baseCutoff = this.values.filterCutoff || 0.75;
+        const baseCutoff = this.values.filterCutoff !== undefined ? this.values.filterCutoff : 0.75;
         const baseOffset = this.values.filterOffset;
         const baseReso = this.values.filterReso;
         const baseSlope = this.values.filterSlope;
@@ -1645,7 +1645,7 @@ class KronosSynth {
         const form = this.values.form;
         const timbre = this.values.timbre;
         const filter = this.values.filter;
-        const baseCutoff = this.values.filterCutoff || 0.75;
+        const baseCutoff = this.values.filterCutoff !== undefined ? this.values.filterCutoff : 0.75;
         const filterSliderVal = this.values.filter || 0.75;
         const filterVal = Math.max(0.0, Math.min(1.0, baseCutoff + filterSliderVal * (this.values.filterCutoffMod || 0.0)));
 
