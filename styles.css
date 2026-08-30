@@ -498,8 +498,6 @@ body {
 .custom-knob {
     width: 2.0vw;
     height: 2.0vw;
-    min-width: 24px;
-    min-height: 24px;
     border-radius: 50%;
     background: transparent;
     border: 1px solid var(--accent); /* Same color outline as sliders */
@@ -719,7 +717,7 @@ body {
 .filter-params-row {
     width: 100%;
     height: 25%;
-    margin-top: 2vh;
+    margin-top: 3vh;
     display: flex;
     flex-direction: row;
     justify-content: space-evenly; /* Align to the left */
