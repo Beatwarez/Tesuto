@@ -770,8 +770,6 @@ body {
 
 /* Filter Custom Knobs for DSP area */
 .filter-knob {
-    width: 1.5vw !important;
-    height: 1.5vw !important;
     margin-bottom: 0.5vh;
 }
 

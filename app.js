@@ -1654,6 +1654,7 @@ class KronosSynth {
         this.canvas.width = rect.width * window.devicePixelRatio;
         this.canvas.height = rect.height * window.devicePixelRatio;
         this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        this.initFilterCanvas();
     }
 
     initParticles() {
