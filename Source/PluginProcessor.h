@@ -296,7 +296,8 @@ filterOffsetVal = filterOffset;
       // filter limiter
       float multA = calculateFilterMult(freqs[p], fcA, filterResoVal, filterSlopeVal, (int)filterTypeAVal);
       float multB = calculateFilterMult(freqs[p], fcB, filterResoVal, filterSlopeVal, (int)filterTypeBVal);
-      float filterMult = multA * (1.0f - filterMorphVal) + multB * filterMorphVal;
+      float currentMorph = std::clamp(filterMorphVal + filterVal * filterMorphModVal, 0.0f, 1.0f);
+      float filterMult = multA * (1.0f - currentMorph) + multB * currentMorph;
       if (filterMult > 1.0f) filterMult = 1.0f;
 
       // Space (Organic LFO drift)

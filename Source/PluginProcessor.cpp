@@ -61,6 +61,8 @@ std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterOffset", 
     synth.clearVoices();
     for (int i = 0; i < 8; ++i)
         synth.addVoice (new KronosVoice());
+        
+    apvts.state = juce::ValueTree ("KronosParams");
 }
 
 KronosAudioProcessor::~KronosAudioProcessor()

@@ -1943,7 +1943,7 @@ class KronosSynth {
         const gridCount = 6;
         this.ctx.lineWidth = 1.0;
         for (let i = 1; i <= gridCount; i++) {
-            const rad = maxRadius * (i / gridCount) * (1.0 - filterVal * 0.15);
+            const rad = maxRadius * (i / gridCount) * (1.0 - filter * 0.15);
             this.ctx.strokeStyle = `rgba(255, 255, 255, ${0.015 + (1.0 - space * 0.5) * 0.025})`;
             this.ctx.beginPath();
             for (let angle = 0; angle <= Math.PI * 2; angle += 0.05) {
@@ -2007,8 +2007,8 @@ class KronosSynth {
                 amp = ampB * (1 - mix) + ampC * mix;
             }
 
-            // filter limiter
-            const filterfilterIndex = filterVal * this.particles.length;
+            // FILTER: progressively suppress higher index particles
+            const filterfilterIndex = filter * this.particles.length;
             if (i > filterfilterIndex) {
                 amp *= Math.max(0, 1.0 - (i - filterfilterIndex) / 24.0);
             }
