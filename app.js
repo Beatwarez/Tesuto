@@ -732,8 +732,7 @@ class CustomSlider {
         const percentage = (this.value - this.min) / (this.max - this.min);
         if (this.isHorizontal) {
             this.fill.style.width = `${percentage * 100}%`;
-            const halfThumbWidth = (this.thumb.offsetWidth || 10) / 2;
-            this.thumb.style.left = `calc(${percentage * 100}% - ${halfThumbWidth}px)`;
+            this.thumb.style.left = `${percentage * 100}%`;
         } else {
             this.fill.style.height = `${percentage * 100}%`;
             const halfThumbHeight = (this.thumb.offsetHeight || 14) / 2;
