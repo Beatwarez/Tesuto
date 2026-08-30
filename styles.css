@@ -807,3 +807,28 @@ body {
     pointer-events: none;
     transition: none;
 }
+
+.knob-names {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    margin-top: 5px;
+    margin-bottom: 2px;
+}
+
+.knob-name-a {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.65vw;
+    font-weight: 700;
+    letter-spacing: 0.1vw;
+    color: #e0e0e6;
+}
+
+.knob-name-b {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.65vw;
+    font-weight: 700;
+    letter-spacing: 0.1vw;
+    color: #8c8c94;
+}

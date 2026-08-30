@@ -204,30 +204,89 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             const blockTime = bufferLength / sampleRate;
             const attackStep = blockTime / 0.8;
             const releaseStep = blockTime / 1.5;
-
-
-            const calculateFilterMult = (freq, fc, q, n, type) => {
-                if (fc < 1.0) return 0.0;
-                const x = freq / fc;
-                const x2 = x * x;
+        const calculateFilterMult = (freq, fc, rawReso, rawSlope, type) => {
+            if (fc < 1.0) return 0.0;
+            const x = freq / fc;
+            const x2 = x * x;
+            
+            if (type <= 3) {
+                const q = 0.707 * Math.exp(rawReso * 3.0);
+                const n = 1.0 + rawSlope * 3.0;
                 const D = (1.0 - x2) * (1.0 - x2) + (x2 / (q * q));
                 let denom = Math.pow(D, n * 0.5);
                 if (denom < 0.000001) denom = 0.000001;
-                
-                if (type === 0) return 1.0 / denom; // LP
-                if (type === 1) return Math.pow(x / q, n) / denom; // BP
-                if (type === 2) return Math.pow(x2, n) / denom; // HP
-                if (type === 3) return Math.pow(Math.abs(1.0 - x2), n) / denom; // Notch
+                if (type === 0) return 1.0 / denom;
+                if (type === 1) return Math.pow(x / q, n) / denom;
+                if (type === 2) return Math.pow(x2, n) / denom;
+                if (type === 3) return Math.pow(Math.abs(1.0 - x2), n) / denom;
+            }
+            if (type === 4) {
+                if (freq <= fc) {
+                    const peakDist = 1.0 - x;
+                    if (peakDist < 0.1 && peakDist >= 0.0) return 1.0 + rawReso * (0.1 - peakDist) * 20.0;
+                    return 1.0;
+                } else {
+                    return rawSlope * rawSlope;
+                }
+            }
+            if (type === 5) {
+                const h_idx = Math.round(freq / 50.0);
+                const threshH = fc / 50.0;
+                if (h_idx > threshH) {
+                    const isOdd = (h_idx % 2) !== 0;
+                    const targetOdd = rawSlope >= 0.5;
+                    if (isOdd === targetOdd) return 1.0 - rawReso;
+                }
                 return 1.0;
-            };
+            }
+            if (type === 6) {
+                const phase = rawSlope * 6.283185307;
+                const comb = 0.5 - 0.5 * Math.cos(freq * 6.283185307 / fc + phase);
+                return 1.0 - rawReso * comb;
+            }
+            if (type === 7) {
+                const v = rawSlope;
+                let p1 = 700.0 * (1.0 - v) * (1.0 - v) + 300.0 * 2.0 * v * (1.0 - v) + 270.0 * v * v;
+                let p2 = 1100.0 * (1.0 - v) * (1.0 - v) + 870.0 * 2.0 * v * (1.0 - v) + 2300.0 * v * v;
+                let p3 = 2400.0 * (1.0 - v) * (1.0 - v) + 2200.0 * 2.0 * v * (1.0 - v) + 3000.0 * v * v;
+                const shift = fc / 1000.0;
+                p1 *= shift; p2 *= shift; p3 *= shift;
+                const width = 0.1 + (1.0 - rawReso) * 0.4;
+                const g = (center) => {
+                    const diff = (freq - center) / (center * width);
+                    return Math.exp(-diff * diff);
+                };
+                const mult = g(p1) + 0.5 * g(p2) + 0.2 * g(p3);
+                return 0.1 + mult * 2.0;
+            }
+            if (type === 8) {
+                if (freq > fc) {
+                    let h_val = (freq * 12.9898 + 78.233) % 1.0;
+                    h_val = (h_val * 43758.5453) % 1.0;
+                    if (h_val > rawReso) return 1.0 - rawSlope;
+                }
+                return 1.0;
+            }
+            if (type === 9) {
+                const angle = rawSlope * 2.0 - 1.0;
+                const tilt = Math.pow(freq / fc, angle);
+                let peak = 0.0;
+                if (rawReso > 0.01) {
+                    const dist = Math.abs(1.0 - x);
+                    if (dist < 0.2) peak = rawReso * (0.2 - dist) * 5.0;
+                }
+                return tilt + peak;
+            }
+            return 1.0;
+        };
 
             // Map filter exponentially (50Hz to 12000Hz)
             const cutoffA_norm = Math.min(1.0, Math.max(0.0, filterVal - filterOffsetVal * 0.165));
             const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.165));
             const fcA = 50.0 * Math.pow(2, cutoffA_norm * 8.0);
             const fcB = 50.0 * Math.pow(2, cutoffB_norm * 8.0);
-            const Q = 0.707 * Math.exp(filterResoVal * 3.0);
-            const N = 1.0 + filterSlopeVal * 3.0;
+            // const Q = ...
+            // const N = ...
 
             // Initialize output channels to zero
             for (let i = 0; i < bufferLength; i++) {
@@ -1042,7 +1101,8 @@ class KronosSynth {
         this.sliders.filterMorph = new CustomSlider('slider-filterMorph', 0, 1, this.values.filterMorph, 0.001, (v) => this.onSliderChange('filterMorph', v), true);
         this.sliders.filterMorph.updateModLine();
         
-        this.filterTypes = ['LP', 'BP', 'HP', 'NOTCH'];
+        this.filterTypes = ['LP', 'BP', 'HP', 'NOTCH', 'BRICK', 'SIEVE', 'COMB', 'VOWEL', 'GLITCH', 'TILT'];
+        this.updateFilterLabels();
         this.setupFilterTypeSelectors();
 
         // Build UI overlays and canvas sizing
@@ -1325,24 +1385,28 @@ class KronosSynth {
         const typeBLabel = document.querySelector('#filter-type-b .type-label');
         
         document.querySelector('#filter-type-a .cycle-left').addEventListener('click', () => {
-            this.values.filterTypeA = (this.values.filterTypeA - 1 + 4) % 4;
+            this.values.filterTypeA = (this.values.filterTypeA - 1 + 10) % 10;
             typeALabel.textContent = this.filterTypes[this.values.filterTypeA];
             this.onSliderChange('filterTypeA', this.values.filterTypeA);
+            this.updateFilterLabels();
         });
         document.querySelector('#filter-type-a .cycle-right').addEventListener('click', () => {
-            this.values.filterTypeA = (this.values.filterTypeA + 1) % 4;
+            this.values.filterTypeA = (this.values.filterTypeA + 1) % 10;
             typeALabel.textContent = this.filterTypes[this.values.filterTypeA];
             this.onSliderChange('filterTypeA', this.values.filterTypeA);
+            this.updateFilterLabels();
         });
         document.querySelector('#filter-type-b .cycle-left').addEventListener('click', () => {
-            this.values.filterTypeB = (this.values.filterTypeB - 1 + 4) % 4;
+            this.values.filterTypeB = (this.values.filterTypeB - 1 + 10) % 10;
             typeBLabel.textContent = this.filterTypes[this.values.filterTypeB];
             this.onSliderChange('filterTypeB', this.values.filterTypeB);
+            this.updateFilterLabels();
         });
         document.querySelector('#filter-type-b .cycle-right').addEventListener('click', () => {
-            this.values.filterTypeB = (this.values.filterTypeB + 1) % 4;
+            this.values.filterTypeB = (this.values.filterTypeB + 1) % 10;
             typeBLabel.textContent = this.filterTypes[this.values.filterTypeB];
             this.onSliderChange('filterTypeB', this.values.filterTypeB);
+            this.updateFilterLabels();
         });
     }
 
@@ -1508,6 +1572,33 @@ class KronosSynth {
     // ==========================================================================
     // 6. Canvas Responsive Resizer
     // ==========================================================================
+    updateFilterLabels() {
+        const labels = {
+            0: ['CUTOFF', 'OFFSET', 'RESO', 'SLOPE'],
+            1: ['CENTER', 'OFFSET', 'RESO', 'SLOPE'],
+            2: ['CUTOFF', 'OFFSET', 'RESO', 'SLOPE'],
+            3: ['CENTER', 'OFFSET', 'RESO', 'SLOPE'],
+            4: ['CUTOFF', 'OFFSET', 'PEAK', 'LEAK'],
+            5: ['THRESH', 'OFFSET', 'HARSH', 'ODD/EVN'],
+            6: ['SPACE', 'OFFSET', 'DEPTH', 'PHASE'],
+            7: ['FORMANT', 'OFFSET', 'SHARP', 'VOWEL'],
+            8: ['CUTOFF', 'OFFSET', 'SURVIVE', 'DAMAGE'],
+            9: ['PIVOT', 'OFFSET', 'PEAK', 'ANGLE']
+        };
+        const aType = Math.round(this.values.filterTypeA || 0);
+        const bType = Math.round(this.values.filterTypeB || 0);
+        
+        const params = ['filterCutoff', 'filterOffset', 'filterReso', 'filterSlope'];
+        
+        for (let i = 0; i < 4; i++) {
+            const labelA = document.getElementById(`label-${params[i]}-a`);
+            const labelB = document.getElementById(`label-${params[i]}-b`);
+            if (labelA) labelA.textContent = labels[aType][i];
+            if (labelB) labelB.textContent = labels[bType][i];
+        }
+    }
+
+
     resizeCanvas() {
         const parent = this.canvas.parentElement;
         const rect = parent ? parent.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight };
@@ -1578,20 +1669,81 @@ class KronosSynth {
         const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.165));
         const fcA = 50.0 * Math.pow(2, cutoffA_norm * 8.0);
         const fcB = 50.0 * Math.pow(2, cutoffB_norm * 8.0);
-        const Q = 0.707 * Math.exp(filterResoVal * 3.0);
-        const N = 1.0 + filterSlopeVal * 3.0;
-        
-        const calculateFilterMult = (freq, fc, q, n, type) => {
+        // const Q = ...
+        // const N = ...
+        const calculateFilterMult = (freq, fc, rawReso, rawSlope, type) => {
             if (fc < 1.0) return 0.0;
             const x = freq / fc;
             const x2 = x * x;
-            const D = (1.0 - x2) * (1.0 - x2) + (x2 / (q * q));
-            let denom = Math.pow(D, n * 0.5);
-            if (denom < 0.000001) denom = 0.000001;
-            if (type === 0) return 1.0 / denom;
-            if (type === 1) return Math.pow(x, n) / denom; // Unnormalized BP peaks at Q
-            if (type === 2) return Math.pow(x2, n) / denom;
-            if (type === 3) return Math.pow(Math.abs(1.0 - x2), n) / denom;
+            
+            if (type <= 3) {
+                const q = 0.707 * Math.exp(rawReso * 3.0);
+                const n = 1.0 + rawSlope * 3.0;
+                const D = (1.0 - x2) * (1.0 - x2) + (x2 / (q * q));
+                let denom = Math.pow(D, n * 0.5);
+                if (denom < 0.000001) denom = 0.000001;
+                if (type === 0) return 1.0 / denom;
+                if (type === 1) return Math.pow(x / q, n) / denom;
+                if (type === 2) return Math.pow(x2, n) / denom;
+                if (type === 3) return Math.pow(Math.abs(1.0 - x2), n) / denom;
+            }
+            if (type === 4) {
+                if (freq <= fc) {
+                    const peakDist = 1.0 - x;
+                    if (peakDist < 0.1 && peakDist >= 0.0) return 1.0 + rawReso * (0.1 - peakDist) * 20.0;
+                    return 1.0;
+                } else {
+                    return rawSlope * rawSlope;
+                }
+            }
+            if (type === 5) {
+                const h_idx = Math.round(freq / 50.0);
+                const threshH = fc / 50.0;
+                if (h_idx > threshH) {
+                    const isOdd = (h_idx % 2) !== 0;
+                    const targetOdd = rawSlope >= 0.5;
+                    if (isOdd === targetOdd) return 1.0 - rawReso;
+                }
+                return 1.0;
+            }
+            if (type === 6) {
+                const phase = rawSlope * 6.283185307;
+                const comb = 0.5 - 0.5 * Math.cos(freq * 6.283185307 / fc + phase);
+                return 1.0 - rawReso * comb;
+            }
+            if (type === 7) {
+                const v = rawSlope;
+                let p1 = 700.0 * (1.0 - v) * (1.0 - v) + 300.0 * 2.0 * v * (1.0 - v) + 270.0 * v * v;
+                let p2 = 1100.0 * (1.0 - v) * (1.0 - v) + 870.0 * 2.0 * v * (1.0 - v) + 2300.0 * v * v;
+                let p3 = 2400.0 * (1.0 - v) * (1.0 - v) + 2200.0 * 2.0 * v * (1.0 - v) + 3000.0 * v * v;
+                const shift = fc / 1000.0;
+                p1 *= shift; p2 *= shift; p3 *= shift;
+                const width = 0.1 + (1.0 - rawReso) * 0.4;
+                const g = (center) => {
+                    const diff = (freq - center) / (center * width);
+                    return Math.exp(-diff * diff);
+                };
+                const mult = g(p1) + 0.5 * g(p2) + 0.2 * g(p3);
+                return 0.1 + mult * 2.0;
+            }
+            if (type === 8) {
+                if (freq > fc) {
+                    let h_val = (freq * 12.9898 + 78.233) % 1.0;
+                    h_val = (h_val * 43758.5453) % 1.0;
+                    if (h_val > rawReso) return 1.0 - rawSlope;
+                }
+                return 1.0;
+            }
+            if (type === 9) {
+                const angle = rawSlope * 2.0 - 1.0;
+                const tilt = Math.pow(freq / fc, angle);
+                let peak = 0.0;
+                if (rawReso > 0.01) {
+                    const dist = Math.abs(1.0 - x);
+                    if (dist < 0.2) peak = rawReso * (0.2 - dist) * 5.0;
+                }
+                return tilt + peak;
+            }
             return 1.0;
         };
 
@@ -1606,8 +1758,8 @@ class KronosSynth {
             const ratio = i / (numLines - 1);
             const freq = minFreq * Math.pow(maxFreq / minFreq, ratio);
             
-            const multA = calculateFilterMult(freq, fcA, Q, N, Math.round(typeA));
-            const multB = calculateFilterMult(freq, fcB, Q, N, Math.round(typeB));
+            const multA = calculateFilterMult(freq, fcA, filterResoVal, filterSlopeVal, Math.round(typeA));
+            const multB = calculateFilterMult(freq, fcB, filterResoVal, filterSlopeVal, Math.round(typeB));
             const filterMult = multA * (1.0 - morph) + multB * morph;
             
             // Convert to Decibels for professional EQ visualization scaling
