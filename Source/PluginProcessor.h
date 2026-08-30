@@ -297,6 +297,7 @@ filterOffsetVal = filterOffset;
       float multA = calculateFilterMult(freqs[p], fcA, filterResoVal, filterSlopeVal, (int)filterTypeAVal);
       float multB = calculateFilterMult(freqs[p], fcB, filterResoVal, filterSlopeVal, (int)filterTypeBVal);
       float filterMult = multA * (1.0f - filterMorphVal) + multB * filterMorphVal;
+      if (filterMult > 1.0f) filterMult = 1.0f;
 
       // Space (Organic LFO drift)
       float lfoDrift =

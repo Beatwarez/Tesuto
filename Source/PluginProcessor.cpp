@@ -20,8 +20,8 @@ KronosAudioProcessor::KronosAudioProcessor()
         apvts (*this, nullptr, "PARAMETERS", {
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("form", 1), "Form", 0.0f, 1.0f, 0.0f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("timbre", 1), "Timbre", 0.0f, 1.0f, 0.25f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterTypeA", 1), "FilterTypeA", 0.0f, 3.0f, 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterTypeB", 1), "FilterTypeB", 0.0f, 3.0f, 0.0f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterTypeA", 1), "FilterTypeA", 0.0f, 9.0f, 0.0f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterTypeB", 1), "FilterTypeB", 0.0f, 9.0f, 0.0f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterMorph", 1), "FilterMorph", 0.0f, 1.0f, 0.0f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterMorphMod", 1), "FilterMorphMod", -1.0f, 1.0f, 0.0f),
 
