@@ -492,6 +492,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    width: 5.5vw;
 }
 
 .custom-knob {
@@ -585,8 +586,6 @@ body {
 .small-knob {
     width: 1.5vw !important;
     height: 1.5vw !important;
-    min-width: 18px !important;
-    min-height: 18px !important;
 }
 
 /* ==========================================================================
@@ -723,10 +722,12 @@ body {
     margin-top: 2vh;
     display: flex;
     flex-direction: row;
-    justify-content: flex-start; /* Align to the left */
-    gap: 1.6vw; /* Equal placing */
+    justify-content: space-evenly; /* Align to the left */
+     /* Equal placing */
     align-items: flex-end;
     padding-left: 2vw;
+
+    box-sizing: border-box;
 }
 
 /* Mod Ring Outer SVG */
@@ -771,8 +772,6 @@ body {
 .filter-knob {
     width: 1.5vw !important;
     height: 1.5vw !important;
-    min-width: 18px !important;
-    min-height: 18px !important;
     margin-bottom: 0.5vh;
 }
 

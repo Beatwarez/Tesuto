@@ -1202,6 +1202,10 @@ class KronosSynth {
 
     onSliderChange(param, val) {
         this.values[param] = val;
+        if (param === 'filterMorph') {
+            this.updateFilterLabelColors();
+        }
+
         const displayEl = document.getElementById(`val-${param}`);
         if (displayEl) {
             if (param === 'pitch') {
@@ -1572,6 +1576,51 @@ class KronosSynth {
     // ==========================================================================
     // 6. Canvas Responsive Resizer
     // ==========================================================================
+    
+    updateFilterLabelColors() {
+        const morph = this.values.filterMorph !== undefined ? this.values.filterMorph : 0.5;
+        
+        // Target colors
+        // Active: #e0e0e6 (224, 224, 230)
+        // Inactive: #8c8c94 (140, 140, 148)
+        
+        // Label A fading: 
+        // morph = 0.0 -> Active (1.0)
+        // morph = 0.5 -> Active (1.0)
+        // morph = 1.0 -> Inactive (0.0)
+        let aFactor = 1.0;
+        if (morph > 0.5) {
+            aFactor = 1.0 - (morph - 0.5) * 2.0;
+        }
+        
+        // Label B fading:
+        // morph = 0.0 -> Inactive (0.0)
+        // morph = 0.5 -> Active (1.0)
+        // morph = 1.0 -> Active (1.0)
+        let bFactor = 1.0;
+        if (morph < 0.5) {
+            bFactor = morph * 2.0;
+        }
+        
+        const rA = Math.round(140 + aFactor * (224 - 140));
+        const gA = Math.round(140 + aFactor * (224 - 140));
+        const bA = Math.round(148 + aFactor * (230 - 148));
+        const colorA = `rgb(${rA}, ${gA}, ${bA})`;
+        
+        const rB = Math.round(140 + bFactor * (224 - 140));
+        const gB = Math.round(140 + bFactor * (224 - 140));
+        const bB = Math.round(148 + bFactor * (230 - 148));
+        const colorB = `rgb(${rB}, ${gB}, ${bB})`;
+        
+        const params = ['filterCutoff', 'filterOffset', 'filterReso', 'filterSlope'];
+        for (let i = 0; i < 4; i++) {
+            const labelA = document.getElementById(`label-${params[i]}-a`);
+            const labelB = document.getElementById(`label-${params[i]}-b`);
+            if (labelA) labelA.style.color = colorA;
+            if (labelB) labelB.style.color = colorB;
+        }
+    }
+
     updateFilterLabels() {
         const labels = {
             0: ['CUTOFF', 'OFFSET', 'RESO', 'SLOPE'],
