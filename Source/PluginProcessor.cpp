@@ -25,7 +25,9 @@ KronosAudioProcessor::KronosAudioProcessor()
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterMorph", 1), "FilterMorph", 0.0f, 1.0f, 0.0f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterMorphMod", 1), "FilterMorphMod", -1.0f, 1.0f, 0.0f),
 
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterOffset", 1), "FilterOffset", -1.0f, 1.0f, 0.0f),
+                        std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterCutoff", 1), "FilterCutoff", 0.0f, 1.0f, 0.75f),
+            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterCutoffMod", 1), "FilterCutoffMod", -1.0f, 1.0f, 0.0f),
+std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterOffset", 1), "FilterOffset", -1.0f, 1.0f, 0.0f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterReso", 1), "FilterReso", 0.0f, 1.0f, 0.2f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterSlope", 1), "FilterSlope", 0.0f, 1.0f, 0.5f),
             std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filter", 1), "filter", 0.0f, 1.0f, 0.75f),
@@ -190,7 +192,9 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     float filterMorph = *apvts.getRawParameterValue ("filterMorph");
     float filterMorphMod = *apvts.getRawParameterValue ("filterMorphMod");
 
-    float filterOffset = *apvts.getRawParameterValue ("filterOffset");
+        float filterCutoff = *apvts.getRawParameterValue ("filterCutoff");
+    float filterCutoffMod = *apvts.getRawParameterValue ("filterCutoffMod");
+float filterOffset = *apvts.getRawParameterValue ("filterOffset");
     float filterReso = *apvts.getRawParameterValue ("filterReso");
     float filterSlope = *apvts.getRawParameterValue ("filterSlope");
     float filter = *apvts.getRawParameterValue ("filter");
@@ -214,7 +218,7 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     {
         if (auto* voice = dynamic_cast<KronosVoice*> (synth.getVoice (i)))
         {
-            voice->updateParams (form, timbre, filterTypeA, filterTypeB, filterMorph, filterMorphMod, filterOffset, filterReso, filterSlope, filter, space, cloud, size, sweep, desync, pitch);
+            voice->updateParams (form, timbre, filterTypeA, filterTypeB, filterMorph, filterMorphMod, filterCutoff, filterCutoffMod, filterOffset, filterReso, filterSlope, filter, space, cloud, size, sweep, desync, pitch);
             voice->updateAlter (alter);
             voice->updateAdsr (attack, decay, sustain, release);
             voice->setGlobalSendAccum(

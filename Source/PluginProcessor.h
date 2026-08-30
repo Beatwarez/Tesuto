@@ -80,7 +80,7 @@ public:
       return 1.0f;
   }
 
-  void updateParams(float form, float timbre, float typeA, float typeB, float filterMorph, float filterMorphMod, float filterOffset, float filterReso, float filterSlope, float filter, float space, float cloud, float size, float sweep, float desync, float pitch) {
+  void updateParams(float form, float timbre, float typeA, float typeB, float filterMorph, float filterMorphMod, float filterCutoff, float filterCutoffMod, float filterOffset, float filterReso, float filterSlope, float filter, float space, float cloud, float size, float sweep, float desync, float pitch) {
     formVal = form;
     timbreVal = timbre;
     filterTypeAVal = typeA;
@@ -88,7 +88,9 @@ public:
     filterMorphVal = filterMorph;
     filterMorphModVal = filterMorphMod;
 
-    filterOffsetVal = filterOffset;
+        filterCutoffVal = filterCutoff;
+    filterCutoffModVal = filterCutoffMod;
+filterOffsetVal = filterOffset;
     filterResoVal = filterReso;
     filterSlopeVal = filterSlope;
     filterVal = filter;
@@ -132,8 +134,9 @@ public:
       currentSampleRate = 44100.0;
 
     // Exponential mapping for filter frequency (50Hz to 12000Hz)
-    float cutoffA_norm = std::clamp(filterVal - filterOffsetVal * 0.165f, 0.0f, 1.0f);
-    float cutoffB_norm = std::clamp(filterVal + filterOffsetVal * 0.165f, 0.0f, 1.0f);
+    float currentCutoff = std::clamp(filterCutoffVal + filterVal * filterCutoffModVal, 0.0f, 1.0f);
+    float cutoffA_norm = std::clamp(currentCutoff - filterOffsetVal * 0.165f, 0.0f, 1.0f);
+    float cutoffB_norm = std::clamp(currentCutoff + filterOffsetVal * 0.165f, 0.0f, 1.0f);
     float fcA = 50.0f * std::pow(2.0f, cutoffA_norm * 8.0f);
     float fcB = 50.0f * std::pow(2.0f, cutoffB_norm * 8.0f);
     float Q = 0.707f * std::exp(filterResoVal * 3.0f);
@@ -369,7 +372,9 @@ private:
   float filterTypeBVal = 0.0f;
   float filterMorphVal = 0.0f;
   float filterMorphModVal = 0.0f;
-  float filterOffsetVal = 0.0f;
+    float filterCutoffVal = 0.75f;
+  float filterCutoffModVal = 0.0f;
+float filterOffsetVal = 0.0f;
   float filterResoVal = 0.2f;
   float filterSlopeVal = 0.5f;
   float filterVal = 0.75f;

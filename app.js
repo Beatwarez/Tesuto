@@ -1645,6 +1645,10 @@ class KronosSynth {
         const form = this.values.form;
         const timbre = this.values.timbre;
         const filter = this.values.filter;
+        const baseCutoff = this.values.filterCutoff || 0.75;
+        const filterSliderVal = this.values.filter || 0.75;
+        const filterVal = Math.max(0.0, Math.min(1.0, baseCutoff + filterSliderVal * (this.values.filterCutoffMod || 0.0)));
+
         const space = this.values.space;
         const pitch = this.values.pitch;
         const desync = this.values.desync;
@@ -1737,7 +1741,7 @@ class KronosSynth {
         const gridCount = 6;
         this.ctx.lineWidth = 1.0;
         for (let i = 1; i <= gridCount; i++) {
-            const rad = maxRadius * (i / gridCount) * (1.0 - filter * 0.15);
+            const rad = maxRadius * (i / gridCount) * (1.0 - filterVal * 0.15);
             this.ctx.strokeStyle = `rgba(255, 255, 255, ${0.015 + (1.0 - space * 0.5) * 0.025})`;
             this.ctx.beginPath();
             for (let angle = 0; angle <= Math.PI * 2; angle += 0.05) {
@@ -1802,7 +1806,7 @@ class KronosSynth {
             }
 
             // filter limiter
-            const filterfilterIndex = filter * this.particles.length;
+            const filterfilterIndex = filterVal * this.particles.length;
             if (i > filterfilterIndex) {
                 amp *= Math.max(0, 1.0 - (i - filterfilterIndex) / 24.0);
             }
