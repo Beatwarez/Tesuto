@@ -19,8 +19,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
         return [
             { name: 'form', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'timbre', defaultValue: 0.25, minValue: 0.0, maxValue: 1.0 },
-            { name: 'filterTypeA', defaultValue: 0.0, minValue: 0.0, maxValue: 3.0 },
-            { name: 'filterTypeB', defaultValue: 0.0, minValue: 0.0, maxValue: 3.0 },
+            { name: 'filterTypeA', defaultValue: 0.0, minValue: 0.0, maxValue: 9.0 },
+            { name: 'filterTypeB', defaultValue: 0.0, minValue: 0.0, maxValue: 9.0 },
                         { name: 'filterMorph', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'filterMorphMod', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
             { name: 'filterOffset', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
@@ -1055,10 +1055,10 @@ class KronosSynth {
             size: 0.50,
             sweep: 0.50,
             cloud: 0.30,
-            attack: 0.80,
+            attack: 0.20,
             decay: 0.30,
             sustain: 0.80,
-            release: 1.50,
+            release: 1.00,
             desync: 0.00,
             pitch: 0.50
         };
@@ -1638,6 +1638,11 @@ class KronosSynth {
     }
 
     updateFilterLabels() {
+        const typeALabel = document.querySelector('#filter-type-a .type-label');
+        const typeBLabel = document.querySelector('#filter-type-b .type-label');
+        if (typeALabel) typeALabel.textContent = this.filterTypes[Math.round(this.values.filterTypeA || 0)];
+        if (typeBLabel) typeBLabel.textContent = this.filterTypes[Math.round(this.values.filterTypeB || 0)];
+        
         const labels = {
             0: ['CUTOFF', 'OFFSET', 'RESO', 'SLOPE'],
             1: ['CENTER', 'OFFSET', 'RESO', 'SLOPE'],

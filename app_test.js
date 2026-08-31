@@ -19,8 +19,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
         return [
             { name: 'form', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'timbre', defaultValue: 0.25, minValue: 0.0, maxValue: 1.0 },
-            { name: 'filterTypeA', defaultValue: 0.0, minValue: 0.0, maxValue: 3.0 },
-            { name: 'filterTypeB', defaultValue: 0.0, minValue: 0.0, maxValue: 3.0 },
+            { name: 'filterTypeA', defaultValue: 0.0, minValue: 0.0, maxValue: 9.0 },
+            { name: 'filterTypeB', defaultValue: 0.0, minValue: 0.0, maxValue: 9.0 },
                         { name: 'filterMorph', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'filterMorphMod', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
             { name: 'filterOffset', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
@@ -919,10 +919,10 @@ class KronosSynth {
             size: 0.50,
             sweep: 0.50,
             cloud: 0.30,
-            attack: 0.80,
+            attack: 0.20,
             decay: 0.30,
             sustain: 0.80,
-            release: 1.50,
+            release: 1.00,
             desync: 0.00,
             pitch: 0.50
         };
@@ -964,7 +964,7 @@ class KronosSynth {
         this.sliders.filterMorph = new CustomSlider('slider-filterMorph', 0, 1, this.values.filterMorph, 0.001, (v) => this.onSliderChange('filterMorph', v), true);
         this.sliders.filterMorph.updateModLine();
         
-        this.filterTypes = ['LP', 'BP', 'HP', 'NOTCH'];
+        this.filterTypes = ['LP', 'BP', 'HP', 'NOTCH', 'BRICK', 'SIEVE', 'COMB', 'VOWEL', 'GLITCH', 'TILT'];
         this.setupFilterTypeSelectors();
 
         // Build UI overlays and canvas sizing
@@ -1247,22 +1247,22 @@ class KronosSynth {
         const typeBLabel = document.querySelector('#filter-type-b .type-label');
         
         document.querySelector('#filter-type-a .cycle-left').addEventListener('click', () => {
-            this.values.filterTypeA = (this.values.filterTypeA - 1 + 4) % 4;
+            this.values.filterTypeA = (this.values.filterTypeA - 1 + 10) % 10;
             typeALabel.textContent = this.filterTypes[this.values.filterTypeA];
             this.onSliderChange('filterTypeA', this.values.filterTypeA);
         });
         document.querySelector('#filter-type-a .cycle-right').addEventListener('click', () => {
-            this.values.filterTypeA = (this.values.filterTypeA + 1) % 4;
+            this.values.filterTypeA = (this.values.filterTypeA + 1) % 10;
             typeALabel.textContent = this.filterTypes[this.values.filterTypeA];
             this.onSliderChange('filterTypeA', this.values.filterTypeA);
         });
         document.querySelector('#filter-type-b .cycle-left').addEventListener('click', () => {
-            this.values.filterTypeB = (this.values.filterTypeB - 1 + 4) % 4;
+            this.values.filterTypeB = (this.values.filterTypeB - 1 + 10) % 10;
             typeBLabel.textContent = this.filterTypes[this.values.filterTypeB];
             this.onSliderChange('filterTypeB', this.values.filterTypeB);
         });
         document.querySelector('#filter-type-b .cycle-right').addEventListener('click', () => {
-            this.values.filterTypeB = (this.values.filterTypeB + 1) % 4;
+            this.values.filterTypeB = (this.values.filterTypeB + 1) % 10;
             typeBLabel.textContent = this.filterTypes[this.values.filterTypeB];
             this.onSliderChange('filterTypeB', this.values.filterTypeB);
         });
