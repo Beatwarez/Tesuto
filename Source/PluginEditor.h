@@ -9,8 +9,18 @@
 class KronosWebView : public juce::WebBrowserComponent
 {
 public:
-    float localParams[26] = { -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f };
-    bool localActiveNotes[128] = { false };
+    float localParams[26];
+    bool localActiveNotes[128];
+
+    KronosWebView (KronosAudioProcessor& p)
+        : juce::WebBrowserComponent (getOptions (this, p)),
+          processor (p)
+    {
+        for (int i = 0; i < 26; ++i)
+            localParams[i] = -999.0f;
+        for (int i = 0; i < 128; ++i)
+            localActiveNotes[i] = false;
+    }
 
     static void logToFile (const juce::String& message)
     {
@@ -104,11 +114,7 @@ public:
             });
     }
 
-    KronosWebView (KronosAudioProcessor& p)
-        : juce::WebBrowserComponent (getOptions (this, p)),
-          processor (p)
-    {
-    }
+
 
 private:
     KronosAudioProcessor& processor;

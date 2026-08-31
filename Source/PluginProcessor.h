@@ -200,8 +200,9 @@ public:
 
     // Exponential mapping for filter frequency (50Hz to 12000Hz)
     float currentCutoff = std::clamp(filterCutoffVal + filterVal * filterCutoffModVal, 0.0f, 1.0f);
-    float cutoffA_norm = std::clamp(currentCutoff - filterOffsetVal * 0.165f, 0.0f, 1.0f);
-    float cutoffB_norm = std::clamp(currentCutoff + filterOffsetVal * 0.165f, 0.0f, 1.0f);
+    float currentOffset = std::clamp(filterOffsetVal + filterVal * filterOffsetModVal, -1.0f, 1.0f);
+    float cutoffA_norm = std::clamp(currentCutoff - currentOffset * 0.165f, 0.0f, 1.0f);
+    float cutoffB_norm = std::clamp(currentCutoff + currentOffset * 0.165f, 0.0f, 1.0f);
     float fcA = 50.0f * std::pow(2.0f, cutoffA_norm * 8.0f);
     float fcB = 50.0f * std::pow(2.0f, cutoffB_norm * 8.0f);
     // float Q = ...
@@ -297,8 +298,10 @@ public:
                     + getSpectralShape (p, harmonicIndex, timbreIdx + 1) * timbreMix;
 
       // filter limiter
-      float multA = calculateFilterMult(freqs[p], fcA, filterResoVal, filterSlopeVal, (int)filterTypeAVal);
-      float multB = calculateFilterMult(freqs[p], fcB, filterResoVal, filterSlopeVal, (int)filterTypeBVal);
+      float currentReso = std::clamp(filterResoVal + filterVal * filterResoModVal, 0.0f, 1.0f);
+      float currentSlope = std::clamp(filterSlopeVal + filterVal * filterSlopeModVal, 0.0f, 1.0f);
+      float multA = calculateFilterMult(freqs[p], fcA, currentReso, currentSlope, (int)filterTypeAVal);
+      float multB = calculateFilterMult(freqs[p], fcB, currentReso, currentSlope, (int)filterTypeBVal);
       float currentMorph = std::clamp(filterMorphVal + filterVal * filterMorphModVal, 0.0f, 1.0f);
       float filterMult = multA * (1.0f - currentMorph) + multB * currentMorph;
       if (filterMult > 1.0f) filterMult = 1.0f;
