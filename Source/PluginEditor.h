@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include <unordered_map>
 
 // ==========================================================================
 // Custom WebBrowserComponent Subclass for JS-to-C++ Parameter Bridging
@@ -9,15 +10,14 @@
 class KronosWebView : public juce::WebBrowserComponent
 {
 public:
-    float localParams[26];
+    std::unordered_map<juce::String, float> localParams;
     bool localActiveNotes[128];
 
     KronosWebView (KronosAudioProcessor& p)
         : juce::WebBrowserComponent (getOptions (this, p)),
           processor (p)
     {
-        for (int i = 0; i < 26; ++i)
-            localParams[i] = -999.0f;
+        // Parameter IDs are populated in Editor constructor dynamically
         for (int i = 0; i < 128; ++i)
             localActiveNotes[i] = false;
     }
@@ -77,8 +77,8 @@ public:
 
                     if (paramName == "queryall")
                     {
-                        for (int i = 0; i < 26; ++i)
-                            webViewInstance->localParams[i] = -1.0f;
+                        for (auto& pair : webViewInstance->localParams)
+                            pair.second = -999.0f;
                         for (int i = 0; i < 128; ++i)
                             webViewInstance->localActiveNotes[i] = false;
                     }
@@ -92,10 +92,14 @@ public:
                     }
                     else
                     {
-                        // 1. Force raw parameter update directly to guarantee instant audio thread response
-                        if (auto* rawVal = p.apvts.getRawParameterValue (paramName))
-                        {
-                            rawVal->store (paramValue);
+                        if (paramName == "routingOrder") {
+                            p.updateRoutingOrder(args[1].toString());
+                        } else {
+                            // 1. Force raw parameter update directly to guarantee instant audio thread response
+                            if (auto* rawVal = p.apvts.getRawParameterValue (paramName))
+                            {
+                                rawVal->store (paramValue);
+                            }
                         }
                         
                         // 2. Notify the host of the parameter change for automation recording

@@ -27,301 +27,300 @@
 
         <!-- Left Side Floating Control Panel -->
         <section class="control-panel-left">
-            <div class="sliders-container">
-                <div class="slider-wrapper" data-param="form">
+            <div class="sliders-container" id="lanes-left">
+                <!-- Lane 1 (Source) -->
+                <div class="slider-wrapper mod-lane" data-lane="1" data-param="mod1_macro">
                     <div class="slider-header">
                         <span class="slider-num">01</span>
-                        <span class="slider-name">FORM</span>
-                        <span class="slider-val" id="val-form">0.00</span>
+                        <span class="slider-name">SOURCE</span>
+                        <span class="slider-val" id="val-mod1_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-form">
-                        <div class="slider-track">
-                            <div class="slider-fill"></div>
-                            <div class="slider-thumb"></div>
-                        </div>
+                    <div class="custom-slider" id="slider-mod1_macro">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
-                    <div class="dsp-edit-toggle" data-target="form"></div>
+                    <div class="dsp-edit-toggle" data-target="mod1"></div>
                 </div>
 
-                <div class="slider-wrapper" data-param="timbre">
+                <!-- Lane 2 -->
+                <div class="slider-wrapper mod-lane" data-lane="2" data-param="mod2_macro" draggable="true">
                     <div class="slider-header">
                         <span class="slider-num">02</span>
-                        <span class="slider-name">TIMBRE</span>
-                        <span class="slider-val" id="val-timbre">0.25</span>
+                        <select class="slider-name engine-selector">
+                            <option value="empty" selected>EMPTY</option>
+                            <option value="filter">FILTER</option>
+                            <option value="space">SPACE</option>
+                            <option value="pitch">PITCH</option>
+                            <option value="alter">ALTER</option>
+                            <option value="cloud">CLOUD</option>
+                            <option value="desync">DE-SYNC</option>
+                        </select>
+                        <span class="slider-val" id="val-mod2_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-timbre">
-                        <div class="slider-track">
-                            <div class="slider-fill"></div>
-                            <div class="slider-thumb"></div>
-                        </div>
+                    <div class="custom-slider" id="slider-mod2_macro">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
-                    <div class="dsp-edit-toggle" data-target="timbre"></div>
+                    <div class="dsp-edit-toggle" data-target="mod2"></div>
                 </div>
 
-                <div class="slider-wrapper" data-param="filter">
+                <!-- Lane 3 -->
+                <div class="slider-wrapper mod-lane" data-lane="3" data-param="mod3_macro" draggable="true">
                     <div class="slider-header">
                         <span class="slider-num">03</span>
-                        <span class="slider-name">FILTER</span>
-                        <span class="slider-val" id="val-filter">0.75</span>
+                        <select class="slider-name engine-selector">
+                            <option value="empty" selected>EMPTY</option>
+                            <option value="filter">FILTER</option>
+                            <option value="space">SPACE</option>
+                            <option value="pitch">PITCH</option>
+                            <option value="alter">ALTER</option>
+                            <option value="cloud">CLOUD</option>
+                            <option value="desync">DE-SYNC</option>
+                        </select>
+                        <span class="slider-val" id="val-mod3_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-filter">
-                        <div class="slider-track">
-                            <div class="slider-fill"></div>
-                            <div class="slider-thumb"></div>
-                        </div>
+                    <div class="custom-slider" id="slider-mod3_macro">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
-                    <div class="dsp-edit-toggle" data-target="filter"></div>
+                    <div class="dsp-edit-toggle" data-target="mod3"></div>
                 </div>
 
-                <div class="slider-wrapper" data-param="space">
+                <!-- Lane 4 -->
+                <div class="slider-wrapper mod-lane" data-lane="4" data-param="mod4_macro" draggable="true">
                     <div class="slider-header">
                         <span class="slider-num">04</span>
-                        <span class="slider-name">SPACE</span>
-                        <span class="slider-val" id="val-space">0.30</span>
+                        <select class="slider-name engine-selector">
+                            <option value="empty" selected>EMPTY</option>
+                            <option value="filter">FILTER</option>
+                            <option value="space">SPACE</option>
+                            <option value="pitch">PITCH</option>
+                            <option value="alter">ALTER</option>
+                            <option value="cloud">CLOUD</option>
+                            <option value="desync">DE-SYNC</option>
+                        </select>
+                        <span class="slider-val" id="val-mod4_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-space">
-                        <div class="slider-track">
-                            <div class="slider-fill"></div>
-                            <div class="slider-thumb"></div>
-                        </div>
+                    <div class="custom-slider" id="slider-mod4_macro">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
-                    <div class="dsp-edit-toggle" data-target="space"></div>
+                    <div class="dsp-edit-toggle" data-target="mod4"></div>
                 </div>
             </div>
 
-            <div class="dsp-edit-area" id="dsp-area-left"></div>
-
-            <!-- Compact ADSR Outlined Knobs Panel -->
-            <div class="adsr-container" style="display: none;">
-                <div class="adsr-title">ENVELOPE (ADSR)</div>
-                <div class="knobs-row">
-                    <div class="knob-wrapper" data-param="attack">
-                        <div class="custom-knob" id="knob-attack">
-                            <div class="knob-dial">
-                                <div class="knob-marker"></div>
-                            </div>
-                        </div>
-                        <span class="knob-name">A</span>
-                        <span class="knob-val" id="val-attack">0.80s</span>
-                    </div>
-                    <div class="knob-wrapper" data-param="decay">
-                        <div class="custom-knob" id="knob-decay">
-                            <div class="knob-dial">
-                                <div class="knob-marker"></div>
-                            </div>
-                        </div>
-                        <span class="knob-name">D</span>
-                        <span class="knob-val" id="val-decay">0.30s</span>
-                    </div>
-                    <div class="knob-wrapper" data-param="sustain">
-                        <div class="custom-knob" id="knob-sustain">
-                            <div class="knob-dial">
-                                <div class="knob-marker"></div>
-                            </div>
-                        </div>
-                        <span class="knob-name">S</span>
-                        <span class="knob-val" id="val-sustain">0.80</span>
-                    </div>
-                    <div class="knob-wrapper" data-param="release">
-                        <div class="custom-knob" id="knob-release">
-                            <div class="knob-dial">
-                                <div class="knob-marker"></div>
-                            </div>
-                        </div>
-                        <span class="knob-name">R</span>
-                        <span class="knob-val" id="val-release">1.50s</span>
-                    </div>
-                </div>
+            <div class="dsp-edit-area" id="dsp-area-left">
+                <!-- Dynamically injected Left Panels go here -->
             </div>
         </section>
 
         <!-- Right Side Floating Control Panel (Symmetric Sliders) -->
         <section class="control-panel-right">
-            <div class="sliders-container">
-                <div class="slider-wrapper" data-param="alter">
+            <div class="sliders-container" id="lanes-right">
+                <!-- Lane 5 -->
+                <div class="slider-wrapper mod-lane" data-lane="5" data-param="mod5_macro" draggable="true">
                     <div class="slider-header">
                         <span class="slider-num">05</span>
-                        <span class="slider-name">ALTER</span>
-                        <span class="slider-val" id="val-alter">0.00</span>
+                        <select class="slider-name engine-selector">
+                            <option value="empty" selected>EMPTY</option>
+                            <option value="filter">FILTER</option>
+                            <option value="space">SPACE</option>
+                            <option value="pitch">PITCH</option>
+                            <option value="alter">ALTER</option>
+                            <option value="cloud">CLOUD</option>
+                            <option value="desync">DE-SYNC</option>
+                        </select>
+                        <span class="slider-val" id="val-mod5_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-alter">
-                        <div class="slider-track">
-                            <div class="slider-fill"></div>
-                            <div class="slider-thumb"></div>
-                        </div>
+                    <div class="custom-slider" id="slider-mod5_macro">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
-                    <div class="dsp-edit-toggle" data-target="alter"></div>
+                    <div class="dsp-edit-toggle" data-target="mod5"></div>
                 </div>
 
-                <div class="slider-wrapper" data-param="desync">
+                <!-- Lane 6 -->
+                <div class="slider-wrapper mod-lane" data-lane="6" data-param="mod6_macro" draggable="true">
                     <div class="slider-header">
                         <span class="slider-num">06</span>
-                        <span class="slider-name">DE-SYNC</span>
-                        <span class="slider-val" id="val-desync">0.00</span>
+                        <select class="slider-name engine-selector">
+                            <option value="empty" selected>EMPTY</option>
+                            <option value="filter">FILTER</option>
+                            <option value="space">SPACE</option>
+                            <option value="pitch">PITCH</option>
+                            <option value="alter">ALTER</option>
+                            <option value="cloud">CLOUD</option>
+                            <option value="desync">DE-SYNC</option>
+                        </select>
+                        <span class="slider-val" id="val-mod6_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-desync">
-                        <div class="slider-track">
-                            <div class="slider-fill"></div>
-                            <div class="slider-thumb"></div>
-                        </div>
+                    <div class="custom-slider" id="slider-mod6_macro">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
-                    <div class="dsp-edit-toggle" data-target="desync"></div>
+                    <div class="dsp-edit-toggle" data-target="mod6"></div>
                 </div>
 
-                <div class="slider-wrapper" data-param="pitch">
+                <!-- Lane 7 -->
+                <div class="slider-wrapper mod-lane" data-lane="7" data-param="mod7_macro" draggable="true">
                     <div class="slider-header">
                         <span class="slider-num">07</span>
-                        <span class="slider-name">PITCH</span>
-                        <span class="slider-val" id="val-pitch">0.00</span>
+                        <select class="slider-name engine-selector">
+                            <option value="empty" selected>EMPTY</option>
+                            <option value="filter">FILTER</option>
+                            <option value="space">SPACE</option>
+                            <option value="pitch">PITCH</option>
+                            <option value="alter">ALTER</option>
+                            <option value="cloud">CLOUD</option>
+                            <option value="desync">DE-SYNC</option>
+                        </select>
+                        <span class="slider-val" id="val-mod7_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-pitch">
-                        <div class="slider-track">
-                            <div class="slider-fill"></div>
-                            <div class="slider-thumb"></div>
-                        </div>
+                    <div class="custom-slider" id="slider-mod7_macro">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
-                    <div class="dsp-edit-toggle" data-target="pitch"></div>
+                    <div class="dsp-edit-toggle" data-target="mod7"></div>
                 </div>
 
-                <div class="slider-wrapper" data-param="cloud">
+                <!-- Lane 8 -->
+                <div class="slider-wrapper mod-lane" data-lane="8" data-param="mod8_macro" draggable="true">
                     <div class="slider-header">
                         <span class="slider-num">08</span>
-                        <span class="slider-name">CLOUD</span>
-                        <span class="slider-val" id="val-cloud">0.30</span>
+                        <select class="slider-name engine-selector">
+                            <option value="empty" selected>EMPTY</option>
+                            <option value="filter">FILTER</option>
+                            <option value="space">SPACE</option>
+                            <option value="pitch">PITCH</option>
+                            <option value="alter">ALTER</option>
+                            <option value="cloud">CLOUD</option>
+                            <option value="desync">DE-SYNC</option>
+                        </select>
+                        <span class="slider-val" id="val-mod8_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-cloud">
-                        <div class="slider-track">
-                            <div class="slider-fill"></div>
-                            <div class="slider-thumb"></div>
-                        </div>
+                    <div class="custom-slider" id="slider-mod8_macro">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
-                    <div class="dsp-edit-toggle" data-target="cloud"></div>
+                    <div class="dsp-edit-toggle" data-target="mod8"></div>
                 </div>
             </div>
             
-            <div class="dsp-edit-area" id="dsp-area-right"></div>
-
-            <!-- Reverb Size & Sweep Knobs under Cloud slider -->
-            <div class="cloud-knobs-container" style="display: none;">
-                <div class="cloud-knobs-title">REVERB</div>
-                <div class="cloud-knobs-row">
-                    <div class="knob-wrapper" data-param="size">
-                        <div class="custom-knob small-knob" id="knob-size">
-                            <div class="knob-dial">
-                                <div class="knob-marker"></div>
-                            </div>
-                        </div>
-                        <span class="knob-name">SIZE</span>
-                        <span class="knob-val" id="val-size">0.50</span>
-                    </div>
-                    <div class="knob-wrapper" data-param="sweep">
-                        <div class="custom-knob small-knob" id="knob-sweep">
-                            <div class="knob-dial">
-                                <div class="knob-marker"></div>
-                            </div>
-                        </div>
-                        <span class="knob-name">SWEEP</span>
-                        <span class="knob-val" id="val-sweep">0.50</span>
-                    </div>
-                </div>
+            <div class="dsp-edit-area" id="dsp-area-right">
+                <!-- Dynamically injected Right Panels go here -->
             </div>
         </section>
 
-        <div id="filter-dsp-panel" class="dsp-panel hidden">
+        <!-- HTML TEMPLATES FOR DYNAMIC ENGINE INJECTION -->
+        
+        <!-- SOURCE ENGINE TEMPLATE -->
+        <template id="tmpl-engine-source">
+            <div class="dsp-panel engine-source-panel">
+                <div class="filter-ui-canvas-container" style="display:flex; align-items:center; justify-content:center;">
+                    <div style="color:var(--fg-muted); font-family:var(--font-mono); letter-spacing:0.2vw;">SOURCE SPECTRAL MAP</div>
+                </div>
+                <div class="filter-params-row" style="margin-top: 4vh;">
+                    <div class="knob-wrapper" data-param="mod{{LANE}}_p1">
+                        <div class="custom-knob filter-knob" id="knob-mod{{LANE}}_p1">
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names">
+                            <span class="knob-name-a">PARTIALS</span>
+                        </div>
+                        <span class="knob-val" id="val-mod{{LANE}}_p1">256</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="mod{{LANE}}_p2">
+                        <div class="custom-knob filter-knob bipolar-knob" id="knob-mod{{LANE}}_p2" data-bipolar="true">
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names">
+                            <span class="knob-name-a">BALANCE</span>
+                        </div>
+                        <span class="knob-val" id="val-mod{{LANE}}_p2">0.00</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="mod{{LANE}}_p3">
+                        <div class="custom-knob filter-knob bipolar-knob" id="knob-mod{{LANE}}_p3" data-bipolar="true">
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names">
+                            <span class="knob-name-a">WIDTH</span>
+                        </div>
+                        <span class="knob-val" id="val-mod{{LANE}}_p3">0.00</span>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- FILTER ENGINE TEMPLATE -->
+        <template id="tmpl-engine-filter">
+        <div class="dsp-panel engine-filter-panel">
             <div class="filter-ui-canvas-container">
                 <canvas id="filter-ui-canvas"></canvas>
             </div>
             <div class="filter-morph-row">
-                <div class="filter-type" id="filter-type-a">
+                <div class="filter-type" id="filter-type-a-{{LANE}}">
                     <span class="type-cycle cycle-left">&lt;</span>
                     <span class="type-label">LP</span>
                     <span class="type-cycle cycle-right">&gt;</span>
                 </div>
-                <div class="morph-slider-container" data-param="filterMorph">
-                    <div class="mod-line-container" data-mod-param="filterMorphMod">
+                <div class="morph-slider-container" data-param="mod{{LANE}}_p5">
+                    <div class="mod-line-container" data-mod-param="mod{{LANE}}_p5_mod">
                         <div class="mod-line-bg"></div>
                         <div class="mod-line-fill"></div>
                     </div>
-                    <div class="custom-slider horizontal" id="slider-filterMorph" data-mod-param="filterMorphMod">
+                    <div class="custom-slider horizontal" id="slider-mod{{LANE}}_p5" data-mod-param="mod{{LANE}}_p5_mod">
                         <div class="slider-track horizontal-track">
                             <div class="slider-fill horizontal-fill"></div>
                             <div class="slider-thumb horizontal-thumb"></div>
                         </div>
                     </div>
                 </div>
-                <div class="filter-type" id="filter-type-b">
+                <div class="filter-type" id="filter-type-b-{{LANE}}">
                     <span class="type-cycle cycle-left">&lt;</span>
                     <span class="type-label">LP</span>
                     <span class="type-cycle cycle-right">&gt;</span>
                 </div>
             </div>
             <div class="filter-params-row">
-                <div class="knob-wrapper" data-param="filterCutoff">
-                    <div class="custom-knob filter-knob has-mod" id="knob-filterCutoff" data-mod-param="filterCutoffMod">
-                        <svg class="mod-ring-svg" viewBox="0 0 100 100">
-                            <path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" />
-                            <path class="mod-ring-arc" d="" />
-                        </svg>
-                        <div class="knob-dial">
-                            <div class="knob-marker"></div>
-                        </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_p1">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p1" data-mod-param="mod{{LANE}}_p1_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
                     </div>
                     <div class="knob-names">
-                        <span class="knob-name-a" id="label-filterCutoff-a">CUTOFF</span>
-                        <span class="knob-name-b" id="label-filterCutoff-b">CUTOFF</span>
+                        <span class="knob-name-a">CUTOFF</span>
+                        <span class="knob-name-b">CUTOFF</span>
                     </div>
-                    <span class="knob-val" id="val-filterCutoff">0.75</span>
+                    <span class="knob-val" id="val-mod{{LANE}}_p1">0.75</span>
                 </div>
-                <div class="knob-wrapper" data-param="filterOffset">
-                    <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-filterOffset" data-bipolar="true" data-mod-param="filterOffsetMod">
-                        <svg class="mod-ring-svg" viewBox="0 0 100 100">
-                            <path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" />
-                            <path class="mod-ring-arc" d="" />
-                        </svg>
-                        <div class="knob-dial">
-                            <div class="knob-marker"></div>
-                        </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_p2">
+                    <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-mod{{LANE}}_p2" data-bipolar="true" data-mod-param="mod{{LANE}}_p2_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
                     </div>
                     <div class="knob-names">
-                        <span class="knob-name-a" id="label-filterOffset-a">OFFSET</span>
-                        <span class="knob-name-b" id="label-filterOffset-b">OFFSET</span>
+                        <span class="knob-name-a">OFFSET</span>
+                        <span class="knob-name-b">OFFSET</span>
                     </div>
-                    <span class="knob-val" id="val-filterOffset">0.00</span>
+                    <span class="knob-val" id="val-mod{{LANE}}_p2">0.00</span>
                 </div>
-                <div class="knob-wrapper" data-param="filterReso">
-                    <div class="custom-knob filter-knob has-mod" id="knob-filterReso" data-mod-param="filterResoMod">
-                        <svg class="mod-ring-svg" viewBox="0 0 100 100">
-                            <path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" />
-                            <path class="mod-ring-arc" d="" />
-                        </svg>
-                        <div class="knob-dial">
-                            <div class="knob-marker"></div>
-                        </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_p3">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p3" data-mod-param="mod{{LANE}}_p3_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
                     </div>
                     <div class="knob-names">
-                        <span class="knob-name-a" id="label-filterReso-a">RESO</span>
-                        <span class="knob-name-b" id="label-filterReso-b">RESO</span>
+                        <span class="knob-name-a">RESO</span>
+                        <span class="knob-name-b">RESO</span>
                     </div>
-                    <span class="knob-val" id="val-filterReso">0.20</span>
+                    <span class="knob-val" id="val-mod{{LANE}}_p3">0.20</span>
                 </div>
-                <div class="knob-wrapper" data-param="filterSlope">
-                    <div class="custom-knob filter-knob has-mod" id="knob-filterSlope" data-mod-param="filterSlopeMod">
-                        <svg class="mod-ring-svg" viewBox="0 0 100 100">
-                            <path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" />
-                            <path class="mod-ring-arc" d="" />
-                        </svg>
-                        <div class="knob-dial">
-                            <div class="knob-marker"></div>
-                        </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_p4">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p4" data-mod-param="mod{{LANE}}_p4_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
                     </div>
                     <div class="knob-names">
-                        <span class="knob-name-a" id="label-filterSlope-a">SLOPE</span>
-                        <span class="knob-name-b" id="label-filterSlope-b">SLOPE</span>
+                        <span class="knob-name-a">SLOPE</span>
+                        <span class="knob-name-b">SLOPE</span>
                     </div>
-                    <span class="knob-val" id="val-filterSlope">0.50</span>
+                    <span class="knob-val" id="val-mod{{LANE}}_p4">0.50</span>
                 </div>
             </div>
         </div>
+        </template>
     </div>
     
     <script src="app.js?v=1788029963"></script>

@@ -1063,47 +1063,18 @@ class KronosSynth {
             pitch: 0.50
         };
 
-        // Initialize Custom Sliders (Left and Right symmetric panels)
-        this.sliders = {
-            form: new CustomSlider('slider-form', 0, 1, this.values.form, 0.001, (v) => this.onSliderChange('form', v)),
-            timbre: new CustomSlider('slider-timbre', 0, 1, this.values.timbre, 0.001, (v) => this.onSliderChange('timbre', v)),
-            filter: new CustomSlider('slider-filter', 0, 1, this.values.filter, 0.001, (v) => this.onSliderChange('filter', v)),
-            space: new CustomSlider('slider-space', 0, 1, this.values.space, 0.001, (v) => this.onSliderChange('space', v)),
-            alter: new CustomSlider('slider-alter', 0, 1, this.values.alter, 0.001, (v) => this.onSliderChange('alter', v)),
-            desync: new CustomSlider('slider-desync', 0, 1, this.values.desync, 0.001, (v) => this.onSliderChange('desync', v)),
-            pitch: new CustomSlider('slider-pitch', 0, 1, this.values.pitch, 0.001, (v) => this.onSliderChange('pitch', v)),
-            cloud: new CustomSlider('slider-cloud', 0, 1, this.values.cloud, 0.001, (v) => this.onSliderChange('cloud', v)),
-        };
+        // Initialize Generic Modular Sliders (Left and Right symmetric panels)
+        this.sliders = {};
+        for (let i = 1; i <= 8; i++) {
+            const param = `mod${i}_macro`;
+            this.values[param] = 0.0;
+            this.sliders[param] = new CustomSlider(`slider-${param}`, 0, 1, this.values[param], 0.001, (v) => {
+                this.onSliderChange(param, v);
+                // Visuals are now handled dynamically in draw() based on laneEngines
+            });
+        }
 
-        // Initialize Custom Knobs (ADSR and Reverb panels)
-        this.knobs = {
-            attack: new CustomKnob('knob-attack', 0.01, 5.0, this.values.attack, true, true, (v) => this.onKnobChange('attack', v)),
-            decay: new CustomKnob('knob-decay', 0.01, 5.0, this.values.decay, true, true, (v) => this.onKnobChange('decay', v)),
-            sustain: new CustomKnob('knob-sustain', 0.0, 1.0, this.values.sustain, false, false, (v) => this.onKnobChange('sustain', v)),
-            release: new CustomKnob('knob-release', 0.01, 8.0, this.values.release, true, true, (v) => this.onKnobChange('release', v)),
-            size: new CustomKnob('knob-size', 0.0, 1.0, this.values.size, false, false, (v) => this.onKnobChange('size', v)),
-            sweep: new CustomKnob('knob-sweep', 0.0, 1.0, this.values.sweep, false, false, (v) => this.onKnobChange('sweep', v)),
-            filterReso: new CustomKnob('knob-filterReso', 0.0, 1.0, this.values.filterReso, false, false, (v) => this.onKnobChange('filterReso', v)),
-            filterSlope: new CustomKnob('knob-filterSlope', 0.0, 1.0, this.values.filterSlope, false, false, (v) => this.onKnobChange('filterSlope', v)),
-            filterOffset: new CustomKnob('knob-filterOffset', -1.0, 1.0, this.values.filterOffset, false, false, (v) => this.onKnobChange('filterOffset', v)),
-            filterCutoff: new CustomKnob('knob-filterCutoff', 0.0, 1.0, this.values.filterCutoff, false, false, (v) => this.onKnobChange('filterCutoff', v))
-        };
-        
-        // Init mod arcs with app reference
-        Object.keys(this.knobs).forEach(k => {
-            if (this.knobs[k].modParam) {
-                this.knobs[k].app = this;
-                this.knobs[k].updateModArc();
-            }
-        });
-        
-        this.sliders.filterMorph = new CustomSlider('slider-filterMorph', 0, 1, this.values.filterMorph, 0.001, (v) => this.onSliderChange('filterMorph', v), true);
-        this.sliders.filterMorph.updateModLine();
-        
         this.filterTypes = ['LP', 'BP', 'HP', 'NOTCH', 'BRICK', 'SIEVE', 'COMB', 'VOWEL', 'GLITCH', 'TILT'];
-        this.updateFilterLabels();
-        this.setupFilterTypeSelectors();
-
         // Build UI overlays and canvas sizing
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
@@ -1116,12 +1087,73 @@ class KronosSynth {
         this.animate();
         
         this.setupFocusToggles();
+        this.setupDragAndDrop();
 
         // Initialize Audio engine setup immediately
         this.initAudio();
 
         // Request initial parameter states from C++ on load
         this.sendParamToCpp("queryall", 0);
+    }
+    
+    setupDragAndDrop() {
+        const lanes = document.querySelectorAll('.mod-lane[draggable="true"]');
+        let draggedLane = null;
+
+        lanes.forEach(lane => {
+            lane.addEventListener('dragstart', (e) => {
+                draggedLane = lane;
+                setTimeout(() => lane.classList.add('dragging'), 0);
+            });
+
+            lane.addEventListener('dragend', () => {
+                draggedLane.classList.remove('dragging');
+                draggedLane = null;
+                this.updateRoutingOrder();
+            });
+        });
+
+        const containers = [document.getElementById('lanes-left'), document.getElementById('lanes-right')];
+        containers.forEach(container => {
+            container.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const afterElement = this.getDragAfterElement(container, e.clientY);
+                if (afterElement == null) {
+                    container.appendChild(draggedLane);
+                } else {
+                    container.insertBefore(draggedLane, afterElement);
+                }
+            });
+        });
+    }
+
+    getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll('.mod-lane:not(.dragging)')];
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    updateRoutingOrder() {
+        const leftLanes = Array.from(document.getElementById('lanes-left').querySelectorAll('.mod-lane'));
+        const rightLanes = Array.from(document.getElementById('lanes-right').querySelectorAll('.mod-lane'));
+        const allLanes = [...leftLanes, ...rightLanes];
+        
+        // Extract lane indices (e.g., "mod2" -> 2)
+        // Note: Lane 1 (Source) cannot be dragged, so routingOrder should only include lanes 2-8.
+        const order = allLanes
+            .map(lane => parseInt(lane.getAttribute('data-lane')))
+            .filter(laneNum => laneNum !== 1);
+            
+        const routingStr = order.join(',');
+        console.log("New Routing Order:", routingStr);
+        this.sendParamToCpp("routingOrder", routingStr);
     }
 
     async initAudio() {
@@ -1343,91 +1375,173 @@ class KronosSynth {
         this.sendParamToCpp("noteoff", note);
     }
 
-    setupFocusToggles() {
-        const toggles = document.querySelectorAll('.dsp-edit-toggle');
-        toggles.forEach(toggle => {
-            toggle.addEventListener('click', () => {
-                const target = toggle.getAttribute('data-target');
-                if (!target) return;
-                
-                const isLeft = this.leftFocusParams.includes(target);
-                
-                if (isLeft) {
-                    if (this.activeLeftFocus === target) {
-                        this.activeLeftFocus = null;
-                    } else {
-                        this.activeLeftFocus = target;
+    setupLaneListeners() {
+        this.laneEngines = { 1: 'source', 2: 'empty', 3: 'empty', 4: 'empty', 5: 'empty', 6: 'empty', 7: 'empty', 8: 'empty' };
+        
+        // Engine Selectors
+        document.querySelectorAll('.mod-lane').forEach(lane => {
+            const laneId = parseInt(lane.getAttribute('data-lane'));
+            const selector = lane.querySelector('.engine-selector');
+            if (selector) {
+                selector.addEventListener('change', (e) => {
+                    this.laneEngines[laneId] = e.target.value;
+                    const engineIdMapping = { 'empty': 0, 'source': 1, 'filter': 2, 'space': 3, 'pitch': 4, 'alter': 5, 'cloud': 6, 'desync': 7 };
+                    this.sendParamToCpp(`mod${laneId}_engine`, engineIdMapping[e.target.value] || 0);
+                    
+                    if (this.activeLeftFocus === laneId || this.activeRightFocus === laneId) {
+                        this.renderSidePanels();
                     }
-                } else {
-                    if (this.activeRightFocus === target) {
-                        this.activeRightFocus = null;
+                });
+            }
+            
+            // Edit Toggles
+            const toggle = lane.querySelector('.dsp-edit-toggle');
+            if (toggle) {
+                toggle.addEventListener('click', () => {
+                    const isLeft = lane.closest('#lanes-left') !== null;
+                    if (isLeft) {
+                        this.activeLeftFocus = (this.activeLeftFocus === laneId) ? null : laneId;
                     } else {
-                        this.activeRightFocus = target;
+                        this.activeRightFocus = (this.activeRightFocus === laneId) ? null : laneId;
                     }
-                }
-                
-                this.updateFocusUI();
-            });
+                    this.updateToggleUI();
+                    this.renderSidePanels();
+                });
+            }
         });
     }
 
-    updateFocusUI() {
-        const toggles = document.querySelectorAll('.dsp-edit-toggle');
-        toggles.forEach(toggle => {
-            const target = toggle.getAttribute('data-target');
-            if (target === this.activeLeftFocus || target === this.activeRightFocus) {
-                toggle.classList.add('active');
-            } else {
-                toggle.classList.remove('active');
+    updateToggleUI() {
+        document.querySelectorAll('.mod-lane').forEach(lane => {
+            const laneId = parseInt(lane.getAttribute('data-lane'));
+            const toggle = lane.querySelector('.dsp-edit-toggle');
+            if (toggle) {
+                if (laneId === this.activeLeftFocus || laneId === this.activeRightFocus) {
+                    toggle.classList.add('active');
+                } else {
+                    toggle.classList.remove('active');
+                }
             }
         });
-        
-        const filterPanel = document.getElementById('filter-dsp-panel');
+    }
+
+    renderSidePanels() {
         const leftArea = document.getElementById('dsp-area-left');
         const rightArea = document.getElementById('dsp-area-right');
         
-        if (this.activeLeftFocus === 'filter') {
-            leftArea.appendChild(filterPanel);
-            filterPanel.classList.remove('hidden');
+        // Clean up previous knobs/sliders dynamically tracked
+        this.knobs = {};
+        
+        leftArea.innerHTML = '';
+        rightArea.innerHTML = '';
+        
+        if (this.activeLeftFocus) {
+            this.injectEngineUI(leftArea, this.activeLeftFocus);
+        }
+        
+        if (this.activeRightFocus) {
+            this.injectEngineUI(rightArea, this.activeRightFocus);
+        }
+        
+        // Init mod arcs for newly injected knobs
+        Object.keys(this.knobs).forEach(k => {
+            if (this.knobs[k].modParam) {
+                this.knobs[k].app = this;
+                this.knobs[k].updateModArc();
+            }
+        });
+    }
+
+    injectEngineUI(container, laneId) {
+        const engineType = this.laneEngines[laneId];
+        const tmpl = document.getElementById(`tmpl-engine-${engineType}`);
+        
+        if (!tmpl) {
+            // No template for this engine yet, or empty
+            return;
+        }
+        
+        let htmlStr = tmpl.innerHTML;
+        // Replace {{LANE}} with the actual laneId
+        htmlStr = htmlStr.replace(/{{LANE}}/g, laneId);
+        container.innerHTML = htmlStr;
+        
+        // Initialize dynamic knobs inside this container
+        container.querySelectorAll('.custom-knob').forEach(knobEl => {
+            const paramId = knobEl.parentElement.getAttribute('data-param');
+            if (!paramId) return;
+            const isBipolar = knobEl.hasAttribute('data-bipolar');
+            const min = isBipolar ? -1.0 : 0.0;
+            const max = 1.0;
+            
+            // Ensure value exists in state
+            if (this.values[paramId] === undefined) {
+                this.values[paramId] = isBipolar ? 0.0 : 0.5;
+            }
+            
+            this.knobs[paramId] = new CustomKnob(
+                `knob-${paramId}`, min, max, this.values[paramId], isBipolar, false,
+                (v) => this.onKnobChange(paramId, v)
+            );
+        });
+        
+        // Initialize dynamic sliders (like filter morph)
+        container.querySelectorAll('.custom-slider.horizontal').forEach(sliderEl => {
+            const paramId = sliderEl.parentElement.getAttribute('data-param');
+            if (!paramId) return;
+            if (this.values[paramId] === undefined) this.values[paramId] = 0.0;
+            
+            this.sliders[paramId] = new CustomSlider(
+                `slider-${paramId}`, 0, 1, this.values[paramId], 0.001,
+                (v) => this.onSliderChange(paramId, v), true
+            );
+            this.sliders[paramId].updateModLine();
+        });
+        
+        // specific filter logic initialization
+        if (engineType === 'filter') {
+            this.setupDynamicFilterSelectors(container, laneId);
             this.initFilterCanvas();
-        } else if (this.activeRightFocus === 'filter') {
-            rightArea.appendChild(filterPanel);
-            filterPanel.classList.remove('hidden');
-            this.initFilterCanvas();
-        } else {
-            filterPanel.classList.add('hidden');
-            document.body.appendChild(filterPanel); // move it back out of flow
         }
     }
 
-    setupFilterTypeSelectors() {
-        const typeALabel = document.querySelector('#filter-type-a .type-label');
-        const typeBLabel = document.querySelector('#filter-type-b .type-label');
+    setupDynamicFilterSelectors(container, laneId) {
+        const paramIdA = `mod${laneId}_p6`;
+        const paramIdB = `mod${laneId}_p7`;
         
-        document.querySelector('#filter-type-a .cycle-left').addEventListener('click', () => {
-            this.values.filterTypeA = (this.values.filterTypeA - 1 + 10) % 10;
-            typeALabel.textContent = this.filterTypes[this.values.filterTypeA];
-            this.onSliderChange('filterTypeA', this.values.filterTypeA);
-            this.updateFilterLabels();
-        });
-        document.querySelector('#filter-type-a .cycle-right').addEventListener('click', () => {
-            this.values.filterTypeA = (this.values.filterTypeA + 1) % 10;
-            typeALabel.textContent = this.filterTypes[this.values.filterTypeA];
-            this.onSliderChange('filterTypeA', this.values.filterTypeA);
-            this.updateFilterLabels();
-        });
-        document.querySelector('#filter-type-b .cycle-left').addEventListener('click', () => {
-            this.values.filterTypeB = (this.values.filterTypeB - 1 + 10) % 10;
-            typeBLabel.textContent = this.filterTypes[this.values.filterTypeB];
-            this.onSliderChange('filterTypeB', this.values.filterTypeB);
-            this.updateFilterLabels();
-        });
-        document.querySelector('#filter-type-b .cycle-right').addEventListener('click', () => {
-            this.values.filterTypeB = (this.values.filterTypeB + 1) % 10;
-            typeBLabel.textContent = this.filterTypes[this.values.filterTypeB];
-            this.onSliderChange('filterTypeB', this.values.filterTypeB);
-            this.updateFilterLabels();
-        });
+        if (this.values[paramIdA] === undefined) this.values[paramIdA] = 0;
+        if (this.values[paramIdB] === undefined) this.values[paramIdB] = 0;
+        
+        const typeALabel = container.querySelector(`#filter-type-a-${laneId} .type-label`);
+        const typeBLabel = container.querySelector(`#filter-type-b-${laneId} .type-label`);
+        
+        if (typeALabel) {
+            typeALabel.textContent = this.filterTypes[this.values[paramIdA]] || 'LP';
+            container.querySelector(`#filter-type-a-${laneId} .cycle-left`).addEventListener('click', () => {
+                this.values[paramIdA] = (this.values[paramIdA] - 1 + 10) % 10;
+                typeALabel.textContent = this.filterTypes[this.values[paramIdA]];
+                this.onSliderChange(paramIdA, this.values[paramIdA]);
+            });
+            container.querySelector(`#filter-type-a-${laneId} .cycle-right`).addEventListener('click', () => {
+                this.values[paramIdA] = (this.values[paramIdA] + 1) % 10;
+                typeALabel.textContent = this.filterTypes[this.values[paramIdA]];
+                this.onSliderChange(paramIdA, this.values[paramIdA]);
+            });
+        }
+        
+        if (typeBLabel) {
+            typeBLabel.textContent = this.filterTypes[this.values[paramIdB]] || 'LP';
+            container.querySelector(`#filter-type-b-${laneId} .cycle-left`).addEventListener('click', () => {
+                this.values[paramIdB] = (this.values[paramIdB] - 1 + 10) % 10;
+                typeBLabel.textContent = this.filterTypes[this.values[paramIdB]];
+                this.onSliderChange(paramIdB, this.values[paramIdB]);
+            });
+            container.querySelector(`#filter-type-b-${laneId} .cycle-right`).addEventListener('click', () => {
+                this.values[paramIdB] = (this.values[paramIdB] + 1) % 10;
+                typeBLabel.textContent = this.filterTypes[this.values[paramIdB]];
+                this.onSliderChange(paramIdB, this.values[paramIdB]);
+            });
+        }
     }
 
     // ==========================================================================
@@ -1865,16 +1979,34 @@ class KronosSynth {
         const centerY = h / 2;
         const maxRadius = Math.min(w * 0.42, h * 0.42);
 
-        const form = this.values.form;
-        const timbre = this.values.timbre;
-        const filter = this.values.filter;
-        const baseCutoff = this.values.filterCutoff !== undefined ? this.values.filterCutoff : 0.75;
-        const filterSliderVal = this.values.filter || 0.75;
-        const filterVal = Math.max(0.0, Math.min(1.0, baseCutoff + filterSliderVal * (this.values.filterCutoffMod || 0.0)));
+        let visual1 = this.values.mod1_macro || 0.0; // Form/Warp
+        let visual2 = this.values.mod1_macro || 0.0; // Timbre
+        let visual3 = 0.0; // Filter
+        let visual4 = 0.0; // Space
+        let visual5 = 0.0; // Alter
+        let visual6 = 0.0; // Cloud
+        let visual7 = 0.0; // Desync
+        let visual8 = 0.5; // Pitch
 
-        const space = this.values.space;
-        const pitch = this.values.pitch;
-        const desync = this.values.desync;
+        for (let lane = 2; lane <= 8; lane++) {
+            let engine = this.laneEngines[lane];
+            let macroVal = this.values[`mod${lane}_macro`] || 0.0;
+            
+            if (engine === 'filter') visual3 = Math.max(visual3, macroVal);
+            else if (engine === 'space') visual4 = Math.max(visual4, macroVal);
+            else if (engine === 'alter') visual5 = Math.max(visual5, macroVal);
+            else if (engine === 'cloud') visual6 = Math.max(visual6, macroVal);
+            else if (engine === 'desync') visual7 = Math.max(visual7, macroVal);
+            else if (engine === 'pitch') {
+                if (Math.abs(macroVal - 0.5) > Math.abs(visual8 - 0.5)) {
+                    visual8 = macroVal;
+                }
+            }
+        }
+
+        const baseCutoff = this.values.filterCutoff !== undefined ? this.values.filterCutoff : 0.75;
+        const filterSliderVal = visual3;
+        const filterVal = Math.max(0.0, Math.min(1.0, baseCutoff + filterSliderVal * (this.values.filterCutoffMod || 0.0)));
 
         // Smoothly update visual envelope matching the DSP ADSR (0.8s attack, 1.5s release)
         const targetEnvelope = this.activeKeys.size > 0 ? 1.0 : 0.0;
@@ -1912,11 +2044,11 @@ class KronosSynth {
             const targetY = centerY + anchorRadius * Math.sin(t);
 
             // Drag rope wobble based on form/space macro
-            const wobbleY = Math.sin(Date.now() * 0.002 + index * 2) * (form * 25);
+            const wobbleY = Math.sin(Date.now() * 0.002 + index * 2) * (visual1 * 25);
 
             // Draw curved light-gray visual guide line (always visible, floats cleanly)
             const guideOpacity = 0.45 + activeRatio * 0.55;
-            this.ctx.strokeStyle = `rgba(224, 224, 230, ${(0.08 + space * 0.12) * guideOpacity})`;
+            this.ctx.strokeStyle = `rgba(224, 224, 230, ${(0.08 + visual4 * 0.12) * guideOpacity})`;
             this.ctx.lineWidth = 1.0;
             this.ctx.beginPath();
             this.ctx.moveTo(start.x, start.y);
@@ -1929,21 +2061,19 @@ class KronosSynth {
 
             // Draw glowing anchor point on the canvas orbit
             const anchorOpacity = 0.5 + activeRatio * 0.5;
-            this.ctx.fillStyle = `rgba(255, 255, 255, ${(0.22 + space * 0.28) * anchorOpacity})`;
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${(0.22 + visual4 * 0.28) * anchorOpacity})`;
             this.ctx.beginPath();
             this.ctx.arc(targetX, targetY, 3, 0, Math.PI * 2);
             this.ctx.fill();
         });
 
         // 1.5 Draw CLOUD background smokey light pulsation (Concept 2 - Revised)
-        const cloud = this.values.cloud;
-        const sweep = this.values.sweep;
-        const intensity = cloud * this.visualReverbEnv;
+        const intensity = visual6 * this.visualReverbEnv;
         if (intensity > 0.001) {
-            const sweepHue = (sweep * 360) % 360;
+            const sweepHue = (this.values.sweep * 360) % 360;
             
             // Calculate organic slow pulse based on time and space drift speed
-            const pulse = 1.0 + Math.sin(Date.now() * 0.003 + Math.sin(Date.now() * 0.0008) * 2) * 0.12 * (1.0 + space * 1.5);
+            const pulse = 1.0 + Math.sin(Date.now() * 0.003 + Math.sin(Date.now() * 0.0008) * 2) * 0.12 * (1.0 + visual4 * 1.5);
             const radius = maxRadius * 0.95 * pulse * intensity;
             
             // Create a radial gradient for the "smokey light glow"
@@ -1964,11 +2094,11 @@ class KronosSynth {
         const gridCount = 6;
         this.ctx.lineWidth = 1.0;
         for (let i = 1; i <= gridCount; i++) {
-            const rad = maxRadius * (i / gridCount) * (1.0 - filter * 0.15);
-            this.ctx.strokeStyle = `rgba(255, 255, 255, ${0.015 + (1.0 - space * 0.5) * 0.025})`;
+            const rad = maxRadius * (i / gridCount) * (1.0 - visual3 * 0.15);
+            this.ctx.strokeStyle = `rgba(255, 255, 255, ${0.015 + (1.0 - visual4 * 0.5) * 0.025})`;
             this.ctx.beginPath();
             for (let angle = 0; angle <= Math.PI * 2; angle += 0.05) {
-                const warp = Math.sin(angle * 5 + Date.now() * 0.0008) * form * 14 * (i / gridCount);
+                const warp = Math.sin(angle * 5 + Date.now() * 0.0008) * visual1 * 14 * (i / gridCount);
                 const x = centerX + (rad + warp) * Math.cos(angle);
                 const y = centerY + (rad + warp) * Math.sin(angle);
                 if (angle === 0) this.ctx.moveTo(x, y);
@@ -1979,10 +2109,10 @@ class KronosSynth {
         }
 
         // Draw expanding hard-sync shockwave ring
-        if (desync > 0.1 && this.activeKeys.size > 0) {
+        if (visual7 > 0.1 && this.activeKeys.size > 0) {
             const syncTime = (Date.now() * 0.004) % 1.0;
             const syncRadius = maxRadius * syncTime * 1.1;
-            const syncOpacity = (1.0 - syncTime) * desync * 0.18;
+            const syncOpacity = (1.0 - syncTime) * visual7 * 0.18;
             this.ctx.strokeStyle = `rgba(255, 255, 255, ${syncOpacity})`;
             this.ctx.lineWidth = 1.5;
             this.ctx.beginPath();
@@ -1998,43 +2128,43 @@ class KronosSynth {
             const p = this.particles[i];
 
             // Speed up drift when space is high, and scale with pitch transposition
-            const pitchSpeedFactor = Math.pow(2.0, (pitch - 0.5) * 2.0);
-            p.phase += p.speed * (1.0 + space * 2.5) * pitchSpeedFactor;
+            const pitchSpeedFactor = Math.pow(2.0, (visual8 - 0.5) * 2.0);
+            p.phase += p.speed * (1.0 + visual4 * 2.5) * pitchSpeedFactor;
 
             // Angle warp caused by form slider (harmonic to chaotic Moiré)
-            const angleWarp = Math.sin(i * 0.12 + p.phase * 0.05) * form * form * 5.0;
+            const angleWarp = Math.sin(i * 0.12 + p.phase * 0.05) * visual1 * visual1 * 5.0;
             const theta = (i * 0.22) + p.phase * 0.08 + angleWarp;
 
             let polyFactor = 1.0;
-            if (desync > 0.05) {
+            if (visual7 > 0.05) {
                 const N = 3 + (i % 3); // Crystalline mix of triangles, squares, pentagons
                 const alpha = (2 * Math.PI) / N;
                 const thetaRel = ((theta % alpha) + alpha) % alpha - (alpha / 2);
                 const targetPolyFactor = Math.cos(alpha / 2) / Math.cos(thetaRel);
-                polyFactor = 1.0 * (1.0 - desync) + targetPolyFactor * desync;
+                polyFactor = 1.0 * (1.0 - visual7) + targetPolyFactor * visual7;
             }
 
             // Amplitude envelope shape calculation
             let amp = 1.0;
-            if (timbre < 0.5) {
-                const mix = timbre * 2.0;
+            if (visual2 < 0.5) {
+                const mix = visual2 * 2.0;
                 const ampA = 1.0 / Math.pow(i + 1, 0.75);
                 const ampB = Math.sin(i * 0.22) * 0.5 + 0.5;
                 amp = ampA * (1 - mix) + ampB * mix;
             } else {
-                const mix = (timbre - 0.5) * 2.0;
+                const mix = (visual2 - 0.5) * 2.0;
                 const ampB = Math.sin(i * 0.22) * 0.5 + 0.5;
                 const ampC = 1.0 - (i / this.particles.length);
                 amp = ampB * (1 - mix) + ampC * mix;
             }
 
             // FILTER: progressively suppress higher index particles
-            const filterfilterIndex = filter * this.particles.length;
-            if (i > filterfilterIndex) {
-                amp *= Math.max(0, 1.0 - (i - filterfilterIndex) / 24.0);
+            const filterIndex = visual3 * this.particles.length;
+            if (i > filterIndex) {
+                amp *= Math.max(0, 1.0 - (i - filterIndex) / 24.0);
             }
 
-            const pitchScale = Math.pow(2.0, (pitch - 0.5) * 0.6);
+            const pitchScale = Math.pow(2.0, (visual8 - 0.5) * 0.6);
             const dist = maxRadius * (0.15 + 0.85 * (i / this.particles.length)) * pitchScale;
             // Tiny continuous orbit modulation even when silent, morphing to deep active waves
             const modulationScale = 8.0 + activeRatio * 37.0;
@@ -2059,7 +2189,7 @@ class KronosSynth {
 
             const headOpacity = 0.45 + activeRatio * 0.45; // 0.45 (idle) to 0.90 (bright)
             const trailOpacity = 0.10 + activeRatio * 0.12; // 0.10 (idle) to 0.22 (bright)
-            const lineOpacity = (0.08 + activeRatio * 0.12) * (1.0 - form * 0.5); // 0.08 (idle) to 0.20 (bright)
+            const lineOpacity = (0.08 + activeRatio * 0.12) * (1.0 - visual1 * 0.5); // 0.08 (idle) to 0.20 (bright)
 
             // Render fading trails from history
             for (let hIdx = 0; hIdx < p.history.length; hIdx++) {
@@ -2087,15 +2217,14 @@ class KronosSynth {
             }
 
             // 4. Draw ALTER cross-connecting laser web (Concept 3)
-            const alterVal = this.values.alter;
-            const webOpacity = alterVal * (0.015 + activeRatio * 0.05) * amp;
+            const webOpacity = visual5 * (0.015 + activeRatio * 0.05) * amp;
             if (webOpacity > 0.001) {
                 const targetIdx = (i + 47) % this.particles.length;
                 const pTarget = this.particles[targetIdx];
                 if (pTarget.history && pTarget.history.length > 0) {
                     const targetPos = pTarget.history[pTarget.history.length - 1];
                     this.ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${light + 10}%, ${webOpacity})`;
-                    this.ctx.lineWidth = 0.5 + alterVal * 0.8;
+                    this.ctx.lineWidth = 0.5 + visual5 * 0.8;
                     this.ctx.beginPath();
                     this.ctx.moveTo(x, y);
                     this.ctx.lineTo(targetPos.x, targetPos.y);

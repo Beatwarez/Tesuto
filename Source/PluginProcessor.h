@@ -4,13 +4,17 @@
 
 extern float sineTable[32768];
 
+class KronosAudioProcessor;
+
 // ==========================================================================
 // 1. Synthesiser Voice Class
 // ==========================================================================
 class KronosVoice : public juce::MPESynthesiserVoice {
 public:
-  KronosVoice() {
-    for (int p = 0; p < 256; ++p) {
+  KronosAudioProcessor* processor = nullptr;
+
+  KronosVoice(KronosAudioProcessor* p) : processor(p) {
+    for (int p = 0; p < 512; ++p) {
       phases[p] = 0.0f;
       phaseDrifts[p] = juce::Random::getSystemRandom().nextFloat() *
                        juce::MathConstants<float>::twoPi;
@@ -27,7 +31,7 @@ public:
 
     fundamentalFreq = targetFreq;
     currentFundamentalFreq = targetFreq;
-    for (int p = 0; p < 256; ++p) {
+    for (int p = 0; p < 512; ++p) {
       phases[p] = 0.0f;
       smoothedAmps[p] = 0.0f;
     }
@@ -142,35 +146,6 @@ public:
       return 1.0f;
   }
 
-  void updateParams(float form, float timbre, float typeA, float typeB, float filterMorph, float filterMorphMod, float filterCutoff, float filterCutoffMod, float filterOffset, float filterOffsetMod, float filterReso, float filterResoMod, float filterSlope, float filterSlopeMod, float filter, float space, float cloud, float size, float sweep, float desync, float pitch) {
-    formVal = form;
-    timbreVal = timbre;
-    filterTypeAVal = typeA;
-    filterTypeBVal = typeB;
-    filterMorphVal = filterMorph;
-    filterMorphModVal = filterMorphMod;
-
-        filterCutoffVal = filterCutoff;
-    filterCutoffModVal = filterCutoffMod;
-    filterOffsetVal = filterOffset;
-    filterOffsetModVal = filterOffsetMod;
-    filterResoVal = filterReso;
-    filterResoModVal = filterResoMod;
-    filterSlopeVal = filterSlope;
-    filterSlopeModVal = filterSlopeMod;
-    filterVal = filter;
-    spaceVal = space;
-    cloudVal = cloud;
-    sizeVal = size;
-    sweepVal = sweep;
-    deSyncVal = desync;
-    pitchVal = pitch;
-  }
-
-  void updateAlter(float alter) {
-    alterVal = alter;
-  }
-
   void updateAdsr(float attack, float decay, float sustain, float release) {
     adsrParams.attack = attack;
     adsrParams.decay = decay;
@@ -185,8 +160,7 @@ public:
   }
 
   void renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int startSample,
-                       int numSamples) override {
-    bool adsrActive = adsr.isActive();
+                       int numSamples) override;
     
     if (! adsrActive) {
       clearCurrentNote();
@@ -198,143 +172,129 @@ public:
     if (currentSampleRate <= 0.0)
       currentSampleRate = 44100.0;
 
-    // Exponential mapping for filter frequency (50Hz to 12000Hz)
-    float currentCutoff = std::clamp(filterCutoffVal + filterVal * filterCutoffModVal, 0.0f, 1.0f);
-    float currentOffset = std::clamp(filterOffsetVal + filterVal * filterOffsetModVal, -1.0f, 1.0f);
-    float cutoffA_norm = std::clamp(currentCutoff - currentOffset * 0.165f, 0.0f, 1.0f);
-    float cutoffB_norm = std::clamp(currentCutoff + currentOffset * 0.165f, 0.0f, 1.0f);
-    float fcA = 50.0f * std::pow(2.0f, cutoffA_norm * 8.0f);
-    float fcB = 50.0f * std::pow(2.0f, cutoffB_norm * 8.0f);
-    // float Q = ...
-    // float N = ...
+    currentFundamentalFreq += (fundamentalFreq - currentFundamentalFreq) * 0.06f;
 
-    // Precompute partial amplitudes, frequencies, phase deltas, panning, and build active list
-    float freqs[256];
-    float targetAmps[256];
-    float phaseDeltas[256];
-    float pL_block[256];
-    float pR_block[256];
+    // --- 1. Source Engine (Lane 1) ---
+    float partials_param = processor->mod1_p[0] ? processor->mod1_p[0]->load() : 0.5f;
+    float balance_param  = processor->mod1_p[1] ? processor->mod1_p[1]->load() : 0.0f;
+    float width_param    = processor->mod1_p[2] ? processor->mod1_p[2]->load() : 0.0f;
 
-    int activePartials[256];
-    int numActivePartials = 0;
-
-    currentFundamentalFreq +=
-        (fundamentalFreq - currentFundamentalFreq) * 0.06f;
-
-    // Apply MPE timbre slide modifier
-    float voiceTimbre =
-        std::max(0.0f, std::min(1.0f, timbreVal + localTimbreMod));
-
-    // Lambda for the 10 distinct spectral shapes with a baseline floor
-    auto getSpectralShape = [] (int p, int harmonicIndex, int shapeIndex) -> float
-    {
-        float rawVal = 0.0f;
-        switch (shapeIndex)
-        {
-            case 0: // 1. Warm Triangle/Saw
-                rawVal = 1.0f / std::pow ((float)harmonicIndex, 1.3f); break;
-            case 1: // 2. Hollow Square (Odd harmonics only)
-                rawVal = (p % 2 == 0) ? (1.0f / (float)harmonicIndex) : (0.08f / (float)harmonicIndex); break;
-            case 2: // 3. Comb Filter / Phased
-                rawVal = (std::sin ((float)p * 0.22f) * 0.4f + 0.6f) / std::sqrt ((float)harmonicIndex); break;
-            case 3: // 4. High Fizz (High-pass)
-                rawVal = (0.1f + 0.9f * ((float)p / 256.0f)) * (1.0f / std::sqrt ((float)harmonicIndex)); break;
-            case 4: // 5. Formant Vocal "Ooh" (Double peaks near H3 & H8)
-                rawVal = std::exp (-std::pow ((float)harmonicIndex - 3.0f, 2.0f) / 2.0f)
-                     + 0.5f * std::exp (-std::pow ((float)harmonicIndex - 8.0f, 2.0f) / 8.0f)
-                     + 0.05f / (float)harmonicIndex; break;
-            case 5: // 6. Formant Vocal "Aah" (Double peaks near H6 & H14)
-                rawVal = std::exp (-std::pow ((float)harmonicIndex - 6.0f, 2.0f) / 4.0f)
-                     + 0.4f * std::exp (-std::pow ((float)harmonicIndex - 14.0f, 2.0f) / 16.0f)
-                     + 0.05f / (float)harmonicIndex; break;
-            case 6: // 7. Octave Double (Even harmonics dominant)
-                rawVal = (p % 2 == 1) ? (1.0f / std::pow ((float)harmonicIndex, 1.2f)) : (0.15f / (float)harmonicIndex); break;
-            case 7: // 8. Metallic / Inharmonic (Golden ratio spacing)
-                rawVal = (std::sin ((float)p * 1.618f) * 0.4f + 0.6f) / std::pow ((float)harmonicIndex, 0.7f); break;
-            case 8: // 9. Resonance Spike (Resonant peak at H12)
-                rawVal = (p == 0) ? 1.0f : (0.08f + 0.92f * std::exp (-std::pow ((float)harmonicIndex - 12.0f, 2.0f) / 2.0f)); break;
-            case 9: // 10. Grit (Deterministic noise-like hash)
-                rawVal = (std::sin ((float)p * 123.456f) * 0.3f + 0.7f) / (float)harmonicIndex; break;
-            default:
-                rawVal = 0.0f; break;
-        }
-        
-        // Dynamic sheen baseline (adds subtle bright high frequencies without masking the shape)
-        float baseline = 0.05f / std::sqrt ((float)harmonicIndex);
-        return rawVal * 0.90f + baseline;
-    };
-
-    // Morph between shapes based on voiceTimbre
-    float scaledTimbre = voiceTimbre * 9.0f;
-    int timbreIdx = (int)scaledTimbre;
-    float timbreMix = scaledTimbre - (float)timbreIdx;
-    if (timbreIdx >= 9) {
-      timbreIdx = 8;
-      timbreMix = 1.0f;
+    int targetPartials = (int)(partials_param * 511.0f) + 1;
+    float maxHarmonics = (currentSampleRate / 2.0f) / currentFundamentalFreq;
+    if (maxHarmonics < 1.0f) maxHarmonics = 1.0f;
+    
+    float spacing = 1.0f;
+    if (width_param > 0.0f) {
+        float maxWidthSpacing = maxHarmonics / (float)targetPartials;
+        spacing = 1.0f + width_param * (maxWidthSpacing - 1.0f);
+    } else if (width_param < 0.0f) {
+        spacing = 1.0f + width_param * 0.95f; // shrinks to 0.05
     }
 
-    float centerHarmonic = sweepVal * 255.0f;
-    float sendWidth = 35.0f; // Width of the swept bandpass zone
+    float totalClusterSpan = (float)targetPartials * spacing;
+    float clusterStart = 1.0f;
+    if (balance_param > 0.0f) {
+        float maxStart = maxHarmonics - totalClusterSpan;
+        if (maxStart < 1.0f) maxStart = 1.0f;
+        clusterStart = 1.0f + balance_param * (maxStart - 1.0f);
+    } else if (balance_param < 0.0f) {
+        clusterStart = 1.0f; // Could be modified for sub harmonics later
+    }
 
-    float pitchMultiplier = std::pow (2.0f, (pitchVal - 0.5f) * 2.0f);
-    float pitchedFundamental = currentFundamentalFreq * pitchMultiplier;
+    float freqs[512];
+    float targetAmps[512];
+    float phaseDeltas[512];
+    float pL_block[512];
+    float pR_block[512];
 
-    numActivePartials = 0;
-    for (int p = 0; p < 256; ++p) {
-      int harmonicIndex = p + 1;
+    for (int p = 0; p < 512; ++p) {
+        if (p < targetPartials) {
+            float virtualHarmonicIndex = clusterStart + (float)p * spacing;
+            freqs[p] = currentFundamentalFreq * virtualHarmonicIndex;
+            
+            if (freqs[p] >= currentSampleRate * 0.49f) {
+                targetAmps[p] = 0.0f;
+            } else {
+                targetAmps[p] = targetAmp * (1.0f / std::sqrt(virtualHarmonicIndex + 1.0f));
+            }
+        } else {
+            freqs[p] = 0.0f;
+            targetAmps[p] = 0.0f;
+        }
+    }
 
-      // Formant / Inharmonic Warp
-      float stretch =
-          (p == 0) ? 0.0f
-                   : (formVal * formVal * 3.5f *
-                      std::sin((float)harmonicIndex * 1.57f + (float)p * 0.1f));
-      freqs[p] = pitchedFundamental * ((float)harmonicIndex + stretch);
-      float syncMultiplier = 1.0f + deSyncVal * 1.0f;
-      if (p > 0)
-        freqs[p] *= syncMultiplier;
+    // --- 2. Dynamic Serial Router (Lanes 2-8) ---
+    float cloudVal = 0.0f;
+    float deSyncVal = 0.0f;
+    float alterVal = 0.0f;
 
-      // Timbre Morphing
-      float baseAmp = getSpectralShape (p, harmonicIndex, timbreIdx) * (1.0f - timbreMix)
-                    + getSpectralShape (p, harmonicIndex, timbreIdx + 1) * timbreMix;
+    for (int i = 0; i < 7; ++i) {
+        int laneNumber = processor->routingOrder[i].load();
+        if (laneNumber < 2 || laneNumber > 8) continue;
+        
+        int laneIdx = laneNumber - 2;
+        int engineType = processor->mod_engine[laneIdx] ? processor->mod_engine[laneIdx]->load() : 0;
+        float macroVal = processor->mod_macro[laneIdx] ? processor->mod_macro[laneIdx]->load() : 0.0f;
+        
+        if (engineType == 2) { // FILTER
+            float cutoff_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.5f;
+            float cutoff_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
+            float offset_param = processor->mod_p[laneIdx][1] ? processor->mod_p[laneIdx][1]->load() : 0.0f;
+            float offset_mod   = processor->mod_pMod[laneIdx][1] ? processor->mod_pMod[laneIdx][1]->load() : 0.0f;
+            float reso_param   = processor->mod_p[laneIdx][2] ? processor->mod_p[laneIdx][2]->load() : 0.2f;
+            float reso_mod     = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
+            float slope_param  = processor->mod_p[laneIdx][3] ? processor->mod_p[laneIdx][3]->load() : 0.5f;
+            float slope_mod    = processor->mod_pMod[laneIdx][3] ? processor->mod_pMod[laneIdx][3]->load() : 0.0f;
+            float morph_param  = processor->mod_p[laneIdx][4] ? processor->mod_p[laneIdx][4]->load() : 0.0f;
+            float morph_mod    = processor->mod_pMod[laneIdx][4] ? processor->mod_pMod[laneIdx][4]->load() : 0.0f;
+            
+            int typeA = processor->mod_p[laneIdx][5] ? (int)processor->mod_p[laneIdx][5]->load() : 0;
+            int typeB = processor->mod_p[laneIdx][6] ? (int)processor->mod_p[laneIdx][6]->load() : 0;
 
-      // filter limiter
-      float currentReso = std::clamp(filterResoVal + filterVal * filterResoModVal, 0.0f, 1.0f);
-      float currentSlope = std::clamp(filterSlopeVal + filterVal * filterSlopeModVal, 0.0f, 1.0f);
-      float multA = calculateFilterMult(freqs[p], fcA, currentReso, currentSlope, (int)filterTypeAVal);
-      float multB = calculateFilterMult(freqs[p], fcB, currentReso, currentSlope, (int)filterTypeBVal);
-      float currentMorph = std::clamp(filterMorphVal + filterVal * filterMorphModVal, 0.0f, 1.0f);
-      float filterMult = multA * (1.0f - currentMorph) + multB * currentMorph;
-      if (filterMult > 1.0f) filterMult = 1.0f;
+            float currentCutoff = std::clamp(cutoff_param + macroVal * cutoff_mod, 0.0f, 1.0f);
+            float currentOffset = std::clamp(offset_param + macroVal * offset_mod, -1.0f, 1.0f);
+            float cutoffA_norm = std::clamp(currentCutoff - currentOffset * 0.165f, 0.0f, 1.0f);
+            float cutoffB_norm = std::clamp(currentCutoff + currentOffset * 0.165f, 0.0f, 1.0f);
+            float fcA = 50.0f * std::pow(2.0f, cutoffA_norm * 8.0f);
+            float fcB = 50.0f * std::pow(2.0f, cutoffB_norm * 8.0f);
+            float currentReso = std::clamp(reso_param + macroVal * reso_mod, 0.0f, 1.0f);
+            float currentSlope = std::clamp(slope_param + macroVal * slope_mod, 0.0f, 1.0f);
+            float currentMorph = std::clamp(morph_param + macroVal * morph_mod, 0.0f, 1.0f);
 
-      // Space (Organic LFO drift)
-      float lfoDrift =
-          std::sin((float)voiceTime * 1.2f + phaseDrifts[p]) * spaceVal * 0.3f;
+            for (int p = 0; p < targetPartials; ++p) {
+                if (targetAmps[p] > 0.0f) {
+                    float multA = calculateFilterMult(freqs[p], fcA, currentReso, currentSlope, typeA);
+                    float multB = calculateFilterMult(freqs[p], fcB, currentReso, currentSlope, typeB);
+                    float filterMult = multA * (1.0f - currentMorph) + multB * currentMorph;
+                    if (filterMult > 1.0f) filterMult = 1.0f;
+                    targetAmps[p] *= filterMult;
+                }
+            }
+        }
+    }
 
-      targetAmps[p] = baseAmp * filterMult * targetAmp * (1.0f + lfoDrift);
+    // --- 3. Finalization (Panning & Phase Deltas) ---
+    int activePartials[512];
+    int numActivePartials = 0;
 
-      // Precalculate phase delta and panning
-      phaseDeltas[p] = freqs[p] / (float)currentSampleRate;
-      
-      if (p == 0) {
-        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
-        pR_block[p] = panRight[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
-      } else if (p % 2 == 0) {
-        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
-        pR_block[p] = panRight[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
-      } else {
-        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 0.0f * spaceVal;
-        pR_block[p] = panRight[p] * (1.0f - spaceVal) + 1.0f * spaceVal;
-      }
+    for (int p = 0; p < 512; ++p) {
+        if (p < targetPartials && targetAmps[p] > 0.0f) {
+            phaseDeltas[p] = freqs[p] / (float)currentSampleRate;
+            pL_block[p] = panLeft[p]; 
+            pR_block[p] = panRight[p];
+        } else {
+            phaseDeltas[p] = 0.0f;
+            pL_block[p] = 0.0f;
+            pR_block[p] = 0.0f;
+        }
 
-      // Algorithmic send amount based on SWEEP Gaussian bandpass
-      float distance = (float)p - centerHarmonic;
-      float sendAmp = std::exp(-(distance * distance) / (2.0f * sendWidth * sendWidth));
-      p_send_gain[p] = cloudVal * sendAmp * 0.2f;
+        // Send logic
+        p_send_gain[p] = 0.0f;
 
-      // Collect active partials: active if target is audible OR if envelope is still active
-      if (targetAmps[p] >= 0.0001f || smoothedAmps[p] >= 0.0001f) {
-        activePartials[numActivePartials++] = p;
-      }
+        // Collect active partials
+        if (targetAmps[p] >= 0.0001f || smoothedAmps[p] >= 0.0001f) {
+            activePartials[numActivePartials++] = p;
+        }
     }
 
     // Mix into output buffers
@@ -428,40 +388,17 @@ private:
   float fundamentalFreq = 0.0f;
   float currentFundamentalFreq = 0.0f;
 
-  float phases[256];
-  float phaseDrifts[256];
-  float panLeft[256];
-  float panRight[256];
+  float phases[512];
+  float phaseDrifts[512];
+  float panLeft[512];
+  float panRight[512];
 
-  float smoothedAmps[256];
+  float smoothedAmps[512];
   float cloudVal = 0.0f;
-
-  float formVal = 0.0f;
-  float timbreVal = 0.25f;
-  float filterTypeAVal = 0.0f;
-  float filterTypeBVal = 0.0f;
-  float filterMorphVal = 0.0f;
-  float filterMorphModVal = 0.0f;
-    float filterCutoffVal = 0.75f;
-  float filterCutoffModVal = 0.0f;
-  float filterOffsetVal = 0.0f;
-  float filterOffsetModVal = 0.0f;
-  float filterResoVal = 0.2f;
-  float filterResoModVal = 0.0f;
-  float filterSlopeVal = 0.5f;
-  float filterSlopeModVal = 0.0f;
-  float filterVal = 0.75f;
-  float spaceVal = 0.30f;
-  float alterVal = 0.0f;
-  float sizeVal = 0.5f;
-  float sweepVal = 0.5f;
-  float deSyncVal = 0.0f;
-  float pitchVal = 0.5f;
-
   float localTimbreMod = 0.0f;
   double voiceTime = 0.0;
 
-  float p_send_gain[256];
+  float p_send_gain[512];
   float* globalSendAccum[8] = { nullptr };
 };
 
@@ -501,6 +438,30 @@ public:
 
   juce::AudioProcessorValueTreeState apvts;
   std::atomic<bool> activeMidiNotes[128];
+
+  // Generic Parameter Matrix Pointers
+  std::atomic<float>* mod1_macro = nullptr;
+  std::atomic<float>* mod1_p[8] = { nullptr };
+
+  std::atomic<float>* mod_engine[7] = { nullptr };
+  std::atomic<float>* mod_macro[7] = { nullptr };
+  std::atomic<float>* mod_p[7][8] = { {nullptr} };
+  std::atomic<float>* mod_pMod[7][8] = { {nullptr} };
+
+  std::atomic<float>* attack = nullptr;
+  std::atomic<float>* decay = nullptr;
+  std::atomic<float>* sustain = nullptr;
+  std::atomic<float>* release = nullptr;
+
+  std::atomic<int> routingOrder[7];
+  
+  void updateRoutingOrder(const juce::String& routingStr) {
+      juce::StringArray tokens;
+      tokens.addTokens(routingStr, ",", "\"");
+      for (int i = 0; i < 7 && i < tokens.size(); ++i) {
+          routingOrder[i].store(tokens[i].getIntValue());
+      }
+  }
 
   void triggerNoteOnFromEditor(int note, float velocity) {
     synth.handleMidiEvent(juce::MidiMessage::noteOn(1, note, velocity));

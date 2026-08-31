@@ -6,6 +6,40 @@ float sineTable[32768];
 // ==========================================================================
 // Constructor & Destructor
 // ==========================================================================
+static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
+{
+    juce::AudioProcessorValueTreeState::ParameterLayout layout;
+    
+    // Routing Order
+    layout.add(std::make_unique<juce::AudioParameterString>(juce::ParameterID("routingOrder", 1), "RoutingOrder", "1,2,3,4,5,6,7,8"));
+    
+    // Modulator 1 (Source)
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_macro", 1), "mod1_macro", 0.0f, 1.0f, 0.5f));
+    for (int p = 1; p <= 8; ++p) {
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p" + juce::String(p), 1), "mod1_p" + juce::String(p), 0.0f, 1.0f, 0.0f));
+    }
+    
+    // Modulators 2-8
+    for (int m = 2; m <= 8; ++m) {
+        juce::String mStr = juce::String(m);
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_engine", 1), "mod" + mStr + "_engine", 0.0f, 10.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_macro", 1), "mod" + mStr + "_macro", 0.0f, 1.0f, 0.5f));
+        for (int p = 1; p <= 8; ++p) {
+            juce::String pStr = juce::String(p);
+            layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr, 1), "mod" + mStr + "_p" + pStr, 0.0f, 1.0f, 0.0f));
+            layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr + "Mod", 1), "mod" + mStr + "_p" + pStr + "Mod", -1.0f, 1.0f, 0.0f));
+        }
+    }
+    
+    // Amp Envelope
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("attack", 1), "Attack", juce::NormalisableRange<float>(0.01f, 5.0f, 0.01f, 0.35f), 0.20f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("decay", 1), "Decay", juce::NormalisableRange<float>(0.01f, 5.0f, 0.01f, 0.35f), 0.30f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("sustain", 1), "Sustain", 0.0f, 1.0f, 0.80f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("release", 1), "Release", juce::NormalisableRange<float>(0.01f, 8.0f, 0.01f, 0.35f), 1.00f));
+    
+    return layout;
+}
+
 KronosAudioProcessor::KronosAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
      : AudioProcessor (BusesProperties()
@@ -17,34 +51,7 @@ KronosAudioProcessor::KronosAudioProcessor()
                      #endif
                        ),
 #endif
-        apvts (*this, nullptr, "PARAMETERS", {
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("form", 1), "Form", 0.0f, 1.0f, 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("timbre", 1), "Timbre", 0.0f, 1.0f, 0.25f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterTypeA", 1), "FilterTypeA", juce::NormalisableRange<float>(0.0f, 9.0f, 1.0f), 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterTypeB", 1), "FilterTypeB", juce::NormalisableRange<float>(0.0f, 9.0f, 1.0f), 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterMorph", 1), "FilterMorph", 0.0f, 1.0f, 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterMorphMod", 1), "FilterMorphMod", -1.0f, 1.0f, 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterCutoff", 1), "FilterCutoff", 0.0f, 1.0f, 0.75f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterCutoffMod", 1), "FilterCutoffMod", -1.0f, 1.0f, 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterOffset", 1), "FilterOffset", -1.0f, 1.0f, 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterOffsetMod", 1), "FilterOffsetMod", -1.0f, 1.0f, 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterReso", 1), "FilterReso", 0.0f, 1.0f, 0.2f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterResoMod", 1), "FilterResoMod", -1.0f, 1.0f, 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterSlope", 1), "FilterSlope", 0.0f, 1.0f, 0.5f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filterSlopeMod", 1), "FilterSlopeMod", -1.0f, 1.0f, 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("filter", 1), "filter", 0.0f, 1.0f, 0.75f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("space", 1), "Space",  0.0f, 1.0f, 0.30f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("alter", 1), "Alter",  0.0f, 1.0f, 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("size", 1), "Size",   0.0f, 1.0f, 0.50f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("sweep", 1), "Sweep",  0.0f, 1.0f, 0.50f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("cloud", 1), "Cloud",  0.0f, 1.0f, 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("desync", 1), "De-Sync", 0.0f, 1.0f, 0.0f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("pitch", 1), "Pitch", 0.0f, 1.0f, 0.50f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("attack", 1), "Attack", juce::NormalisableRange<float> (0.01f, 5.0f, 0.01f, 0.35f), 0.20f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("decay", 1), "Decay",  juce::NormalisableRange<float> (0.01f, 5.0f, 0.01f, 0.35f), 0.30f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("sustain", 1), "Sustain", 0.0f, 1.0f, 0.80f),
-            std::make_unique<juce::AudioParameterFloat> (juce::ParameterID ("release", 1), "Release", juce::NormalisableRange<float> (0.01f, 8.0f, 0.01f, 0.35f), 1.00f)
-        })
+        apvts (*this, nullptr, "PARAMETERS", createParameterLayout())
 {
     for (int i = 0; i < 32768; ++i)
         sineTable[i] = std::sin (((float)i / 32768.0f) * juce::MathConstants<float>::twoPi);
@@ -60,9 +67,34 @@ KronosAudioProcessor::KronosAudioProcessor()
         fdnIndices[i] = 0;
     }
 
+    // Initialize Generic Parameter Pointers
+    mod1_macro = apvts.getRawParameterValue("mod1_macro");
+    for (int p = 1; p <= 8; ++p) {
+        mod1_p[p-1] = apvts.getRawParameterValue("mod1_p" + juce::String(p));
+    }
+    
+    for (int m = 2; m <= 8; ++m) {
+        juce::String mStr = juce::String(m);
+        mod_engine[m-2] = apvts.getRawParameterValue("mod" + mStr + "_engine");
+        mod_macro[m-2] = apvts.getRawParameterValue("mod" + mStr + "_macro");
+        for (int p = 1; p <= 8; ++p) {
+            juce::String pStr = juce::String(p);
+            mod_p[m-2][p-1] = apvts.getRawParameterValue("mod" + mStr + "_p" + pStr);
+            mod_pMod[m-2][p-1] = apvts.getRawParameterValue("mod" + mStr + "_p" + pStr + "Mod");
+        }
+    }
+    
+    attack = apvts.getRawParameterValue("attack");
+    decay = apvts.getRawParameterValue("decay");
+    sustain = apvts.getRawParameterValue("sustain");
+    release = apvts.getRawParameterValue("release");
+    
+    // Default routing order
+    for (int i = 0; i < 7; ++i) routingOrder[i].store(i + 2);
+
     synth.clearVoices();
     for (int i = 0; i < 8; ++i)
-        synth.addVoice (new KronosVoice());
+        synth.addVoice (new KronosVoice(this));
         
     apvts.state = juce::ValueTree ("KronosParams");
 }
@@ -189,34 +221,6 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         buffer.clear (i, 0, buffer.getNumSamples());
 
     // Update voice parameters from host control values
-    float form = *apvts.getRawParameterValue ("form");
-    float timbre = *apvts.getRawParameterValue ("timbre");
-    float filterTypeA = *apvts.getRawParameterValue ("filterTypeA");
-    float filterTypeB = *apvts.getRawParameterValue ("filterTypeB");
-    float filterMorph = *apvts.getRawParameterValue ("filterMorph");
-    float filterMorphMod = *apvts.getRawParameterValue ("filterMorphMod");
-
-    float filterCutoff = *apvts.getRawParameterValue ("filterCutoff");
-    float filterCutoffMod = *apvts.getRawParameterValue ("filterCutoffMod");
-    float filterOffset = *apvts.getRawParameterValue ("filterOffset");
-    float filterOffsetMod = *apvts.getRawParameterValue ("filterOffsetMod");
-    float filterReso = *apvts.getRawParameterValue ("filterReso");
-    float filterResoMod = *apvts.getRawParameterValue ("filterResoMod");
-    float filterSlope = *apvts.getRawParameterValue ("filterSlope");
-    float filterSlopeMod = *apvts.getRawParameterValue ("filterSlopeMod");
-    float filter = *apvts.getRawParameterValue ("filter");
-    float space  = *apvts.getRawParameterValue ("space");
-    float alter  = *apvts.getRawParameterValue ("alter");
-    float size   = *apvts.getRawParameterValue ("size");
-    float sweep  = *apvts.getRawParameterValue ("sweep");
-    float cloud  = *apvts.getRawParameterValue ("cloud");
-    float desync = *apvts.getRawParameterValue ("desync");
-    float pitch  = *apvts.getRawParameterValue ("pitch");
-    float attack = *apvts.getRawParameterValue ("attack");
-    float decay  = *apvts.getRawParameterValue ("decay");
-    float sustain = *apvts.getRawParameterValue ("sustain");
-    float release = *apvts.getRawParameterValue ("release");
-
     int numSamples = buffer.getNumSamples();
     sendBuffers.setSize (8, numSamples, false, true, true);
     sendBuffers.clear();
@@ -225,9 +229,9 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     {
         if (auto* voice = dynamic_cast<KronosVoice*> (synth.getVoice (i)))
         {
-            voice->updateParams (form, timbre, filterTypeA, filterTypeB, filterMorph, filterMorphMod, filterCutoff, filterCutoffMod, filterOffset, filterOffsetMod, filterReso, filterResoMod, filterSlope, filterSlopeMod, filter, space, cloud, size, sweep, desync, pitch);
-            voice->updateAlter (alter);
-            voice->updateAdsr (attack, decay, sustain, release);
+            if (attack && decay && sustain && release) {
+                voice->updateAdsr (attack->load(), decay->load(), sustain->load(), release->load());
+            }
             voice->setGlobalSendAccum(
                 sendBuffers.getWritePointer(0),
                 sendBuffers.getWritePointer(1),
@@ -261,6 +265,7 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     synth.renderNextBlock (buffer, midiMessages, 0, buffer.getNumSamples());
 
     // Process 8-Channel Global FDN Reverb
+    float size = 0.5f;
     float decayTimeSeconds = 0.1f + size * size * 5.9f;
     float decayAlpha = -6.91f / (decayTimeSeconds * getSampleRate());
     float fdnGains[8];

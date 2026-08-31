@@ -7,6 +7,13 @@
 KronosAudioProcessorEditor::KronosAudioProcessorEditor (KronosAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p), webView (p)
 {
+    // Populate dynamic parameter IDs for JS syncing
+    for (auto* param : audioProcessor.getParameters()) {
+        if (auto* pID = dynamic_cast<juce::AudioProcessorParameterWithID*>(param)) {
+            webView.localParams[pID->paramID] = -999.0f;
+        }
+    }
+
     startTimerHz (30);
     // 1. Add WebView UI
     addAndMakeVisible (webView);
@@ -63,16 +70,18 @@ void KronosAudioProcessorEditor::timerCallback()
     }
 
     // 2. Sync DAW-automated/saved parameters from C++ APVTS back to JS UI Sliders
-    juce::String paramIDs[26] = { "form", "timbre", "filter", "space", "alter", "size", "sweep", "cloud", "attack", "decay", "sustain", "release", "desync", "pitch", "filterCutoff", "filterCutoffMod", "filterMorph", "filterMorphMod", "filterOffset", "filterOffsetMod", "filterReso", "filterResoMod", "filterSlope", "filterSlopeMod", "filterTypeA", "filterTypeB" };
-    for (int p = 0; p < 26; ++p)
+    for (auto& pair : webView.localParams)
     {
-        if (auto* rawVal = audioProcessor.apvts.getRawParameterValue (paramIDs[p]))
+        juce::String paramID = pair.first;
+        if (paramID == "routingOrder") continue; // String parameters are handled via explicit UI updates
+
+        if (auto* rawVal = audioProcessor.apvts.getRawParameterValue (paramID))
         {
             float val = rawVal->load();
-            if (std::abs (val - webView.localParams[p]) > 0.001f)
+            if (std::abs (val - pair.second) > 0.001f)
             {
-                webView.localParams[p] = val;
-                webView.evaluateJavascript ("if (window.kronosSynth) window.kronosSynth.updateParamFromCpp('" + paramIDs[p] + "', " + juce::String (val) + ");");
+                pair.second = val;
+                webView.evaluateJavascript ("if (window.kronosSynth) window.kronosSynth.updateParamFromCpp('" + paramID + "', " + juce::String (val) + ");");
             }
         }
     }
