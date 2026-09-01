@@ -258,10 +258,31 @@ body {
     font-family: var(--font-mono);
 }
 
-.slider-num {
-    font-size: 0.8vw;
-    color: var(--fg-muted);
+.drag-handle {
+    font-size: 1.2vw;
+    color: rgba(255, 255, 255, 0.3);
     margin-bottom: 2px;
+    cursor: grab;
+    transition: color 0.2s;
+    user-select: none;
+    line-height: 1;
+}
+
+.drag-handle:hover {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+.drag-placeholder {
+    width: 100%;
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    transition: height 0.2s ease;
+    margin: 10px 0;
 }
 
 .slider-name {
@@ -362,7 +383,13 @@ select.slider-name option {
     background: transparent;
     transition: all 0.2s ease;
 }
-
+.mod-lane {
+    position: relative;
+    border-radius: 8px;
+    background: transparent;
+    transition: background 0.3s ease, transform 0.2s ease, margin 0.2s ease;
+    padding: 10px 0;
+}
 .dsp-edit-toggle:hover {
     border-color: #ffffff;
     transform: scale(1.1);

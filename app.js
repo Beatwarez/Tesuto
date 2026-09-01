@@ -1100,17 +1100,51 @@ class KronosSynth {
     }
     
     setupDragAndDrop() {
-        const lanes = document.querySelectorAll('.mod-lane[draggable="true"]');
+        const lanes = document.querySelectorAll('.mod-lane');
         let draggedLane = null;
+        
+        let placeholder = document.createElement('div');
+        placeholder.className = 'drag-placeholder';
 
         lanes.forEach(lane => {
+            const dragHandle = lane.querySelector('.drag-handle');
+            if (dragHandle) {
+                dragHandle.addEventListener('mousedown', () => {
+                    if (lane.getAttribute('data-lane') !== '1') {
+                        lane.setAttribute('draggable', 'true');
+                    }
+                });
+                dragHandle.addEventListener('mouseup', () => lane.removeAttribute('draggable'));
+                dragHandle.addEventListener('mouseleave', () => lane.removeAttribute('draggable'));
+            }
+
             lane.addEventListener('dragstart', (e) => {
+                if (lane.getAttribute('data-lane') === '1') {
+                    e.preventDefault();
+                    return;
+                }
                 draggedLane = lane;
-                setTimeout(() => lane.classList.add('dragging'), 0);
+                e.dataTransfer.effectAllowed = 'move';
+                
+                // Keep dimensions for placeholder
+                const rect = lane.getBoundingClientRect();
+                placeholder.style.height = rect.height + 'px';
+                
+                setTimeout(() => {
+                    lane.classList.add('dragging');
+                    lane.style.display = 'none';
+                    lane.parentNode.insertBefore(placeholder, lane);
+                }, 0);
             });
 
             lane.addEventListener('dragend', () => {
-                draggedLane.classList.remove('dragging');
+                lane.classList.remove('dragging');
+                lane.style.display = '';
+                lane.removeAttribute('draggable');
+                
+                if (placeholder.parentNode) {
+                    placeholder.parentNode.replaceChild(lane, placeholder);
+                }
                 draggedLane = null;
                 this.updateRoutingOrder();
             });
@@ -1120,12 +1154,22 @@ class KronosSynth {
         containers.forEach(container => {
             container.addEventListener('dragover', (e) => {
                 e.preventDefault();
+                if (!draggedLane) return;
+                
                 const afterElement = this.getDragAfterElement(container, e.clientY);
-                if (afterElement == null) {
-                    container.appendChild(draggedLane);
+                const lane1 = document.querySelector('.mod-lane[data-lane="1"]');
+                
+                if (afterElement === lane1) {
+                    container.insertBefore(placeholder, lane1.nextSibling);
+                } else if (afterElement == null) {
+                    container.appendChild(placeholder);
                 } else {
-                    container.insertBefore(draggedLane, afterElement);
+                    container.insertBefore(placeholder, afterElement);
                 }
+            });
+            
+            container.addEventListener('drop', (e) => {
+                e.preventDefault();
             });
         });
     }
@@ -1489,12 +1533,17 @@ class KronosSynth {
             const paramId = knobEl.parentElement.getAttribute('data-param');
             if (!paramId) return;
             const isBipolar = knobEl.hasAttribute('data-bipolar');
-            const min = isBipolar ? -1.0 : 0.0;
-            const max = 1.0;
+            const dataMin = knobEl.getAttribute('data-min');
+            const dataMax = knobEl.getAttribute('data-max');
+            const dataDefault = knobEl.getAttribute('data-default');
+            
+            const min = dataMin !== null ? parseFloat(dataMin) : (isBipolar ? -1.0 : 0.0);
+            const max = dataMax !== null ? parseFloat(dataMax) : 1.0;
+            const defaultVal = dataDefault !== null ? parseFloat(dataDefault) : (isBipolar ? 0.0 : 0.5);
             
             // Ensure value exists in state
             if (this.values[paramId] === undefined) {
-                this.values[paramId] = isBipolar ? 0.0 : 0.5;
+                this.values[paramId] = defaultVal;
             }
             
             this.knobs[paramId] = new CustomKnob(

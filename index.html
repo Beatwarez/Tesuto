@@ -31,7 +31,7 @@
                 <!-- Lane 1 (Source) -->
                 <div class="slider-wrapper mod-lane" data-lane="1" data-param="mod1_macro">
                     <div class="slider-header">
-                        <span class="slider-num">01</span>
+                        <div class="drag-handle" style="visibility: hidden;">⇿</div>
                         <span class="slider-name">SOURCE</span>
                         <span class="slider-val" id="val-mod1_macro">0.00</span>
                     </div>
@@ -42,9 +42,9 @@
                 </div>
 
                 <!-- Lane 2 -->
-                <div class="slider-wrapper mod-lane" data-lane="2" data-param="mod2_macro" draggable="true">
+                <div class="slider-wrapper mod-lane" data-lane="2" data-param="mod2_macro">
                     <div class="slider-header">
-                        <span class="slider-num">02</span>
+                        <div class="drag-handle">⇿</div>
                         <select class="slider-name engine-selector">
                             <option value="empty" selected>EMPTY</option>
                             <option value="filter">FILTER</option>
@@ -63,9 +63,9 @@
                 </div>
 
                 <!-- Lane 3 -->
-                <div class="slider-wrapper mod-lane" data-lane="3" data-param="mod3_macro" draggable="true">
+                <div class="slider-wrapper mod-lane" data-lane="3" data-param="mod3_macro">
                     <div class="slider-header">
-                        <span class="slider-num">03</span>
+                        <div class="drag-handle">⇿</div>
                         <select class="slider-name engine-selector">
                             <option value="empty" selected>EMPTY</option>
                             <option value="filter">FILTER</option>
@@ -84,9 +84,9 @@
                 </div>
 
                 <!-- Lane 4 -->
-                <div class="slider-wrapper mod-lane" data-lane="4" data-param="mod4_macro" draggable="true">
+                <div class="slider-wrapper mod-lane" data-lane="4" data-param="mod4_macro">
                     <div class="slider-header">
-                        <span class="slider-num">04</span>
+                        <div class="drag-handle">⇿</div>
                         <select class="slider-name engine-selector">
                             <option value="empty" selected>EMPTY</option>
                             <option value="filter">FILTER</option>
@@ -114,9 +114,9 @@
         <section class="control-panel-right">
             <div class="sliders-container" id="lanes-right">
                 <!-- Lane 5 -->
-                <div class="slider-wrapper mod-lane" data-lane="5" data-param="mod5_macro" draggable="true">
+                <div class="slider-wrapper mod-lane" data-lane="5" data-param="mod5_macro">
                     <div class="slider-header">
-                        <span class="slider-num">05</span>
+                        <div class="drag-handle">⇿</div>
                         <select class="slider-name engine-selector">
                             <option value="empty" selected>EMPTY</option>
                             <option value="filter">FILTER</option>
@@ -135,9 +135,9 @@
                 </div>
 
                 <!-- Lane 6 -->
-                <div class="slider-wrapper mod-lane" data-lane="6" data-param="mod6_macro" draggable="true">
+                <div class="slider-wrapper mod-lane" data-lane="6" data-param="mod6_macro">
                     <div class="slider-header">
-                        <span class="slider-num">06</span>
+                        <div class="drag-handle">⇿</div>
                         <select class="slider-name engine-selector">
                             <option value="empty" selected>EMPTY</option>
                             <option value="filter">FILTER</option>
@@ -156,9 +156,9 @@
                 </div>
 
                 <!-- Lane 7 -->
-                <div class="slider-wrapper mod-lane" data-lane="7" data-param="mod7_macro" draggable="true">
+                <div class="slider-wrapper mod-lane" data-lane="7" data-param="mod7_macro">
                     <div class="slider-header">
-                        <span class="slider-num">07</span>
+                        <div class="drag-handle">⇿</div>
                         <select class="slider-name engine-selector">
                             <option value="empty" selected>EMPTY</option>
                             <option value="filter">FILTER</option>
@@ -177,9 +177,9 @@
                 </div>
 
                 <!-- Lane 8 -->
-                <div class="slider-wrapper mod-lane" data-lane="8" data-param="mod8_macro" draggable="true">
+                <div class="slider-wrapper mod-lane" data-lane="8" data-param="mod8_macro">
                     <div class="slider-header">
-                        <span class="slider-num">08</span>
+                        <div class="drag-handle">⇿</div>
                         <select class="slider-name engine-selector">
                             <option value="empty" selected>EMPTY</option>
                             <option value="filter">FILTER</option>
@@ -214,7 +214,7 @@
                 <div class="filter-morph-row" style="visibility: hidden;"></div>
                 <div class="filter-params-row">
                     <div class="knob-wrapper" data-param="mod{{LANE}}_p1">
-                        <div class="custom-knob filter-knob" id="knob-mod{{LANE}}_p1">
+                        <div class="custom-knob filter-knob" id="knob-mod{{LANE}}_p1" data-min="1" data-max="512" data-default="256">
                             <div class="knob-dial"><div class="knob-marker"></div></div>
                         </div>
                         <div class="knob-names">

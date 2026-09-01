@@ -15,8 +15,12 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     
     // Modulator 1 (Source)
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_macro", 1), "mod1_macro", 0.0f, 1.0f, 0.5f));
-    for (int p = 1; p <= 8; ++p) {
-        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p" + juce::String(p), 1), "mod1_p" + juce::String(p), 0.0f, 1.0f, 0.0f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p1", 1), "mod1_p1", juce::NormalisableRange<float>(1.0f, 512.0f, 1.0f, 1.0f), 256.0f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p2", 1), "mod1_p2", -1.0f, 1.0f, 0.0f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p3", 1), "mod1_p3", -1.0f, 1.0f, 0.0f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p4", 1), "mod1_p4", -1.0f, 1.0f, 0.0f));
+    for (int p = 5; p <= 8; ++p) {
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p" + juce::String(p), 1), "mod1_p" + juce::String(p), -1.0f, 1.0f, 0.0f));
     }
     
     // Modulators 2-8
@@ -26,7 +30,7 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_macro", 1), "mod" + mStr + "_macro", 0.0f, 1.0f, 0.5f));
         for (int p = 1; p <= 8; ++p) {
             juce::String pStr = juce::String(p);
-            layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr, 1), "mod" + mStr + "_p" + pStr, 0.0f, 1.0f, 0.0f));
+            layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr, 1), "mod" + mStr + "_p" + pStr, -1.0f, 1.0f, 0.0f));
             layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr + "Mod", 1), "mod" + mStr + "_p" + pStr + "Mod", -1.0f, 1.0f, 0.0f));
         }
     }
@@ -377,11 +381,11 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     currentFundamentalFreq += (fundamentalFreq - currentFundamentalFreq) * 0.06f;
 
     // --- 1. Source Engine (Lane 1) ---
-    float partials_param = processor->mod1_p[0] ? processor->mod1_p[0]->load() : 0.5f;
+    float partials_param = processor->mod1_p[0] ? processor->mod1_p[0]->load() : 256.0f;
     float balance_param  = processor->mod1_p[1] ? processor->mod1_p[1]->load() : 0.0f;
     float width_param    = processor->mod1_p[2] ? processor->mod1_p[2]->load() : 0.0f;
 
-    int targetPartials = (int)(partials_param * 511.0f) + 1;
+    int targetPartials = (int)partials_param;
     float maxHarmonics = ((float)currentSampleRate / 2.0f) / currentFundamentalFreq;
     if (maxHarmonics < 1.0f) maxHarmonics = 1.0f;
     
