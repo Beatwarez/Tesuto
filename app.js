@@ -1085,8 +1085,7 @@ class KronosSynth {
         this.particles = [];
         this.initParticles();
         this.animate();
-        
-        this.setupFocusToggles();
+        this.setupLaneListeners();
         this.setupDragAndDrop();
 
         // Initialize Audio engine setup immediately
@@ -1323,6 +1322,21 @@ class KronosSynth {
             this.values[param] = val;
             const baseParam = param.replace('Mod', '');
             if (this.knobs[baseParam]) this.knobs[baseParam].updateModArc();
+        } else if (param.endsWith('_engine')) {
+            const laneId = parseInt(param.replace('mod', '').replace('_engine', ''));
+            const engineIdMappingRev = { 0: 'empty', 1: 'source', 2: 'filter', 3: 'space', 4: 'pitch', 5: 'alter', 6: 'cloud', 7: 'desync' };
+            const engineType = engineIdMappingRev[Math.round(val)] || 'empty';
+            this.laneEngines[laneId] = engineType;
+            
+            const lane = document.querySelector(`.mod-lane[data-lane="${laneId}"]`);
+            if (lane) {
+                const selector = lane.querySelector('.engine-selector');
+                if (selector) selector.value = engineType;
+            }
+            
+            if (this.activeLeftFocus === laneId || this.activeRightFocus === laneId) {
+                this.renderSidePanels();
+            }
         }
 
         // Sync changes to the AudioWorklet node if active
