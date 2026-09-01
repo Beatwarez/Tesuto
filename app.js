@@ -1937,7 +1937,7 @@ class KronosSynth {
         }
         
         // Draw bars
-        ctx.fillStyle = '#6495ED'; // Cornflower blue for source spectral map
+        ctx.fillStyle = '#d1d1d6'; // Light gray for engine consistency
         const numDraws = Math.min(partialsVal, 512); // Prevent crazy loops if value glitches
         
         // We map maxHarmonics to canvas width 'w'
