@@ -11,7 +11,7 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     
     // Routing Order
-    layout.add(std::make_unique<juce::AudioParameterString>(juce::ParameterID("routingOrder", 1), "RoutingOrder", "1,2,3,4,5,6,7,8"));
+    // Routing Order is stored directly in value tree or handled outside APVTS since AudioParameterString doesn't exist in base JUCE
     
     // Modulator 1 (Source)
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_macro", 1), "mod1_macro", 0.0f, 1.0f, 0.5f));
@@ -358,3 +358,224 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new KronosAudioProcessor();
 }
+
+// ==========================================================================
+// KronosVoice Implementation
+// ==========================================================================
+
+void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int startSample, int numSamples) {
+    if (! adsr.isActive()) {
+      clearCurrentNote();
+      voiceActive = false;
+      return;
+    }
+
+    currentSampleRate = getSampleRate();
+    if (currentSampleRate <= 0.0)
+      currentSampleRate = 44100.0;
+
+    currentFundamentalFreq += (fundamentalFreq - currentFundamentalFreq) * 0.06f;
+
+    // --- 1. Source Engine (Lane 1) ---
+    float partials_param = processor->mod1_p[0] ? processor->mod1_p[0]->load() : 0.5f;
+    float balance_param  = processor->mod1_p[1] ? processor->mod1_p[1]->load() : 0.0f;
+    float width_param    = processor->mod1_p[2] ? processor->mod1_p[2]->load() : 0.0f;
+
+    int targetPartials = (int)(partials_param * 511.0f) + 1;
+    float maxHarmonics = ((float)currentSampleRate / 2.0f) / currentFundamentalFreq;
+    if (maxHarmonics < 1.0f) maxHarmonics = 1.0f;
+    
+    float spacing = 1.0f;
+    if (width_param > 0.0f) {
+        float maxWidthSpacing = maxHarmonics / (float)targetPartials;
+        spacing = 1.0f + width_param * (maxWidthSpacing - 1.0f);
+    } else if (width_param < 0.0f) {
+        spacing = 1.0f + width_param * 0.95f; // shrinks to 0.05
+    }
+
+    float totalClusterSpan = (float)targetPartials * spacing;
+    float clusterStart = 1.0f;
+    if (balance_param > 0.0f) {
+        float maxStart = maxHarmonics - totalClusterSpan;
+        if (maxStart < 1.0f) maxStart = 1.0f;
+        clusterStart = 1.0f + balance_param * (maxStart - 1.0f);
+    } else if (balance_param < 0.0f) {
+        clusterStart = 1.0f; // Could be modified for sub harmonics later
+    }
+
+    float freqs[512];
+    float targetAmps[512];
+    float phaseDeltas[512];
+    float pL_block[512];
+    float pR_block[512];
+
+    for (int p = 0; p < 512; ++p) {
+        if (p < targetPartials) {
+            float virtualHarmonicIndex = clusterStart + (float)p * spacing;
+            freqs[p] = currentFundamentalFreq * virtualHarmonicIndex;
+            
+            if (freqs[p] >= currentSampleRate * 0.49f) {
+                targetAmps[p] = 0.0f;
+            } else {
+                targetAmps[p] = targetAmp * (1.0f / std::sqrt(virtualHarmonicIndex + 1.0f));
+            }
+        } else {
+            freqs[p] = 0.0f;
+            targetAmps[p] = 0.0f;
+        }
+    }
+
+    // --- 2. Dynamic Serial Router (Lanes 2-8) ---
+    float localCloudVal = 0.0f;
+    float deSyncVal = 0.0f;
+    float alterVal = 0.0f;
+
+    for (int i = 0; i < 7; ++i) {
+        int laneNumber = processor->routingOrder[i].load();
+        if (laneNumber < 2 || laneNumber > 8) continue;
+        
+        int laneIdx = laneNumber - 2;
+        int engineType = processor->mod_engine[laneIdx] ? processor->mod_engine[laneIdx]->load() : 0;
+        float macroVal = processor->mod_macro[laneIdx] ? processor->mod_macro[laneIdx]->load() : 0.0f;
+        
+        if (engineType == 2) { // FILTER
+            float cutoff_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.5f;
+            float cutoff_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
+            float offset_param = processor->mod_p[laneIdx][1] ? processor->mod_p[laneIdx][1]->load() : 0.0f;
+            float offset_mod   = processor->mod_pMod[laneIdx][1] ? processor->mod_pMod[laneIdx][1]->load() : 0.0f;
+            float reso_param   = processor->mod_p[laneIdx][2] ? processor->mod_p[laneIdx][2]->load() : 0.2f;
+            float reso_mod     = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
+            float slope_param  = processor->mod_p[laneIdx][3] ? processor->mod_p[laneIdx][3]->load() : 0.5f;
+            float slope_mod    = processor->mod_pMod[laneIdx][3] ? processor->mod_pMod[laneIdx][3]->load() : 0.0f;
+            float morph_param  = processor->mod_p[laneIdx][4] ? processor->mod_p[laneIdx][4]->load() : 0.0f;
+            float morph_mod    = processor->mod_pMod[laneIdx][4] ? processor->mod_pMod[laneIdx][4]->load() : 0.0f;
+            
+            int typeA = processor->mod_p[laneIdx][5] ? (int)processor->mod_p[laneIdx][5]->load() : 0;
+            int typeB = processor->mod_p[laneIdx][6] ? (int)processor->mod_p[laneIdx][6]->load() : 0;
+
+            float currentCutoff = std::clamp(cutoff_param + macroVal * cutoff_mod, 0.0f, 1.0f);
+            float currentOffset = std::clamp(offset_param + macroVal * offset_mod, -1.0f, 1.0f);
+            float cutoffA_norm = std::clamp(currentCutoff - currentOffset * 0.165f, 0.0f, 1.0f);
+            float cutoffB_norm = std::clamp(currentCutoff + currentOffset * 0.165f, 0.0f, 1.0f);
+            float fcA = 50.0f * std::pow(2.0f, cutoffA_norm * 8.0f);
+            float fcB = 50.0f * std::pow(2.0f, cutoffB_norm * 8.0f);
+            float currentReso = std::clamp(reso_param + macroVal * reso_mod, 0.0f, 1.0f);
+            float currentSlope = std::clamp(slope_param + macroVal * slope_mod, 0.0f, 1.0f);
+            float currentMorph = std::clamp(morph_param + macroVal * morph_mod, 0.0f, 1.0f);
+
+            for (int p = 0; p < targetPartials; ++p) {
+                if (targetAmps[p] > 0.0f) {
+                    float multA = calculateFilterMult(freqs[p], fcA, currentReso, currentSlope, typeA);
+                    float multB = calculateFilterMult(freqs[p], fcB, currentReso, currentSlope, typeB);
+                    float filterMult = multA * (1.0f - currentMorph) + multB * currentMorph;
+                    if (filterMult > 1.0f) filterMult = 1.0f;
+                    targetAmps[p] *= filterMult;
+                }
+            }
+        }
+    }
+
+    // --- 3. Finalization (Panning & Phase Deltas) ---
+    int activePartials[512];
+    int numActivePartials = 0;
+
+    for (int p = 0; p < 512; ++p) {
+        if (p < targetPartials && targetAmps[p] > 0.0f) {
+            phaseDeltas[p] = freqs[p] / (float)currentSampleRate;
+            pL_block[p] = panLeft[p]; 
+            pR_block[p] = panRight[p];
+        } else {
+            phaseDeltas[p] = 0.0f;
+            pL_block[p] = 0.0f;
+            pR_block[p] = 0.0f;
+        }
+
+        // Send logic
+        p_send_gain[p] = 0.0f;
+
+        // Collect active partials
+        if (targetAmps[p] >= 0.0001f || smoothedAmps[p] >= 0.0001f) {
+            activePartials[numActivePartials++] = p;
+        }
+    }
+
+    // Mix into output buffers
+    float scaleFactor = 0.090f; // Level normalization per voice
+
+    for (int s = 0; s < numSamples; ++s) {
+      float envVal = adsr.getNextSample();
+      float sampleL = 0.0f;
+      float sampleR = 0.0f;
+      float prevVal = 0.0f;
+
+      // 1. Update master phase first
+      bool masterWrapped = false;
+      phases[0] += phaseDeltas[0];
+      if (phases[0] >= 1.0f) {
+        phases[0] -= 1.0f;
+        masterWrapped = true;
+      }
+
+      for (int i = 0; i < numActivePartials; ++i) {
+        int p = activePartials[i];
+        
+        // Track the dry target amplitude envelope smoothly (15ms time-constant)
+        float dry_target = targetAmps[p] * envVal;
+        smoothedAmps[p] += (dry_target - smoothedAmps[p]) * 0.15f;
+        float a = smoothedAmps[p];
+
+        // 2. Update phase for partial p
+        if (p > 0) {
+          phases[p] += phaseDeltas[p];
+          if (deSyncVal > 0.0f && masterWrapped) {
+            phases[p] = 0.0f; // Hard-sync reset!
+          } else if (phases[p] >= 1.0f) {
+            phases[p] -= 1.0f;
+          }
+        }
+
+        float modPhase = phases[p];
+
+        if (i > 0) {
+          int p_prev = activePartials[i - 1];
+          float distance = std::abs (freqs[p] - freqs[p_prev]);
+          // Normalize the distance by the fundamental frequency to make it pitch-independent
+          float normDistance = distance / currentFundamentalFreq;
+          float modIndex = (alterVal * alterVal * 1.5f * smoothedAmps[p_prev]) / (normDistance + 0.05f);
+          if (modIndex > 2.0f) modIndex = 2.0f;
+          modPhase += modIndex * prevVal;
+        }
+
+        // Sine table lookup with bitwise wrapping
+        int idx = static_cast<int>(modPhase * 32768.0f) & 32767;
+        float val = sineTable[idx];
+        prevVal = val;
+
+        float dryVal = val * a;
+
+        // FDN send routing based on harmonic index p
+        int route = 7 - (p / 32);
+        if (route < 0) route = 0;
+        if (route > 7) route = 7;
+        if (globalSendAccum[route] != nullptr) {
+          globalSendAccum[route][startSample + s] += dryVal * p_send_gain[p];
+        }
+
+        // Blend dry signal output
+        float dryMix = 1.0f - localCloudVal * 0.3f;
+        sampleL += dryVal * dryMix * pL_block[p];
+        sampleR += dryVal * dryMix * pR_block[p];
+      }
+
+      outputBuffer.addSample(0, startSample + s, sampleL * scaleFactor);
+      outputBuffer.addSample(1, startSample + s, sampleR * scaleFactor);
+
+      voiceTime += 1.0 / currentSampleRate;
+    }
+
+    if (! adsr.isActive()) {
+      clearCurrentNote();
+      voiceActive = false;
+    }
+}
+
