@@ -1084,9 +1084,13 @@ class KronosSynth {
         // Animation Particles
         this.particles = [];
         this.initParticles();
-        this.animate();
+        
+        // Setup state and event listeners first
         this.setupLaneListeners();
         this.setupDragAndDrop();
+        
+        // Start rendering loops
+        this.animate();
 
         // Initialize Audio engine setup immediately
         this.initAudio();
@@ -1853,9 +1857,7 @@ class KronosSynth {
     drawSourceCanvas() {
         const canvas = document.getElementById('source-ui-canvas');
         if (!canvas || !this.sourceCtx) return;
-        // The source panel is typically in the left panel, but could be right. Check if the parent panel is visible
-        const sourcePanel = canvas.closest('.dsp-panel');
-        if (sourcePanel && sourcePanel.closest('.dsp-edit-area').classList.contains('hidden')) return;
+        if (!document.body.contains(canvas)) return;
 
         const ctx = this.sourceCtx;
         const rect = canvas.getBoundingClientRect();
@@ -1909,7 +1911,7 @@ class KronosSynth {
     drawFilterCanvas() {
         const canvas = document.getElementById('filter-ui-canvas');
         if (!canvas || !this.filterCtx) return;
-        if (document.getElementById('filter-dsp-panel').classList.contains('hidden')) return;
+        if (!document.body.contains(canvas)) return;
         
         const ctx = this.filterCtx;
         const rect = canvas.getBoundingClientRect();
