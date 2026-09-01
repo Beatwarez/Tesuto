@@ -208,10 +208,11 @@
         <!-- SOURCE ENGINE TEMPLATE -->
         <template id="tmpl-engine-source">
             <div class="dsp-panel engine-source-panel">
-                <div class="filter-ui-canvas-container" style="display:flex; align-items:center; justify-content:center;">
-                    <div style="color:var(--fg-muted); font-family:var(--font-mono); letter-spacing:0.2vw;">SOURCE SPECTRAL MAP</div>
+                <div class="filter-ui-canvas-container">
+                    <canvas id="source-ui-canvas"></canvas>
                 </div>
-                <div class="filter-params-row" style="margin-top: 4vh;">
+                <div class="filter-morph-row" style="visibility: hidden;"></div>
+                <div class="filter-params-row">
                     <div class="knob-wrapper" data-param="mod{{LANE}}_p1">
                         <div class="custom-knob filter-knob" id="knob-mod{{LANE}}_p1">
                             <div class="knob-dial"><div class="knob-marker"></div></div>
@@ -238,6 +239,15 @@
                             <span class="knob-name-a">WIDTH</span>
                         </div>
                         <span class="knob-val" id="val-mod{{LANE}}_p3">0.00</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="mod{{LANE}}_p4" style="opacity: 0.5;">
+                        <div class="custom-knob filter-knob" id="knob-mod{{LANE}}_p4">
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names">
+                            <span class="knob-name-a">AUX</span>
+                        </div>
+                        <span class="knob-val" id="val-mod{{LANE}}_p4">0.00</span>
                     </div>
                 </div>
             </div>

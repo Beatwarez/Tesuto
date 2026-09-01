@@ -1502,6 +1502,8 @@ class KronosSynth {
         if (engineType === 'filter') {
             this.setupDynamicFilterSelectors(container, laneId);
             this.initFilterCanvas();
+        } else if (engineType === 'source') {
+            this.initSourceCanvas();
         }
     }
 
@@ -1809,6 +1811,7 @@ class KronosSynth {
         requestAnimationFrame(() => this.animate());
         this.draw();
         this.drawFilterCanvas();
+        this.drawSourceCanvas();
     }
     
     initFilterCanvas() {
@@ -1820,6 +1823,73 @@ class KronosSynth {
         canvas.height = rect.height * window.devicePixelRatio;
         this.filterCtx = canvas.getContext('2d');
         this.filterCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    
+    initSourceCanvas() {
+        const canvas = document.getElementById('source-ui-canvas');
+        if (!canvas) return;
+        const parent = canvas.parentElement;
+        const rect = parent.getBoundingClientRect();
+        canvas.width = rect.width * window.devicePixelRatio;
+        canvas.height = rect.height * window.devicePixelRatio;
+        this.sourceCtx = canvas.getContext('2d');
+        this.sourceCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    
+    drawSourceCanvas() {
+        const canvas = document.getElementById('source-ui-canvas');
+        if (!canvas || !this.sourceCtx) return;
+        // The source panel is typically in the left panel, but could be right. Check if the parent panel is visible
+        const sourcePanel = canvas.closest('.dsp-panel');
+        if (sourcePanel && sourcePanel.closest('.dsp-edit-area').classList.contains('hidden')) return;
+
+        const ctx = this.sourceCtx;
+        const rect = canvas.getBoundingClientRect();
+        const w = rect.width;
+        const h = rect.height;
+        
+        ctx.clearRect(0, 0, w, h);
+        
+        const partialsVal = this.values.mod1_p1 || 256.0;
+        const balanceVal = this.values.mod1_p2 || 0.0;
+        const widthVal = this.values.mod1_p3 || 0.0;
+        
+        // Emulate the C++ distribution math for visuals
+        const maxHarmonics = 11025.0 / 50.0; // Assume nyquist 22050 and fundamental 50Hz for visualization
+        const spacing = widthVal > 0 
+            ? 1.0 + widthVal * ((maxHarmonics / partialsVal) - 1.0)
+            : 1.0 + widthVal * (1.0 - 0.05); // shrinks to 0.05
+            
+        const clusterSpan = partialsVal * spacing;
+        let clusterStart = 1.0;
+        
+        if (balanceVal > 0) {
+            clusterStart = 1.0 + balanceVal * (maxHarmonics - clusterSpan - 1.0);
+        } else if (balanceVal < 0) {
+            clusterStart = 1.0 + balanceVal * (clusterStart - 1.0); 
+            // In C++ logic for balance < 0, it pushes it down if possible, but 1.0 is min harmonic.
+            // For visualization we just slide it slightly.
+        }
+        
+        // Draw bars
+        ctx.fillStyle = '#6495ED'; // Cornflower blue for source spectral map
+        const numDraws = Math.min(partialsVal, 512); // Prevent crazy loops if value glitches
+        
+        // We map maxHarmonics to canvas width 'w'
+        for (let i = 0; i < numDraws; i++) {
+            const hIndex = clusterStart + i * spacing;
+            const x = (hIndex / maxHarmonics) * w;
+            if (x > w) break; // Don't draw past canvas
+            
+            // Draw a subtle vertical bar for each partial
+            const barW = Math.max(1, (w / maxHarmonics) * 0.8);
+            
+            // Fade high frequency partials slightly or based on density
+            const opacity = Math.max(0.2, 1.0 - (i / partialsVal));
+            ctx.fillStyle = `rgba(100, 150, 237, ${opacity})`;
+            
+            ctx.fillRect(x, h * 0.1, barW, h * 0.8);
+        }
     }
     
     drawFilterCanvas() {
