@@ -160,7 +160,7 @@ public:
   }
 
   void renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int startSample,
-                       int numSamples) override;
+                       int numSamples) override {
     
     if (! adsrActive) {
       clearCurrentNote();
