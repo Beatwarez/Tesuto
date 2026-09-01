@@ -2099,7 +2099,7 @@ class KronosSynth {
             this.visualReverbEnv += (targetEnvelope - this.visualReverbEnv) * 0.08;
         } else {
             this.visualEnvelope += (targetEnvelope - this.visualEnvelope) * 0.012;
-            const decayTimeSeconds = 0.1 + this.values.size * this.values.size * 5.9;
+            const decayTimeSeconds = 0.1 + visual6 * visual6 * 5.9;
             const decayCoef = 1.0 - (1.0 / (decayTimeSeconds * 60.0));
             this.visualReverbEnv *= Math.max(0.9, Math.min(0.998, decayCoef));
         }
@@ -2121,7 +2121,7 @@ class KronosSynth {
                 phaseOffset += Math.PI; // Connect to opposite/distinct side of orbits for right sliders
             }
             const t = Date.now() * 0.0004 + phaseOffset;
-            const anchorRadius = maxRadius * (0.2 + orbitIdx * 0.2) * (1.0 - filter * 0.1);
+            const anchorRadius = maxRadius * (0.2 + orbitIdx * 0.2) * (1.0 - visual3 * 0.1);
             
             // Rotate anchor target on grid
             const targetX = centerX + anchorRadius * Math.cos(t);
@@ -2154,7 +2154,7 @@ class KronosSynth {
         // 1.5 Draw CLOUD background smokey light pulsation (Concept 2 - Revised)
         const intensity = visual6 * this.visualReverbEnv;
         if (intensity > 0.001) {
-            const sweepHue = (this.values.sweep * 360) % 360;
+            const sweepHue = (visual1 * 360) % 360;
             
             // Calculate organic slow pulse based on time and space drift speed
             const pulse = 1.0 + Math.sin(Date.now() * 0.003 + Math.sin(Date.now() * 0.0008) * 2) * 0.12 * (1.0 + visual4 * 1.5);
