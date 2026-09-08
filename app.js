@@ -1138,6 +1138,7 @@ class KronosSynth {
             });
 
             lane.addEventListener('dragend', () => {
+                if (!draggedLane) return;
                 lane.classList.remove('dragging');
                 lane.style.display = '';
                 lane.removeAttribute('draggable');
@@ -1150,69 +1151,81 @@ class KronosSynth {
             });
         });
 
-        const containers = [document.getElementById('lanes-left'), document.getElementById('lanes-right')];
-        containers.forEach(container => {
-            container.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                if (!draggedLane) return;
-                
-                const afterElement = this.getDragAfterElement(container, e.clientY);
-                const lane1 = document.querySelector('.mod-lane[data-lane="1"]');
-                
-                if (afterElement === lane1) {
-                    container.insertBefore(placeholder, lane1.nextSibling);
-                } else if (afterElement == null) {
-                    container.appendChild(placeholder);
-                } else {
-                    container.insertBefore(placeholder, afterElement);
-                }
-                
-                // Rebalance across columns to ensure exactly 4 lanes on each side
-                const leftContainer = document.getElementById('lanes-left');
-                const rightContainer = document.getElementById('lanes-right');
-                const currentLeft = Array.from(leftContainer.querySelectorAll('.mod-lane:not(.dragging):not([data-lane="1"]), .drag-placeholder'));
-                const currentRight = Array.from(rightContainer.querySelectorAll('.mod-lane:not(.dragging):not([data-lane="1"]), .drag-placeholder'));
-                
-                if (currentLeft.length !== 3) {
-                    const allLanes = [...currentLeft, ...currentRight];
-                    if (leftContainer.children[0] !== lane1) leftContainer.insertBefore(lane1, leftContainer.firstChild);
-                    
-                    for (let i = 0; i < 3; i++) {
-                        if (i < allLanes.length) {
-                            const expectedNode = allLanes[i];
-                            if (leftContainer.children[i + 1] !== expectedNode) {
-                                leftContainer.insertBefore(expectedNode, leftContainer.children[i + 1]);
-                            }
-                        }
-                    }
-                    for (let i = 3; i < 7; i++) {
-                        if (i < allLanes.length) {
-                            const expectedNode = allLanes[i];
-                            if (rightContainer.children[i - 3] !== expectedNode) {
-                                rightContainer.insertBefore(expectedNode, rightContainer.children[i - 3]);
-                            }
-                        }
-                    }
-                }
-            });
-            
-            container.addEventListener('drop', (e) => {
-                e.preventDefault();
-            });
-        });
-    }
+        document.addEventListener('dragover', (e) => {
+            if (!draggedLane) return;
+            e.preventDefault();
 
-    getDragAfterElement(container, y) {
-        const draggableElements = [...container.querySelectorAll('.mod-lane:not(.dragging)')];
-        return draggableElements.reduce((closest, child) => {
-            const box = child.getBoundingClientRect();
-            const offset = y - box.top - box.height / 2;
-            if (offset < 0 && offset > closest.offset) {
-                return { offset: offset, element: child };
+            const leftContainer = document.getElementById('lanes-left');
+            const rightContainer = document.getElementById('lanes-right');
+
+            // Collect all draggable elements
+            const allStaticLanes = Array.from(document.querySelectorAll('.mod-lane:not(.dragging):not([data-lane="1"])'));
+            
+            // Find the closest element based on Y position (and X column)
+            let closestNode = null;
+            let closestOffset = Number.NEGATIVE_INFINITY;
+            
+            // Check if we are over the left or right column
+            const isLeftColumn = e.clientX < window.innerWidth / 2;
+
+            allStaticLanes.forEach(child => {
+                const box = child.getBoundingClientRect();
+                const childIsLeft = box.left < window.innerWidth / 2;
+                
+                if (isLeftColumn === childIsLeft) {
+                    const offset = e.clientY - box.top - box.height / 2;
+                    if (offset < 0 && offset > closestOffset) {
+                        closestOffset = offset;
+                        closestNode = child;
+                    }
+                }
+            });
+
+            // Insert placeholder in the correct column based on hover
+            const targetContainer = isLeftColumn ? leftContainer : rightContainer;
+            
+            if (closestNode) {
+                targetContainer.insertBefore(placeholder, closestNode);
             } else {
-                return closest;
+                targetContainer.appendChild(placeholder);
             }
-        }, { offset: Number.NEGATIVE_INFINITY }).element;
+
+            // Immediately enforce the 4/4 layout by shifting lanes left-to-right
+            const lane1 = document.querySelector('.mod-lane[data-lane="1"]');
+            
+            // 1. Gather the unified sequence of 7 dynamic lanes
+            const dynamicLanesLeft = Array.from(leftContainer.querySelectorAll('.mod-lane:not(.dragging):not([data-lane="1"]), .drag-placeholder'));
+            const dynamicLanesRight = Array.from(rightContainer.querySelectorAll('.mod-lane:not(.dragging):not([data-lane="1"]), .drag-placeholder'));
+            const unifiedSequence = [...dynamicLanesLeft, ...dynamicLanesRight];
+
+            // 2. Ensure Lane 1 is at the top of left
+            if (leftContainer.firstChild !== lane1 && lane1) {
+                leftContainer.insertBefore(lane1, leftContainer.firstChild);
+            }
+
+            // 3. Re-distribute the sequence (3 on left, 4 on right)
+            for (let i = 0; i < 3; i++) {
+                if (i < unifiedSequence.length) {
+                    const node = unifiedSequence[i];
+                    if (leftContainer.children[i + 1] !== node) {
+                        leftContainer.insertBefore(node, leftContainer.children[i + 1] || null);
+                    }
+                }
+            }
+
+            for (let i = 3; i < 7; i++) {
+                if (i < unifiedSequence.length) {
+                    const node = unifiedSequence[i];
+                    if (rightContainer.children[i - 3] !== node) {
+                        rightContainer.insertBefore(node, rightContainer.children[i - 3] || null);
+                    }
+                }
+            }
+        });
+
+        document.addEventListener('drop', (e) => {
+            if (draggedLane) e.preventDefault();
+        });
     }
 
     updateRoutingOrder() {
