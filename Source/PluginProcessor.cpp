@@ -404,14 +404,22 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     float width_param    = processor->mod1_p[2] ? processor->mod1_p[2]->load() : 0.0f;
     float width_mod      = processor->mod1_pMod[2] ? processor->mod1_pMod[2]->load() : 0.0f;
 
+    float pitch_param    = processor->mod1_p[3] ? processor->mod1_p[3]->load() : 0.0f;
+    float pitch_mod      = processor->mod1_pMod[3] ? processor->mod1_pMod[3]->load() : 0.0f;
+
     float sourceMacro    = processor->mod1_macro ? processor->mod1_macro->load() : 0.0f;
 
     float currentPartials = std::clamp(partials_param + sourceMacro * partials_mod * 512.0f, 1.0f, 512.0f);
     float currentBalance  = std::clamp(balance_param + sourceMacro * balance_mod, -1.0f, 1.0f);
     float currentWidth    = std::clamp(width_param + sourceMacro * width_mod, -1.0f, 1.0f);
+    float currentPitch    = std::clamp(pitch_param + sourceMacro * pitch_mod, -1.0f, 1.0f) * 36.0f; // Scale -1.0 to 1.0 -> -36 to 36 semitones
+    
+    // Convert currentPitch from semitones to frequency multiplier
+    float pitchMult = std::pow(2.0f, currentPitch / 12.0f);
+    float renderFreq = currentFundamentalFreq * pitchMult;
 
     int targetPartials = (int)currentPartials;
-    float maxHarmonics = ((float)currentSampleRate / 2.0f) / currentFundamentalFreq;
+    float maxHarmonics = ((float)currentSampleRate / 2.0f) / renderFreq;
     if (maxHarmonics < 1.0f) maxHarmonics = 1.0f;
     
     float spacing = 1.0f;
@@ -441,7 +449,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     for (int p = 0; p < 512; ++p) {
         if (p < targetPartials) {
             float virtualHarmonicIndex = clusterStart + (float)p * spacing;
-            freqs[p] = currentFundamentalFreq * virtualHarmonicIndex;
+            freqs[p] = renderFreq * virtualHarmonicIndex;
             
             if (freqs[p] >= currentSampleRate * 0.49f) {
                 targetAmps[p] = 0.0f;

@@ -1377,6 +1377,8 @@ class KronosSynth {
         
         if (param === 'attack' || param === 'decay' || param === 'release') {
             displayVal += 's';
+        } else if (param === 'mod1_p4') {
+            displayVal = (val > 0 ? '+' : '') + displayVal + ' st';
         }
         
         const displayEl = document.getElementById(`val-${param}`);
@@ -1444,6 +1446,8 @@ class KronosSynth {
             let displayVal = val.toFixed(2);
             if (param === 'attack' || param === 'decay' || param === 'release') {
                 displayVal += 's';
+            } else if (param === 'mod1_p4') {
+                displayVal = (val > 0 ? '+' : '') + displayVal + ' st';
             }
             const valDisplay = document.getElementById(`val-${param}`);
             if (valDisplay) {

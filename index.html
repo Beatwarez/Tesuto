@@ -21,7 +21,7 @@
                 <span class="tagline">drone synthesis laboratory</span>
             </div>
             <div class="header-right">
-                <span class="build-version">BUILD #0.09</span>
+                <span class="build-version">BUILD #0.10</span>
             </div>
         </header>
 
@@ -253,14 +253,14 @@
                         </div>
                         <span class="knob-val" id="val-mod{{LANE}}_p3">0.00</span>
                     </div>
-                    <div class="knob-wrapper" data-param="mod{{LANE}}_p4" style="opacity: 0.5;">
-                        <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p4" data-mod-param="mod{{LANE}}_p4_mod">
+                    <div class="knob-wrapper" data-param="mod{{LANE}}_p4">
+                        <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-mod{{LANE}}_p4" data-min="-36" data-max="36" data-default="0" data-bipolar="true" data-mod-param="mod{{LANE}}_p4_mod">
                             <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
                             <div class="knob-dial"><div class="knob-marker"></div></div>
                         </div>
                         <div class="knob-names">
-                            <span class="knob-name-a">AUX</span>
-                            <span class="knob-name-b">AUX</span>
+                            <span class="knob-name-a">PITCH</span>
+                            <span class="knob-name-b">PITCH</span>
                         </div>
                         <span class="knob-val" id="val-mod{{LANE}}_p4">0.00</span>
                     </div>
@@ -353,6 +353,7 @@
             <div class="filter-ui-canvas-container">
                 <canvas id="form-ui-canvas-{{LANE}}"></canvas>
             </div>
+            <div class="filter-morph-row" style="visibility: hidden;"></div>
             <div class="filter-params-row">
                 <div class="knob-wrapper" data-param="mod{{LANE}}_p1">
                     <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p1" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_p1_mod">
