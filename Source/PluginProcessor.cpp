@@ -35,7 +35,7 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_macro", 1), "mod" + mStr + "_macro", 0.0f, 1.0f, 0.0f));
         for (int p = 1; p <= 8; ++p) {
             juce::String pStr = juce::String(p);
-            layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr, 1), "mod" + mStr + "_p" + pStr, -1.0f, 1.0f, 0.0f));
+            layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr, 1), "mod" + mStr + "_p" + pStr, -10.0f, 10.0f, 0.0f));
             layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr + "_mod", 1), "mod" + mStr + "_p" + pStr + "_mod", -1.0f, 1.0f, 0.0f));
         }
     }
@@ -323,13 +323,22 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         mainR[s] += wetR;
     }
 
-    // Master Saturation (tanh) to prevent clipping
+    // Master Limiter (Transparent Soft Clipping above -4dB threshold)
+    const float threshold = 0.630957f; // -4 dB
+    const float headroom = 1.0f - threshold;
+    
     for (int channel = 0; channel < totalNumOutputChannels; ++channel)
     {
         auto* channelData = buffer.getWritePointer (channel);
         for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
         {
-            channelData[sample] = std::tanh (channelData[sample]);
+            float val = channelData[sample];
+            float absVal = std::abs(val);
+            if (absVal > threshold) {
+                float excess = absVal - threshold;
+                float clipped = threshold + headroom * std::tanh(excess / headroom);
+                channelData[sample] = (val > 0.0f) ? clipped : -clipped;
+            }
         }
     }
 }
