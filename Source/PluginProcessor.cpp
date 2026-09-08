@@ -502,6 +502,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             for (int p = 0; p < targetPartials; ++p) {
                 float stretch = currentWarp * currentWarp * 3.5f * std::sin((float)(p + 1) * 1.57f + (float)p * 0.1f);
                 freqs[p] += currentFundamentalFreq * stretch;
+                if (freqs[p] < 0.0f) freqs[p] = std::abs(freqs[p]); // Prevent negative frequencies (NaN filter math crash)
             }
         }
     }
@@ -511,6 +512,10 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     int numActivePartials = 0;
 
     for (int p = 0; p < 512; ++p) {
+        if (freqs[p] >= currentSampleRate * 0.49f) {
+            targetAmps[p] = 0.0f; // Prevent aliasing
+        }
+        
         if (p < targetPartials && targetAmps[p] > 0.0f) {
             targetAmps[p] = std::min(targetAmps[p], 0.5f); // -6 dB hard limit
             phaseDeltas[p] = freqs[p] / (float)currentSampleRate;
