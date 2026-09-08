@@ -1364,6 +1364,10 @@ class KronosSynth {
     }
 
     updateParamFromCpp(param, val) {
+        // ALWAYS update the canonical state first!
+        // This ensures the value is saved even if the UI element is not currently mounted.
+        this.values[param] = val;
+
         if (param === 'ui_active_left') {
             const laneId = Math.round(val);
             this.activeLeftFocus = laneId === 0 ? null : laneId;
@@ -1380,7 +1384,6 @@ class KronosSynth {
         }
         
         if (this.sliders[param] && !this.sliders[param].isDragging) {
-            this.values[param] = val;
             const valDisplay = document.getElementById(`val-${param}`);
             if (valDisplay) {
                 if (param === 'pitch') {
@@ -1403,7 +1406,6 @@ class KronosSynth {
             this.sliders[param].value = val;
             this.sliders[param].updateUI();
         } else if (this.knobs[param] && !this.knobs[param].isDragging) {
-            this.values[param] = val;
             let displayVal = val.toFixed(2);
             if (param === 'attack' || param === 'decay' || param === 'release') {
                 displayVal += 's';
@@ -1415,20 +1417,16 @@ class KronosSynth {
             this.knobs[param].value = val;
             this.knobs[param].updateUI();
         } else if (param === 'filterTypeA') {
-            this.values.filterTypeA = val;
             const typeALabel = document.querySelector('#filter-type-a .type-label');
             if (typeALabel) typeALabel.textContent = this.filterTypes[Math.round(val)];
             this.updateFilterLabels();
         } else if (param === 'filterTypeB') {
-            this.values.filterTypeB = val;
             const typeBLabel = document.querySelector('#filter-type-b .type-label');
             if (typeBLabel) typeBLabel.textContent = this.filterTypes[Math.round(val)];
             this.updateFilterLabels();
         } else if (param === 'filterMorphMod') {
-            this.values.filterMorphMod = val;
             if (this.sliders.filterMorph) this.sliders.filterMorph.updateModLine();
         } else if (param.endsWith('_mod')) {
-            this.values[param] = val;
             const baseParam = param.replace('_mod', '');
             if (this.knobs[baseParam]) this.knobs[baseParam].updateModArc();
         } else if (param.endsWith('_engine')) {
