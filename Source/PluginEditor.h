@@ -73,7 +73,15 @@ public:
                 {
                     juce::String paramName = args[0].toString();
                     float paramValue = (float)args[1];
-                    logToFile ("C++: Received Parameter: " + paramName + " = " + juce::String (paramValue));
+
+                    if (paramName == "js_ready")
+                    {
+                        for (auto& pair : webViewInstance->localParams) {
+                            pair.second = -999.0f; // Force full re-sync for UI initialization
+                        }
+                        completion (juce::var (true));
+                        return;
+                    }
 
                     if (paramName == "queryall")
                     {

@@ -1226,6 +1226,11 @@ class KronosSynth {
         document.addEventListener('drop', (e) => {
             if (draggedLane) e.preventDefault();
         });
+        
+        // Signal to C++ that JS is ready to receive full parameter state
+        setTimeout(() => {
+            this.sendParamToCpp("js_ready", 1.0);
+        }, 50);
     }
 
     updateRoutingOrder() {
