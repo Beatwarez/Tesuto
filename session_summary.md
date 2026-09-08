@@ -1,6 +1,6 @@
 # Session Summary: CPU Optimization, Timbre Refinement, ALTER & CLOUD Reverb, and Hard-Sync
 
-This document provides a comprehensive summary of all progress, DSP changes, and synchronization fixes made up to the Hard-Sync & Parameter Renaming update.
+This document provides a comprehensive summary of all progress, DSP changes, and synchronization fixes made up to the UI Drag/Drop and Source Fixes update.
 
 ---
 
@@ -47,6 +47,13 @@ This document provides a comprehensive summary of all progress, DSP changes, and
 ### Visualizer Note Sync Fix
 * **Active Notes Cache**: Relocated the editor active notes cache to the WebView, resetting it during `"queryall"` initialization. This guarantees that opening the editor while a note plays displays visualizer movements immediately.
 
+### UI Drag & Drop Refinements and Source Parameter Fixes
+* **Drag Handles**: Removed lane number texts (`02`, `03`) and replaced them with `⇿` drag handles centered above lane names. Rearranging lanes is now strictly bound to the drag handles to prevent accidental slider modifications.
+* **Smooth Drop Animation**: Implemented a CSS/JS invisible placeholder system to smoothly part UI lanes when hovering them with a dragged lane, rather than jarring direct DOM snaps.
+* **Locked Source Lane**: Added safety checks in JavaScript to prevent any lane from being dropped above Lane 1 (Source).
+* **Source Engine Parameter Sync**: Restored C++ APVTS initialization constraints for the Source engine (Partials to `1.0f - 512.0f`, Balance/Width/Aux to `-1.0f - 1.0f`). Pushed dynamic data attributes (`data-min`, `data-max`, `data-default`) to the Javascript UI so the frontend automatically adapts to bipolar or custom-range sliders.
+* **Unified UI Visualizer Colors**: Changed the Source engine's spectral map fill color from Cornflower Blue to the standard Light Gray (`#d1d1d6`) used across all other engines for visual consistency.
+
 ---
 
 ## 2. Serialized Code Backups
@@ -55,6 +62,7 @@ All backups are saved as zipped archives inside the workspace under the `.\backu
 * **[source_backup_42.zip](file:///c:/Dropbox/DSP/JUCE_projects/Tesuto/backup/source_backup_42.zip)**: Pre-modification state for Build #42 (C++ & JS).
 * **[source_backup_43.zip](file:///c:/Dropbox/DSP/JUCE_projects/Tesuto/backup/source_backup_43.zip)**: Pre-modification state for Build #44 (C++ & JS).
 * **[source_backup_44.zip](file:///c:/Dropbox/DSP/JUCE_projects/Tesuto/backup/source_backup_44.zip)**: Pre-modification state for Build #45 (C++ & JS).
+* **[source_backup_2026-09-05.zip](file:///c:/Dropbox/DSP/JUCE_projects/Tesuto/backup/source_backup_2026-09-05.zip)**: Serialized state after Drag/Drop mechanics, Source APVTS parameter sync, and visualizer graph fixes (2026-09-05).
 
 ---
 
@@ -72,16 +80,16 @@ All backups are saved as zipped archives inside the workspace under the `.\backu
 * **Build #53**: Cloud build containing visualizer extensions: ALTER geometric web (Concept 3) and CLOUD background smokey pulsation (Concept 2 - Revised) with SWEEP hue color tracking.
 * **Build #54 (Renaming update)**: Successful push containing parameter renames (FORM and PITCH) and visualizer notes sync fix.
 * **Build #55 (Hard-sync & Resets)**: Successful push containing double-click resets, Concept 1: Direct Phase-Reset hard-sync, and crystalline polygonal visualizer morphing.
+* **Build #56 (UI & Source Fixes)**: Successful push containing `⇿` drag handles, placeholder animations, Source engine parameter clamping patches, and unified visualizer graph colors.
 
 ---
 
 ## 4. Current Status & Next Steps
-* **Status**: Complete hard-sync, parameter renames, note sync fix, and double-click resetting pushed to GitHub.
+* **Status**: Drag/Drop visual refinements, Source engine APVTS parameter sync, and unified graph color fixes are fully implemented and pushed to GitHub. A backup archive has been serialized for 2026-09-05.
 * **Next Steps**: Await cloud build completion, download the updated installer, and manually verify:
-  1. Double-clicking any slider/knob resets it.
-  2. Opening the editor while a note plays displays visualizer movements immediately.
-  3. `DE-SYNC` creates an aggressive analog saw-sync sweep.
-  4. At maximum `DE-SYNC`, visualizer orbits morph into crystalline polygonal shapes, and a shockwave ring continuously expands.
+  1. Dragging lanes by the `⇿` handle smoothly shifts other lanes with the animated placeholder.
+  2. Modulators cannot be dropped before Lane 1 (Source).
+  3. Source engine visualizer reacts correctly to bipolar (Balance/Width) parameters without zero-clamping.
 
 ---
 
@@ -120,4 +128,17 @@ All backups are saved as zipped archives inside the workspace under the `.\backu
   * Synchronized Worklet slave frequency scaling and master-slave phase resets.
   * Morphed visualizer orbits to regular polygons (triangles, squares, pentagons) using polar `polyFactor` based on `desync`.
   * Drew expanding shockwave ring to represent phase resets.
+
+### Implementation Plan #56 - UI Drag/Drop & Source Fixes
+* **Goal**: Fix the UI lane dragging that intercepted parameter changes, lock Lane 1, and synchronize the UI constraints with the C++ backend for the Source engine.
+* **C++ Changes**:
+  * Initialized APVTS `mod1_p1` to native `1.0f`–`512.0f` scale (default 256).
+  * Initialized `mod1_p2` (Balance), `mod1_p3` (Width), `mod1_p4` (Aux) to bipolar `-1.0f` to `1.0f`.
+  * Removed raw `511.0f` scaling in `renderNextBlock` to accept raw 1-512 input natively.
+* **JS/HTML Changes**:
+  * Swapped `<span class="slider-num">` for `<div class="drag-handle">⇿</div>`.
+  * Removed static `draggable="true"` from lanes, toggling it dynamically on `mousedown` on the drag handle.
+  * Added a `.drag-placeholder` DOM node logic to seamlessly allocate visual space during HTML5 drag-and-drop.
+  * Added `data-min`, `data-max`, and `data-default` to HTML templates and updated `injectEngineUI()` to respect them when instantiating custom knobs.
+  * Standardized `drawSourceCanvas()` fill color to `#d1d1d6` for UI consistency.
 

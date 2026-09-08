@@ -227,6 +227,7 @@ public:
   // Generic Parameter Matrix Pointers
   std::atomic<float>* mod1_macro = nullptr;
   std::atomic<float>* mod1_p[8] = { nullptr };
+  std::atomic<float>* mod1_pMod[8] = { nullptr };
 
   std::atomic<float>* mod_engine[7] = { nullptr };
   std::atomic<float>* mod_macro[7] = { nullptr };

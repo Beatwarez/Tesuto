@@ -1166,6 +1166,34 @@ class KronosSynth {
                 } else {
                     container.insertBefore(placeholder, afterElement);
                 }
+                
+                // Rebalance across columns to ensure exactly 4 lanes on each side
+                const leftContainer = document.getElementById('lanes-left');
+                const rightContainer = document.getElementById('lanes-right');
+                const currentLeft = Array.from(leftContainer.querySelectorAll('.mod-lane:not(.dragging):not([data-lane="1"]), .drag-placeholder'));
+                const currentRight = Array.from(rightContainer.querySelectorAll('.mod-lane:not(.dragging):not([data-lane="1"]), .drag-placeholder'));
+                
+                if (currentLeft.length !== 3) {
+                    const allLanes = [...currentLeft, ...currentRight];
+                    if (leftContainer.children[0] !== lane1) leftContainer.insertBefore(lane1, leftContainer.firstChild);
+                    
+                    for (let i = 0; i < 3; i++) {
+                        if (i < allLanes.length) {
+                            const expectedNode = allLanes[i];
+                            if (leftContainer.children[i + 1] !== expectedNode) {
+                                leftContainer.insertBefore(expectedNode, leftContainer.children[i + 1]);
+                            }
+                        }
+                    }
+                    for (let i = 3; i < 7; i++) {
+                        if (i < allLanes.length) {
+                            const expectedNode = allLanes[i];
+                            if (rightContainer.children[i - 3] !== expectedNode) {
+                                rightContainer.insertBefore(expectedNode, rightContainer.children[i - 3]);
+                            }
+                        }
+                    }
+                }
             });
             
             container.addEventListener('drop', (e) => {
@@ -1308,6 +1336,14 @@ class KronosSynth {
         this.values[param] = val;
         
         let displayVal = val.toFixed(2);
+        const knobEl = document.getElementById(`knob-${param}`);
+        if (knobEl && knobEl.hasAttribute('data-step')) {
+            const step = parseFloat(knobEl.getAttribute('data-step'));
+            if (Number.isInteger(step)) {
+                displayVal = Math.round(val).toString();
+            }
+        }
+        
         if (param === 'attack' || param === 'decay' || param === 'release') {
             displayVal += 's';
         }
@@ -1328,6 +1364,21 @@ class KronosSynth {
     }
 
     updateParamFromCpp(param, val) {
+        if (param === 'ui_active_left') {
+            const laneId = Math.round(val);
+            this.activeLeftFocus = laneId === 0 ? null : laneId;
+            this.updateToggleUI();
+            this.renderSidePanels();
+            return;
+        }
+        if (param === 'ui_active_right') {
+            const laneId = Math.round(val);
+            this.activeRightFocus = laneId === 0 ? null : laneId;
+            this.updateToggleUI();
+            this.renderSidePanels();
+            return;
+        }
+        
         if (this.sliders[param] && !this.sliders[param].isDragging) {
             this.values[param] = val;
             const valDisplay = document.getElementById(`val-${param}`);
@@ -1336,7 +1387,17 @@ class KronosSynth {
                     const pitchVal = (val - 0.5) * 24.0;
                     valDisplay.textContent = (pitchVal > 0 ? '+' : '') + pitchVal.toFixed(2);
                 } else {
-                    valDisplay.textContent = val.toFixed(2);
+                    const knobEl = document.getElementById(`knob-${param}`);
+                    if (knobEl && knobEl.hasAttribute('data-step')) {
+                        const step = parseFloat(knobEl.getAttribute('data-step'));
+                        if (Number.isInteger(step)) {
+                            valDisplay.textContent = Math.round(val).toString();
+                        } else {
+                            valDisplay.textContent = val.toFixed(2);
+                        }
+                    } else {
+                        valDisplay.textContent = val.toFixed(2);
+                    }
                 }
             }
             this.sliders[param].value = val;
@@ -1463,8 +1524,10 @@ class KronosSynth {
                     const isLeft = lane.closest('#lanes-left') !== null;
                     if (isLeft) {
                         this.activeLeftFocus = (this.activeLeftFocus === laneId) ? null : laneId;
+                        this.sendParamToCpp('ui_active_left', this.activeLeftFocus || 0);
                     } else {
                         this.activeRightFocus = (this.activeRightFocus === laneId) ? null : laneId;
+                        this.sendParamToCpp('ui_active_right', this.activeRightFocus || 0);
                     }
                     this.updateToggleUI();
                     this.renderSidePanels();
@@ -1937,7 +2000,8 @@ class KronosSynth {
         }
         
         // Draw bars
-        ctx.fillStyle = '#d1d1d6'; // Light gray for engine consistency
+        const computedGray = getComputedStyle(document.documentElement).getPropertyValue('--fg-main').trim() || '#e0e0e6';
+        ctx.fillStyle = computedGray;
         const numDraws = Math.min(partialsVal, 512); // Prevent crazy loops if value glitches
         
         // We map maxHarmonics to canvas width 'w'
