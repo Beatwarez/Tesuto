@@ -1678,9 +1678,11 @@ class KronosSynth {
             }
             
             this.knobs[paramId] = new CustomKnob(
-                `knob-${paramId}`, min, max, this.values[paramId], isBipolar, false,
+                `knob-${paramId}`, min, max, defaultVal, isBipolar, false,
                 (v) => this.onKnobChange(paramId, v)
             );
+            this.knobs[paramId].value = this.values[paramId];
+            this.knobs[paramId].updateUI();
             
             // Explicitly update label text upon creation so it isn't left at 0.00
             const valDisplay = document.getElementById(`val-${paramId}`);
@@ -2190,7 +2192,7 @@ class KronosSynth {
                 let denom = Math.pow(D, n * 0.5);
                 if (denom < 0.000001) denom = 0.000001;
                 if (type === 0) return 1.0 / denom;
-                if (type === 1) return Math.pow(x / q, n) / denom;
+                if (type === 1) return (Math.pow(x / q, n) / denom) * (1.0 + rawReso * rawReso * 10.0);
                 if (type === 2) return Math.pow(x2, n) / denom;
                 if (type === 3) return Math.pow(Math.abs(1.0 - x2), n) / denom;
             }

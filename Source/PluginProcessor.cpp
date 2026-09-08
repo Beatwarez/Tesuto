@@ -325,7 +325,8 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
     // Master Limiter (Transparent Soft Clipping above -4dB threshold)
     const float threshold = 0.630957f; // -4 dB
-    const float headroom = 1.0f - threshold;
+    const float ceiling = 0.89125f; // -1 dB
+    const float headroom = ceiling - threshold;
     
     for (int channel = 0; channel < totalNumOutputChannels; ++channel)
     {
@@ -559,7 +560,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     }
 
     // Mix into output buffers
-    float scaleFactor = 0.3981f; // Fixed -8dB attenuation
+    float scaleFactor = 0.2818f; // Fixed -11dB attenuation
 
     for (int s = 0; s < numSamples; ++s) {
       float envVal = adsr.getNextSample();
