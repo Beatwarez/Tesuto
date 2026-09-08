@@ -21,7 +21,7 @@
                 <span class="tagline">drone synthesis laboratory</span>
             </div>
             <div class="header-right">
-                <span class="build-version">BUILD #0.10</span>
+                <span class="build-version">BUILD #0.11</span>
             </div>
         </header>
 
@@ -35,7 +35,7 @@
                         <span class="slider-name">SOURCE</span>
                         <span class="slider-val" id="val-mod1_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-mod1_macro">
+                    <div class="custom-slider" id="slider-mod1_macro" data-min="0" data-max="1" data-default="0">
                         <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
                     <div class="dsp-edit-toggle" data-target="mod1"></div>
@@ -57,7 +57,7 @@
                         </select>
                         <span class="slider-val" id="val-mod2_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-mod2_macro">
+                    <div class="custom-slider" id="slider-mod2_macro" data-min="0" data-max="1" data-default="0">
                         <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
                     <div class="dsp-edit-toggle" data-target="mod2"></div>
@@ -79,7 +79,7 @@
                         </select>
                         <span class="slider-val" id="val-mod3_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-mod3_macro">
+                    <div class="custom-slider" id="slider-mod3_macro" data-min="0" data-max="1" data-default="0">
                         <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
                     <div class="dsp-edit-toggle" data-target="mod3"></div>
@@ -101,7 +101,7 @@
                         </select>
                         <span class="slider-val" id="val-mod4_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-mod4_macro">
+                    <div class="custom-slider" id="slider-mod4_macro" data-min="0" data-max="1" data-default="0">
                         <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
                     <div class="dsp-edit-toggle" data-target="mod4"></div>
@@ -132,7 +132,7 @@
                         </select>
                         <span class="slider-val" id="val-mod5_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-mod5_macro">
+                    <div class="custom-slider" id="slider-mod5_macro" data-min="0" data-max="1" data-default="0">
                         <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
                     <div class="dsp-edit-toggle" data-target="mod5"></div>
@@ -154,7 +154,7 @@
                         </select>
                         <span class="slider-val" id="val-mod6_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-mod6_macro">
+                    <div class="custom-slider" id="slider-mod6_macro" data-min="0" data-max="1" data-default="0">
                         <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
                     <div class="dsp-edit-toggle" data-target="mod6"></div>
@@ -176,7 +176,7 @@
                         </select>
                         <span class="slider-val" id="val-mod7_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-mod7_macro">
+                    <div class="custom-slider" id="slider-mod7_macro" data-min="0" data-max="1" data-default="0">
                         <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
                     <div class="dsp-edit-toggle" data-target="mod7"></div>
@@ -198,7 +198,7 @@
                         </select>
                         <span class="slider-val" id="val-mod8_macro">0.00</span>
                     </div>
-                    <div class="custom-slider" id="slider-mod8_macro">
+                    <div class="custom-slider" id="slider-mod8_macro" data-min="0" data-max="1" data-default="0">
                         <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
                     </div>
                     <div class="dsp-edit-toggle" data-target="mod8"></div>
@@ -227,7 +227,6 @@
                         </div>
                         <div class="knob-names">
                             <span class="knob-name-a">PARTIALS</span>
-                            <span class="knob-name-b">PARTIALS</span>
                         </div>
                         <span class="knob-val" id="val-mod{{LANE}}_p1">256</span>
                     </div>
@@ -238,7 +237,6 @@
                         </div>
                         <div class="knob-names">
                             <span class="knob-name-a">BALANCE</span>
-                            <span class="knob-name-b">BALANCE</span>
                         </div>
                         <span class="knob-val" id="val-mod{{LANE}}_p2">0.00</span>
                     </div>
@@ -249,18 +247,16 @@
                         </div>
                         <div class="knob-names">
                             <span class="knob-name-a">WIDTH</span>
-                            <span class="knob-name-b">WIDTH</span>
                         </div>
                         <span class="knob-val" id="val-mod{{LANE}}_p3">0.00</span>
                     </div>
                     <div class="knob-wrapper" data-param="mod{{LANE}}_p4">
-                        <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-mod{{LANE}}_p4" data-min="-36" data-max="36" data-default="0" data-bipolar="true" data-mod-param="mod{{LANE}}_p4_mod">
+                        <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-mod{{LANE}}_p4" data-min="-1" data-max="1" data-default="0" data-bipolar="true" data-mod-param="mod{{LANE}}_p4_mod">
                             <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
                             <div class="knob-dial"><div class="knob-marker"></div></div>
                         </div>
                         <div class="knob-names">
                             <span class="knob-name-a">PITCH</span>
-                            <span class="knob-name-b">PITCH</span>
                         </div>
                         <span class="knob-val" id="val-mod{{LANE}}_p4">0.00</span>
                     </div>
@@ -362,7 +358,6 @@
                     </div>
                     <div class="knob-names">
                         <span class="knob-name-a">WARP</span>
-                        <span class="knob-name-b">WARP</span>
                     </div>
                     <span class="knob-val" id="val-mod{{LANE}}_p1">0.00</span>
                 </div>
@@ -373,7 +368,6 @@
                     </div>
                     <div class="knob-names">
                         <span class="knob-name-a">P2</span>
-                        <span class="knob-name-b">P2</span>
                     </div>
                     <span class="knob-val" id="val-mod{{LANE}}_p2">0.00</span>
                 </div>
@@ -384,7 +378,6 @@
                     </div>
                     <div class="knob-names">
                         <span class="knob-name-a">P3</span>
-                        <span class="knob-name-b">P3</span>
                     </div>
                     <span class="knob-val" id="val-mod{{LANE}}_p3">0.00</span>
                 </div>
@@ -395,7 +388,6 @@
                     </div>
                     <div class="knob-names">
                         <span class="knob-name-a">P4</span>
-                        <span class="knob-name-b">P4</span>
                     </div>
                     <span class="knob-val" id="val-mod{{LANE}}_p4">0.00</span>
                 </div>

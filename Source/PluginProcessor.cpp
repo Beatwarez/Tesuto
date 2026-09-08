@@ -14,7 +14,7 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     // Routing Order is stored directly in value tree or handled outside APVTS since AudioParameterString doesn't exist in base JUCE
     
     // Modulator 1 (Source)
-    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_macro", 1), "mod1_macro", 0.0f, 1.0f, 0.5f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_macro", 1), "mod1_macro", 0.0f, 1.0f, 0.0f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p1", 1), "mod1_p1", juce::NormalisableRange<float>(1.0f, 512.0f, 1.0f, 1.0f), 256.0f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p1_mod", 1), "mod1_p1_mod", -1.0f, 1.0f, 0.0f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p2", 1), "mod1_p2", -1.0f, 1.0f, 0.0f));
@@ -32,7 +32,7 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     for (int m = 2; m <= 8; ++m) {
         juce::String mStr = juce::String(m);
         layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_engine", 1), "mod" + mStr + "_engine", 0.0f, 10.0f, 0.0f));
-        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_macro", 1), "mod" + mStr + "_macro", 0.0f, 1.0f, 0.5f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_macro", 1), "mod" + mStr + "_macro", 0.0f, 1.0f, 0.0f));
         for (int p = 1; p <= 8; ++p) {
             juce::String pStr = juce::String(p);
             layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr, 1), "mod" + mStr + "_p" + pStr, -1.0f, 1.0f, 0.0f));
@@ -424,7 +424,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     
     float spacing = 1.0f;
     if (currentWidth > 0.0f) {
-        float maxWidthSpacing = maxHarmonics / (float)targetPartials;
+        float maxWidthSpacing = std::max(1.0f, maxHarmonics / (float)targetPartials);
         spacing = 1.0f + currentWidth * (maxWidthSpacing - 1.0f);
     } else if (currentWidth < 0.0f) {
         spacing = 1.0f + currentWidth * 0.95f; // shrinks to 0.05
