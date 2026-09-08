@@ -36,7 +36,7 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         for (int p = 1; p <= 8; ++p) {
             juce::String pStr = juce::String(p);
             layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr, 1), "mod" + mStr + "_p" + pStr, -1.0f, 1.0f, 0.0f));
-            layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr + "Mod", 1), "mod" + mStr + "_p" + pStr + "Mod", -1.0f, 1.0f, 0.0f));
+            layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr + "_mod", 1), "mod" + mStr + "_p" + pStr + "_mod", -1.0f, 1.0f, 0.0f));
         }
     }
     
@@ -94,7 +94,7 @@ KronosAudioProcessor::KronosAudioProcessor()
         for (int p = 1; p <= 8; ++p) {
             juce::String pStr = juce::String(p);
             mod_p[m-2][p-1] = apvts.getRawParameterValue("mod" + mStr + "_p" + pStr);
-            mod_pMod[m-2][p-1] = apvts.getRawParameterValue("mod" + mStr + "_p" + pStr + "Mod");
+            mod_pMod[m-2][p-1] = apvts.getRawParameterValue("mod" + mStr + "_p" + pStr + "_mod");
         }
     }
     
@@ -512,7 +512,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
     for (int p = 0; p < 512; ++p) {
         if (p < targetPartials && targetAmps[p] > 0.0f) {
-            targetAmps[p] = std::min(targetAmps[p], 0.707945f); // -3 dB hard limit
+            targetAmps[p] = std::min(targetAmps[p], 0.5f); // -6 dB hard limit
             phaseDeltas[p] = freqs[p] / (float)currentSampleRate;
             pL_block[p] = panLeft[p]; 
             pR_block[p] = panRight[p];
@@ -532,7 +532,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     }
 
     // Mix into output buffers
-    float scaleFactor = 2.0148f; // Level normalization per voice (+27 dB increase)
+    float scaleFactor = 1.0f; // Flat output
 
     for (int s = 0; s < numSamples; ++s) {
       float envVal = adsr.getNextSample();

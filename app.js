@@ -1427,9 +1427,9 @@ class KronosSynth {
         } else if (param === 'filterMorphMod') {
             this.values.filterMorphMod = val;
             if (this.sliders.filterMorph) this.sliders.filterMorph.updateModLine();
-        } else if (param.endsWith('Mod')) {
+        } else if (param.endsWith('_mod')) {
             this.values[param] = val;
-            const baseParam = param.replace('Mod', '');
+            const baseParam = param.replace('_mod', '');
             if (this.knobs[baseParam]) this.knobs[baseParam].updateModArc();
         } else if (param.endsWith('_engine')) {
             const laneId = parseInt(param.replace('mod', '').replace('_engine', ''));
