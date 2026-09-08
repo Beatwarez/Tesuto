@@ -1147,6 +1147,28 @@ class KronosSynth {
                     placeholder.parentNode.replaceChild(lane, placeholder);
                 }
                 draggedLane = null;
+                
+                // Immediately enforce the 4/4 layout by shifting lanes left-to-right
+                const leftContainer = document.getElementById('lanes-left');
+                const rightContainer = document.getElementById('lanes-right');
+                
+                // 1. Gather the unified sequence of 7 dynamic lanes
+                const dynamicLanesLeft = Array.from(leftContainer.querySelectorAll('.mod-lane:not([data-lane="1"])'));
+                const dynamicLanesRight = Array.from(rightContainer.querySelectorAll('.mod-lane:not([data-lane="1"])'));
+                const unifiedSequence = [...dynamicLanesLeft, ...dynamicLanesRight];
+                
+                const lane1 = document.querySelector('.mod-lane[data-lane="1"]');
+                
+                // We append them in order, which moves them in the DOM automatically
+                if (lane1) leftContainer.appendChild(lane1);
+                
+                for (let i = 0; i < 3; i++) {
+                    if (unifiedSequence[i]) leftContainer.appendChild(unifiedSequence[i]);
+                }
+                for (let i = 3; i < 7; i++) {
+                    if (unifiedSequence[i]) rightContainer.appendChild(unifiedSequence[i]);
+                }
+                
                 this.updateRoutingOrder();
             });
         });
@@ -1189,38 +1211,6 @@ class KronosSynth {
             } else {
                 targetContainer.appendChild(placeholder);
             }
-
-            // Immediately enforce the 4/4 layout by shifting lanes left-to-right
-            const lane1 = document.querySelector('.mod-lane[data-lane="1"]');
-            
-            // 1. Gather the unified sequence of 7 dynamic lanes
-            const dynamicLanesLeft = Array.from(leftContainer.querySelectorAll('.mod-lane:not(.dragging):not([data-lane="1"]), .drag-placeholder'));
-            const dynamicLanesRight = Array.from(rightContainer.querySelectorAll('.mod-lane:not(.dragging):not([data-lane="1"]), .drag-placeholder'));
-            const unifiedSequence = [...dynamicLanesLeft, ...dynamicLanesRight];
-
-            // 2. Ensure Lane 1 is at the top of left
-            if (leftContainer.firstChild !== lane1 && lane1) {
-                leftContainer.insertBefore(lane1, leftContainer.firstChild);
-            }
-
-            // 3. Re-distribute the sequence (3 on left, 4 on right)
-            for (let i = 0; i < 3; i++) {
-                if (i < unifiedSequence.length) {
-                    const node = unifiedSequence[i];
-                    if (leftContainer.children[i + 1] !== node) {
-                        leftContainer.insertBefore(node, leftContainer.children[i + 1] || null);
-                    }
-                }
-            }
-
-            for (let i = 3; i < 7; i++) {
-                if (i < unifiedSequence.length) {
-                    const node = unifiedSequence[i];
-                    if (rightContainer.children[i - 3] !== node) {
-                        rightContainer.insertBefore(node, rightContainer.children[i - 3] || null);
-                    }
-                }
-            }
         });
 
         document.addEventListener('drop', (e) => {
@@ -1247,6 +1237,29 @@ class KronosSynth {
         const routingStr = order.join(',');
         console.log("New Routing Order:", routingStr);
         this.sendParamToCpp("routingOrder", routingStr);
+    }
+    
+    updateRoutingFromCpp(routingStr) {
+        if (!routingStr) return;
+        const order = routingStr.split(',').map(n => parseInt(n));
+        const leftContainer = document.getElementById('lanes-left');
+        const rightContainer = document.getElementById('lanes-right');
+        
+        const lanesMap = {};
+        document.querySelectorAll('.mod-lane').forEach(lane => {
+            lanesMap[parseInt(lane.getAttribute('data-lane'))] = lane;
+        });
+        
+        const sequence = order.map(i => lanesMap[i]);
+        
+        if (lanesMap[1]) leftContainer.appendChild(lanesMap[1]);
+        
+        for (let i = 0; i < 3; i++) {
+            if (sequence[i]) leftContainer.appendChild(sequence[i]);
+        }
+        for (let i = 3; i < 7; i++) {
+            if (sequence[i]) rightContainer.appendChild(sequence[i]);
+        }
     }
 
     async initAudio() {

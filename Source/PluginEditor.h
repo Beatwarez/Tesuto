@@ -79,6 +79,11 @@ public:
                         for (auto& pair : webViewInstance->localParams) {
                             pair.second = -999.0f; // Force full re-sync for UI initialization
                         }
+                        
+                        // Blast the saved routing string back to the UI
+                        juce::String rOrder = p.apvts.state.getProperty("routingOrder", "2,3,4,5,6,7,8").toString();
+                        webViewInstance->evaluateJavascript("if (window.kronosSynth) window.kronosSynth.updateRoutingFromCpp('" + rOrder + "');");
+                        
                         completion (juce::var (true));
                         return;
                     }

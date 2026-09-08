@@ -360,9 +360,15 @@ void KronosAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 void KronosAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     std::unique_ptr<juce::XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
-    if (xmlState != nullptr)
-        if (xmlState->hasTagName (apvts.state.getType()))
+    if (xmlState != nullptr) {
+        if (xmlState->hasTagName (apvts.state.getType())) {
             apvts.replaceState (juce::ValueTree::fromXml (*xmlState));
+            
+            // Restore routing order from the state tree property
+            juce::String savedRouting = apvts.state.getProperty("routingOrder", "2,3,4,5,6,7,8").toString();
+            updateRoutingOrder(savedRouting);
+        }
+    }
 }
 
 // ==========================================================================

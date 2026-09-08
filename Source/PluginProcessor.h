@@ -247,6 +247,8 @@ public:
       for (int i = 0; i < 7 && i < tokens.size(); ++i) {
           routingOrder[i].store(tokens[i].getIntValue());
       }
+      // Persist the routing order as a property in the state tree
+      apvts.state.setProperty("routingOrder", routingStr, nullptr);
   }
 
   void triggerNoteOnFromEditor(int note, float velocity) {
