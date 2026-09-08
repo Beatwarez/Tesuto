@@ -491,9 +491,17 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
                     float multA = calculateFilterMult(freqs[p], fcA, currentReso, currentSlope, typeA);
                     float multB = calculateFilterMult(freqs[p], fcB, currentReso, currentSlope, typeB);
                     float filterMult = multA * (1.0f - currentMorph) + multB * currentMorph;
-                    filterMult = std::clamp(filterMult, 0.0f, 1.0f);
                     targetAmps[p] *= filterMult;
                 }
+            }
+        } else if (engineType == 8) { // FORM
+            float warp_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.0f;
+            float warp_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
+            float currentWarp = std::clamp(warp_param + macroVal * warp_mod, 0.0f, 1.0f);
+            
+            for (int p = 0; p < targetPartials; ++p) {
+                float stretch = currentWarp * currentWarp * 3.5f * std::sin((float)(p + 1) * 1.57f + (float)p * 0.1f);
+                freqs[p] += currentFundamentalFreq * stretch;
             }
         }
     }
@@ -504,6 +512,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
     for (int p = 0; p < 512; ++p) {
         if (p < targetPartials && targetAmps[p] > 0.0f) {
+            targetAmps[p] = std::min(targetAmps[p], 0.707945f); // -3 dB hard limit
             phaseDeltas[p] = freqs[p] / (float)currentSampleRate;
             pL_block[p] = panLeft[p]; 
             pR_block[p] = panRight[p];

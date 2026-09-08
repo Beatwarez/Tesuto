@@ -21,7 +21,7 @@
                 <span class="tagline">drone synthesis laboratory</span>
             </div>
             <div class="header-right">
-                <span class="build-version">BUILD #{{BUILD_NUMBER}}</span>
+                <span class="build-version">BUILD #0.01</span>
             </div>
         </header>
 
@@ -53,6 +53,7 @@
                             <option value="alter">ALTER</option>
                             <option value="cloud">CLOUD</option>
                             <option value="desync">DE-SYNC</option>
+                            <option value="form">FORM</option>
                         </select>
                         <span class="slider-val" id="val-mod2_macro">0.00</span>
                     </div>
@@ -74,6 +75,7 @@
                             <option value="alter">ALTER</option>
                             <option value="cloud">CLOUD</option>
                             <option value="desync">DE-SYNC</option>
+                            <option value="form">FORM</option>
                         </select>
                         <span class="slider-val" id="val-mod3_macro">0.00</span>
                     </div>
@@ -95,6 +97,7 @@
                             <option value="alter">ALTER</option>
                             <option value="cloud">CLOUD</option>
                             <option value="desync">DE-SYNC</option>
+                            <option value="form">FORM</option>
                         </select>
                         <span class="slider-val" id="val-mod4_macro">0.00</span>
                     </div>
@@ -125,6 +128,7 @@
                             <option value="alter">ALTER</option>
                             <option value="cloud">CLOUD</option>
                             <option value="desync">DE-SYNC</option>
+                            <option value="form">FORM</option>
                         </select>
                         <span class="slider-val" id="val-mod5_macro">0.00</span>
                     </div>
@@ -146,6 +150,7 @@
                             <option value="alter">ALTER</option>
                             <option value="cloud">CLOUD</option>
                             <option value="desync">DE-SYNC</option>
+                            <option value="form">FORM</option>
                         </select>
                         <span class="slider-val" id="val-mod6_macro">0.00</span>
                     </div>
@@ -167,6 +172,7 @@
                             <option value="alter">ALTER</option>
                             <option value="cloud">CLOUD</option>
                             <option value="desync">DE-SYNC</option>
+                            <option value="form">FORM</option>
                         </select>
                         <span class="slider-val" id="val-mod7_macro">0.00</span>
                     </div>
@@ -188,6 +194,7 @@
                             <option value="alter">ALTER</option>
                             <option value="cloud">CLOUD</option>
                             <option value="desync">DE-SYNC</option>
+                            <option value="form">FORM</option>
                         </select>
                         <span class="slider-val" id="val-mod8_macro">0.00</span>
                     </div>
@@ -335,6 +342,61 @@
                         <span class="knob-name-b">SLOPE</span>
                     </div>
                     <span class="knob-val" id="val-mod{{LANE}}_p4">0.50</span>
+                </div>
+            </div>
+        </div>
+        </template>
+
+        <!-- FORM ENGINE TEMPLATE -->
+        <template id="tmpl-engine-form">
+        <div class="dsp-panel engine-form-panel">
+            <div class="filter-ui-canvas-container">
+                <canvas id="form-ui-canvas-{{LANE}}"></canvas>
+            </div>
+            <div class="filter-params-row">
+                <div class="knob-wrapper" data-param="mod{{LANE}}_p1">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p1" data-mod-param="mod{{LANE}}_p1_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">WARP</span>
+                        <span class="knob-name-b">WARP</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_p1">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_p2">
+                    <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-mod{{LANE}}_p2" data-bipolar="true" data-mod-param="mod{{LANE}}_p2_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">P2</span>
+                        <span class="knob-name-b">P2</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_p2">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_p3">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p3" data-mod-param="mod{{LANE}}_p3_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">P3</span>
+                        <span class="knob-name-b">P3</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_p3">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_p4">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p4" data-mod-param="mod{{LANE}}_p4_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">P4</span>
+                        <span class="knob-name-b">P4</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_p4">0.00</span>
                 </div>
             </div>
         </div>

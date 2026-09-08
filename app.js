@@ -636,7 +636,7 @@ class CustomSlider {
                     e.stopPropagation();
                     this.isModDragging = true;
                     this.startModX = e.clientX;
-                    this.startModVal = window.kronosSynth.values[this.modParam];
+                    this.startModVal = window.kronosSynth.values[this.modParam] || 0.0;
                 });
                 
                 window.addEventListener('pointermove', (e) => {
@@ -811,7 +811,7 @@ class CustomKnob {
                     e.stopPropagation();
                     this.isModDragging = true;
                     this.startModY = e.clientY;
-                    this.startModVal = window.kronosSynth.values[this.modParam];
+                    this.startModVal = window.kronosSynth.values[this.modParam] || 0.0;
                 });
                 
                 window.addEventListener('pointermove', (e) => {
@@ -872,7 +872,7 @@ class CustomKnob {
                     e.stopPropagation();
                     this.isModDragging = true;
                     this.startModY = e.clientY;
-                    this.startModVal = window.kronosSynth.values[this.modParam];
+                    this.startModVal = window.kronosSynth.values[this.modParam] || 0.0;
                 });
                 
                 window.addEventListener('pointermove', (e) => {
@@ -1433,7 +1433,7 @@ class KronosSynth {
             if (this.knobs[baseParam]) this.knobs[baseParam].updateModArc();
         } else if (param.endsWith('_engine')) {
             const laneId = parseInt(param.replace('mod', '').replace('_engine', ''));
-            const engineIdMappingRev = { 0: 'empty', 1: 'source', 2: 'filter', 3: 'space', 4: 'pitch', 5: 'alter', 6: 'cloud', 7: 'desync' };
+            const engineIdMappingRev = { 0: 'empty', 1: 'source', 2: 'filter', 3: 'space', 4: 'pitch', 5: 'alter', 6: 'cloud', 7: 'desync', 8: 'form' };
             const engineType = engineIdMappingRev[Math.round(val)] || 'empty';
             this.laneEngines[laneId] = engineType;
             
@@ -1508,7 +1508,7 @@ class KronosSynth {
             if (selector) {
                 selector.addEventListener('change', (e) => {
                     this.laneEngines[laneId] = e.target.value;
-                    const engineIdMapping = { 'empty': 0, 'source': 1, 'filter': 2, 'space': 3, 'pitch': 4, 'alter': 5, 'cloud': 6, 'desync': 7 };
+                    const engineIdMapping = { 'empty': 0, 'source': 1, 'filter': 2, 'space': 3, 'pitch': 4, 'alter': 5, 'cloud': 6, 'desync': 7, 'form': 8 };
                     this.sendParamToCpp(`mod${laneId}_engine`, engineIdMapping[e.target.value] || 0);
                     
                     if (this.activeLeftFocus === laneId || this.activeRightFocus === laneId) {
@@ -1632,6 +1632,8 @@ class KronosSynth {
         if (engineType === 'filter') {
             this.setupDynamicFilterSelectors(container, laneId);
             this.initFilterCanvas();
+        } else if (engineType === 'form') {
+            // Optional: initFormCanvas() can be added here later
         } else if (engineType === 'source') {
             this.initSourceCanvas();
         }
@@ -2013,11 +2015,12 @@ class KronosSynth {
             // Draw a subtle vertical bar for each partial
             const barW = Math.max(1, (w / maxHarmonics) * 0.8);
             
-            // Fade high frequency partials slightly or based on density
             const opacity = Math.max(0.2, 1.0 - (i / partialsVal));
-            ctx.fillStyle = `rgba(100, 150, 237, ${opacity})`;
+            ctx.globalAlpha = opacity;
+            ctx.fillStyle = '#d1d1d6';
             
             ctx.fillRect(x, h * 0.1, barW, h * 0.8);
+            ctx.globalAlpha = 1.0;
         }
     }
     
@@ -2033,21 +2036,30 @@ class KronosSynth {
         
         ctx.clearRect(0, 0, w, h);
         
-        
-        const filterSliderVal = this.values.filter; // Modulator
-        const baseCutoff = this.values.filterCutoff !== undefined ? this.values.filterCutoff : 0.75;
-        const baseOffset = this.values.filterOffset;
-        const baseReso = this.values.filterReso;
-        const baseSlope = this.values.filterSlope;
-        
-        const filterVal = Math.max(0.0, Math.min(1.0, baseCutoff + filterSliderVal * (this.values.filterCutoffMod || 0.0)));
-        const filterOffsetVal = Math.max(-1.0, Math.min(1.0, baseOffset + filterSliderVal * (this.values.filterOffsetMod || 0.0)));
-        const filterResoVal = Math.max(0.0, Math.min(1.0, baseReso + filterSliderVal * (this.values.filterResoMod || 0.0)));
-        const filterSlopeVal = Math.max(0.0, Math.min(1.0, baseSlope + filterSliderVal * (this.values.filterSlopeMod || 0.0)));
+        let laneId = null;
+        for (let i = 2; i <= 8; i++) {
+            if (this.laneEngines[i] === 'filter') {
+                laneId = i;
+                break;
+            }
+        }
+        if (!laneId) return;
 
-        const typeA = this.values.filterTypeA;
-        const typeB = this.values.filterTypeB;
-        const morph = Math.max(0.0, Math.min(1.0, (this.values.filterMorph || 0.0) + filterSliderVal * (this.values.filterMorphMod || 0.0)));
+        const macroVal = this.values[`mod${laneId}_macro`] || 0.0;
+        const baseCutoff = this.values[`mod${laneId}_p1`] !== undefined ? this.values[`mod${laneId}_p1`] : 0.75;
+        const baseOffset = this.values[`mod${laneId}_p2`] || 0.0;
+        const baseReso = this.values[`mod${laneId}_p3`] || 0.2;
+        const baseSlope = this.values[`mod${laneId}_p4`] || 0.5;
+        const baseMorph = this.values[`mod${laneId}_p5`] || 0.0;
+        
+        const filterVal = Math.max(0.0, Math.min(1.0, baseCutoff + macroVal * (this.values[`mod${laneId}_p1_mod`] || 0.0)));
+        const filterOffsetVal = Math.max(-1.0, Math.min(1.0, baseOffset + macroVal * (this.values[`mod${laneId}_p2_mod`] || 0.0)));
+        const filterResoVal = Math.max(0.0, Math.min(1.0, baseReso + macroVal * (this.values[`mod${laneId}_p3_mod`] || 0.0)));
+        const filterSlopeVal = Math.max(0.0, Math.min(1.0, baseSlope + macroVal * (this.values[`mod${laneId}_p4_mod`] || 0.0)));
+        const morph = Math.max(0.0, Math.min(1.0, baseMorph + macroVal * (this.values[`mod${laneId}_p5_mod`] || 0.0)));
+
+        const typeA = this.values[`mod${laneId}_p6`] || 0;
+        const typeB = this.values[`mod${laneId}_p7`] || 0;
         
         const cutoffA_norm = Math.min(1.0, Math.max(0.0, filterVal - filterOffsetVal * 0.165));
         const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.165));
