@@ -2086,33 +2086,39 @@ class KronosSynth {
         widthVal = Math.max(-1.0, Math.min(widthVal, 1.0));
         
         // Emulate the C++ distribution math for visuals
-        const maxHarmonics = 11025.0 / 50.0; // Assume nyquist 22050 and fundamental 50Hz for visualization
-        const spacing = widthVal > 0 
-            ? 1.0 + widthVal * ((maxHarmonics / partialsVal) - 1.0)
-            : 1.0 + widthVal * (1.0 - 0.05); // shrinks to 0.05
+        const maxHarmonics = 22050.0 / 50.0; // Assume Nyquist 22050 and fundamental 50Hz
+        
+        let spacing = 1.0;
+        if (widthVal > 0) {
+            const maxWidthSpacing = Math.max(1.0, maxHarmonics / partialsVal);
+            spacing = 1.0 + widthVal * (maxWidthSpacing - 1.0);
+        } else if (widthVal < 0) {
+            spacing = 1.0 + widthVal * 0.95; // shrinks to 0.05
+        }
             
-        const clusterSpan = partialsVal * spacing;
+        const totalClusterSpan = partialsVal * spacing;
         let clusterStart = 1.0;
         
         if (balanceVal > 0) {
-            clusterStart = 1.0 + balanceVal * (maxHarmonics - clusterSpan - 1.0);
+            const maxStart = Math.max(1.0, maxHarmonics - totalClusterSpan);
+            clusterStart = 1.0 + balanceVal * (maxStart - 1.0);
         } else if (balanceVal < 0) {
-            clusterStart = 1.0 + balanceVal * (clusterStart - 1.0); 
+            clusterStart = 1.0;
         }
         
         // Draw bars
         const computedGray = getComputedStyle(document.documentElement).getPropertyValue('--fg-main').trim() || '#e0e0e6';
         ctx.fillStyle = computedGray;
         const numDraws = Math.min(partialsVal, 50); // Cap at 50 to prevent heavy drawing load
-        const visualSpacing = clusterSpan / numDraws; 
         
         // We map maxHarmonics to canvas width 'w'
         for (let i = 0; i < numDraws; i++) {
-            const hIndex = clusterStart + i * visualSpacing;
+            const hIndex = clusterStart + i * spacing;
             const x = (hIndex / maxHarmonics) * w;
             if (x > w) break; // Don't draw past canvas
             
-            const barW = Math.max(1, (w / maxHarmonics) * visualSpacing * 0.8);
+            // Thin bars representing actual partials
+            const barW = Math.max(1, (w / maxHarmonics) * spacing * 0.8);
             
             // Mirror the exact DSP amplitude math: 1.0 / sqrt(harmonicIndex + 1.0)
             const opacity = 1.0 / Math.sqrt(hIndex + 1.0);

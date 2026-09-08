@@ -531,7 +531,6 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         }
         
         if (p < targetPartials && targetAmps[p] > 0.0f) {
-            targetAmps[p] = std::min(targetAmps[p], 0.5f); // -6 dB hard limit
             phaseDeltas[p] = freqs[p] / (float)currentSampleRate;
             pL_block[p] = panLeft[p]; 
             pR_block[p] = panRight[p];
@@ -551,7 +550,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     }
 
     // Mix into output buffers
-    float scaleFactor = 1.0f / std::sqrt((float)std::max(1, targetPartials));
+    float scaleFactor = 0.3981f; // Fixed -8dB attenuation
 
     for (int s = 0; s < numSamples; ++s) {
       float envVal = adsr.getNextSample();
