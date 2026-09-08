@@ -2085,43 +2085,48 @@ class KronosSynth {
         let widthVal = (this.values.mod1_p3 || 0.0) + macroVal * p3_mod;
         widthVal = Math.max(-1.0, Math.min(widthVal, 1.0));
         
-        // Emulate the C++ distribution math for visuals
-        const maxHarmonics = 22050.0 / 50.0; // Assume Nyquist 22050 and fundamental 50Hz
+        // The canvas X-axis maps to exactly 512 slots
+        const maxSlots = 512.0; 
         
         let spacing = 1.0;
         if (widthVal > 0) {
-            const maxWidthSpacing = Math.max(1.0, maxHarmonics / partialsVal);
+            const maxWidthSpacing = maxSlots / partialsVal;
             spacing = 1.0 + widthVal * (maxWidthSpacing - 1.0);
         } else if (widthVal < 0) {
             spacing = 1.0 + widthVal * 0.95; // shrinks to 0.05
         }
             
         const totalClusterSpan = partialsVal * spacing;
-        let clusterStart = 1.0;
+        let clusterStart = 0.0; // Start at slot 0
         
         if (balanceVal > 0) {
-            const maxStart = Math.max(1.0, maxHarmonics - totalClusterSpan);
-            clusterStart = 1.0 + balanceVal * (maxStart - 1.0);
+            const maxStart = Math.max(0.0, maxSlots - totalClusterSpan);
+            clusterStart = balanceVal * maxStart;
         } else if (balanceVal < 0) {
-            clusterStart = 1.0;
+            clusterStart = 0.0;
         }
         
         // Draw bars
         const computedGray = getComputedStyle(document.documentElement).getPropertyValue('--fg-main').trim() || '#e0e0e6';
         ctx.fillStyle = computedGray;
-        const numDraws = Math.min(partialsVal, 50); // Cap at 50 to prevent heavy drawing load
         
-        // We map maxHarmonics to canvas width 'w'
+        // Proportional lines based on 512 = 50 lines
+        const numDraws = Math.max(1, Math.round((partialsVal / 512.0) * 50)); 
+        const partialStep = partialsVal / Math.max(1, numDraws - 1);
+        
         for (let i = 0; i < numDraws; i++) {
-            const hIndex = clusterStart + i * spacing;
-            const x = (hIndex / maxHarmonics) * w;
-            if (x > w) break; // Don't draw past canvas
+            // virtual partial index for this line
+            const p = (i === numDraws - 1) ? partialsVal : (i * partialStep);
             
-            // Thin bars representing actual partials
-            const barW = Math.max(1, (w / maxHarmonics) * spacing * 0.8);
+            const slotIndex = clusterStart + p * spacing;
+            const x = (slotIndex / maxSlots) * w;
+            if (x > w) break; // Safety cutoff
+            
+            // Fixed thin lines
+            const barW = 2;
             
             // Mirror the exact DSP amplitude math: 1.0 / sqrt(harmonicIndex + 1.0)
-            const opacity = 1.0 / Math.sqrt(hIndex + 1.0);
+            const opacity = 1.0 / Math.sqrt(p + 1.0);
             ctx.globalAlpha = Math.max(0.1, opacity);
             ctx.fillStyle = '#d1d1d6';
             
