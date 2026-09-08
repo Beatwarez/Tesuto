@@ -1518,9 +1518,34 @@ class KronosSynth {
             const selector = lane.querySelector('.engine-selector');
             if (selector) {
                 selector.addEventListener('change', (e) => {
-                    this.laneEngines[laneId] = e.target.value;
+                    const newEngine = e.target.value;
+                    this.laneEngines[laneId] = newEngine;
                     const engineIdMapping = { 'empty': 0, 'source': 1, 'filter': 2, 'space': 3, 'pitch': 4, 'alter': 5, 'cloud': 6, 'desync': 7, 'form': 8 };
-                    this.sendParamToCpp(`mod${laneId}_engine`, engineIdMapping[e.target.value] || 0);
+                    this.sendParamToCpp(`mod${laneId}_engine`, engineIdMapping[newEngine] || 0);
+                    
+                    // Default parameters for the new engine to prevent bleed
+                    const tmpl = document.getElementById(`tmpl-engine-${newEngine}`);
+                    if (tmpl) {
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = tmpl.innerHTML.replace(/{{LANE}}/g, laneId);
+                        
+                        tempDiv.querySelectorAll('.custom-knob, .custom-slider.horizontal').forEach(el => {
+                            const paramId = el.parentElement.getAttribute('data-param');
+                            if (!paramId) return;
+                            
+                            const isBipolar = el.hasAttribute('data-bipolar');
+                            const dataDefault = el.getAttribute('data-default');
+                            const defaultVal = dataDefault !== null ? parseFloat(dataDefault) : (isBipolar ? 0.0 : 0.5);
+                            
+                            this.values[paramId] = defaultVal;
+                            this.sendParamToCpp(paramId, defaultVal);
+                            
+                            // Reset mod param
+                            const modParam = paramId + '_mod';
+                            this.values[modParam] = 0.0;
+                            this.sendParamToCpp(modParam, 0.0);
+                        });
+                    }
                     
                     if (this.activeLeftFocus === laneId || this.activeRightFocus === laneId) {
                         this.renderSidePanels();
@@ -1624,6 +1649,23 @@ class KronosSynth {
                 `knob-${paramId}`, min, max, this.values[paramId], isBipolar, false,
                 (v) => this.onKnobChange(paramId, v)
             );
+            
+            // Explicitly update label text upon creation so it isn't left at 0.00
+            const valDisplay = document.getElementById(`val-${paramId}`);
+            if (valDisplay) {
+                if (paramId === 'pitch') {
+                    const pitchVal = (this.values[paramId] - 0.5) * 24.0;
+                    valDisplay.textContent = (pitchVal > 0 ? '+' : '') + pitchVal.toFixed(2);
+                } else if (knobEl.hasAttribute('data-step') && Number.isInteger(parseFloat(knobEl.getAttribute('data-step')))) {
+                    valDisplay.textContent = Math.round(this.values[paramId]).toString();
+                } else {
+                    let text = this.values[paramId].toFixed(2);
+                    if (paramId.includes('attack') || paramId.includes('decay') || paramId.includes('release')) {
+                        text += 's';
+                    }
+                    valDisplay.textContent = text;
+                }
+            }
         });
         
         // Initialize dynamic sliders (like filter morph)
@@ -1637,6 +1679,12 @@ class KronosSynth {
                 (v) => this.onSliderChange(paramId, v), true
             );
             this.sliders[paramId].updateModLine();
+            
+            // Explicitly update label text
+            const valDisplay = document.getElementById(`val-${paramId}`);
+            if (valDisplay) {
+                valDisplay.textContent = this.values[paramId].toFixed(2);
+            }
         });
         
         // specific filter logic initialization
@@ -1991,9 +2039,19 @@ class KronosSynth {
         
         ctx.clearRect(0, 0, w, h);
         
-        const partialsVal = this.values.mod1_p1 || 256.0;
-        const balanceVal = this.values.mod1_p2 || 0.0;
-        const widthVal = this.values.mod1_p3 || 0.0;
+        const macroVal = this.values.mod1_macro || 0.0;
+        const p1_mod = this.values.mod1_p1_mod || 0.0;
+        const p2_mod = this.values.mod1_p2_mod || 0.0;
+        const p3_mod = this.values.mod1_p3_mod || 0.0;
+        
+        let partialsVal = (this.values.mod1_p1 !== undefined ? this.values.mod1_p1 : 256.0) + macroVal * p1_mod * 512.0;
+        partialsVal = Math.max(1.0, Math.min(partialsVal, 512.0));
+        
+        let balanceVal = (this.values.mod1_p2 || 0.0) + macroVal * p2_mod;
+        balanceVal = Math.max(-1.0, Math.min(balanceVal, 1.0));
+        
+        let widthVal = (this.values.mod1_p3 || 0.0) + macroVal * p3_mod;
+        widthVal = Math.max(-1.0, Math.min(widthVal, 1.0));
         
         // Emulate the C++ distribution math for visuals
         const maxHarmonics = 11025.0 / 50.0; // Assume nyquist 22050 and fundamental 50Hz for visualization
@@ -2008,14 +2066,12 @@ class KronosSynth {
             clusterStart = 1.0 + balanceVal * (maxHarmonics - clusterSpan - 1.0);
         } else if (balanceVal < 0) {
             clusterStart = 1.0 + balanceVal * (clusterStart - 1.0); 
-            // In C++ logic for balance < 0, it pushes it down if possible, but 1.0 is min harmonic.
-            // For visualization we just slide it slightly.
         }
         
         // Draw bars
         const computedGray = getComputedStyle(document.documentElement).getPropertyValue('--fg-main').trim() || '#e0e0e6';
         ctx.fillStyle = computedGray;
-        const numDraws = Math.min(partialsVal, 512); // Prevent crazy loops if value glitches
+        const numDraws = Math.min(partialsVal, 50); // Cap at 50 to prevent heavy drawing load
         
         // We map maxHarmonics to canvas width 'w'
         for (let i = 0; i < numDraws; i++) {
@@ -2023,11 +2079,11 @@ class KronosSynth {
             const x = (hIndex / maxHarmonics) * w;
             if (x > w) break; // Don't draw past canvas
             
-            // Draw a subtle vertical bar for each partial
             const barW = Math.max(1, (w / maxHarmonics) * 0.8);
             
-            const opacity = Math.max(0.2, 1.0 - (i / partialsVal));
-            ctx.globalAlpha = opacity;
+            // Mirror the exact DSP amplitude math: 1.0 / sqrt(harmonicIndex + 1.0)
+            const opacity = 1.0 / Math.sqrt(hIndex + 1.0);
+            ctx.globalAlpha = Math.max(0.1, opacity);
             ctx.fillStyle = '#d1d1d6';
             
             ctx.fillRect(x, h * 0.1, barW, h * 0.8);
