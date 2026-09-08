@@ -1392,6 +1392,10 @@ class KronosSynth {
         }
 
         this.sendParamToCpp(param, val);
+        
+        if (param.startsWith('mod1_')) {
+            this.drawSourceCanvas();
+        }
     }
 
     updateParamFromCpp(param, val) {
@@ -1483,6 +1487,10 @@ class KronosSynth {
             if (audioParam) {
                 audioParam.setValueAtTime(val, this.audioContext.currentTime);
             }
+        }
+        
+        if (param.startsWith('mod1_')) {
+            this.drawSourceCanvas();
         }
     }
 
@@ -2090,14 +2098,15 @@ class KronosSynth {
         const computedGray = getComputedStyle(document.documentElement).getPropertyValue('--fg-main').trim() || '#e0e0e6';
         ctx.fillStyle = computedGray;
         const numDraws = Math.min(partialsVal, 50); // Cap at 50 to prevent heavy drawing load
+        const visualSpacing = clusterSpan / numDraws; 
         
         // We map maxHarmonics to canvas width 'w'
         for (let i = 0; i < numDraws; i++) {
-            const hIndex = clusterStart + i * spacing;
+            const hIndex = clusterStart + i * visualSpacing;
             const x = (hIndex / maxHarmonics) * w;
             if (x > w) break; // Don't draw past canvas
             
-            const barW = Math.max(1, (w / maxHarmonics) * 0.8);
+            const barW = Math.max(1, (w / maxHarmonics) * visualSpacing * 0.8);
             
             // Mirror the exact DSP amplitude math: 1.0 / sqrt(harmonicIndex + 1.0)
             const opacity = 1.0 / Math.sqrt(hIndex + 1.0);
