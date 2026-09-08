@@ -1260,6 +1260,8 @@ class KronosSynth {
         for (let i = 3; i < 7; i++) {
             if (sequence[i]) rightContainer.appendChild(sequence[i]);
         }
+        
+        this.updateLaneMoverButtons();
     }
 
     async initAudio() {
