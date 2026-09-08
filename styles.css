@@ -258,22 +258,29 @@ body {
     font-family: var(--font-mono);
 }
 
-.drag-handle {
-    font-size: 1.2vw;
-    color: rgba(255, 255, 255, 0.3);
+.lane-mover {
+    display: flex;
+    justify-content: space-between;
+    width: 60%;
     margin-bottom: 2px;
-    cursor: grab;
+}
+
+.move-btn {
+    font-size: 1.0vw;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
     transition: color 0.2s;
     user-select: none;
-    line-height: 1;
+    font-weight: bold;
 }
 
-.drag-handle:hover {
-    color: rgba(255, 255, 255, 0.9);
+.move-btn:hover {
+    color: rgba(255, 255, 255, 1.0);
 }
 
-.drag-handle:active {
-    cursor: grabbing;
+.move-btn.disabled {
+    color: rgba(255, 255, 255, 0.1);
+    pointer-events: none;
 }
 
 .drag-placeholder {

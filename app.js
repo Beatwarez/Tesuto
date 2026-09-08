@@ -1087,7 +1087,7 @@ class KronosSynth {
         
         // Setup state and event listeners first
         this.setupLaneListeners();
-        this.setupDragAndDrop();
+        this.setupLaneMovers();
         
         // Start rendering loops
         this.animate();
@@ -1099,128 +1099,128 @@ class KronosSynth {
         this.sendParamToCpp("queryall", 0);
     }
     
-    setupDragAndDrop() {
-        const lanes = document.querySelectorAll('.mod-lane');
-        let draggedLane = null;
-        
-        let placeholder = document.createElement('div');
-        placeholder.className = 'drag-placeholder';
+    setupLaneMovers() {
+        const leftContainer = document.getElementById('lanes-left');
+        const rightContainer = document.getElementById('lanes-right');
 
-        lanes.forEach(lane => {
-            const dragHandle = lane.querySelector('.drag-handle');
-            if (dragHandle) {
-                dragHandle.addEventListener('mousedown', () => {
-                    if (lane.getAttribute('data-lane') !== '1') {
-                        lane.setAttribute('draggable', 'true');
+        // Add click listeners to all buttons
+        document.querySelectorAll('.lane-mover').forEach(mover => {
+            const leftBtn = mover.querySelector('.move-left');
+            const rightBtn = mover.querySelector('.move-right');
+            const lane = mover.closest('.mod-lane');
+
+            if (leftBtn) {
+                leftBtn.addEventListener('click', () => {
+                    if (leftBtn.classList.contains('disabled')) return;
+                    
+                    // Re-gather the sequence of swappable lanes right now
+                    const swappableLanes = [...leftContainer.querySelectorAll('.mod-lane:not([data-lane="1"])'), 
+                                            ...rightContainer.querySelectorAll('.mod-lane:not([data-lane="1"])')];
+                    
+                    const index = swappableLanes.indexOf(lane);
+                    if (index > 0) {
+                        const prevLane = swappableLanes[index - 1];
+                        // Swap DOM nodes
+                        const prevParent = prevLane.parentNode;
+                        const laneParent = lane.parentNode;
+                        const prevNextSibling = prevLane.nextSibling;
+                        const laneNextSibling = lane.nextSibling;
+                        
+                        // Edge case: if they are next to each other
+                        if (prevNextSibling === lane) {
+                            laneParent.insertBefore(lane, prevLane);
+                        } else {
+                            laneParent.insertBefore(prevLane, laneNextSibling);
+                            prevParent.insertBefore(lane, prevNextSibling);
+                        }
+                        
+                        this.enforceLaneLayout();
                     }
                 });
-                dragHandle.addEventListener('mouseup', () => lane.removeAttribute('draggable'));
-                dragHandle.addEventListener('mouseleave', () => lane.removeAttribute('draggable'));
             }
 
-            lane.addEventListener('dragstart', (e) => {
-                if (lane.getAttribute('data-lane') === '1') {
-                    e.preventDefault();
-                    return;
-                }
-                draggedLane = lane;
-                e.dataTransfer.effectAllowed = 'move';
-                
-                // Keep dimensions for placeholder
-                const rect = lane.getBoundingClientRect();
-                placeholder.style.height = rect.height + 'px';
-                
-                setTimeout(() => {
-                    lane.classList.add('dragging');
-                    lane.style.display = 'none';
-                    lane.parentNode.insertBefore(placeholder, lane);
-                }, 0);
-            });
-
-            lane.addEventListener('dragend', () => {
-                if (!draggedLane) return;
-                lane.classList.remove('dragging');
-                lane.style.display = '';
-                lane.removeAttribute('draggable');
-                
-                if (placeholder.parentNode) {
-                    placeholder.parentNode.replaceChild(lane, placeholder);
-                }
-                draggedLane = null;
-                
-                // Immediately enforce the 4/4 layout by shifting lanes left-to-right
-                const leftContainer = document.getElementById('lanes-left');
-                const rightContainer = document.getElementById('lanes-right');
-                
-                // 1. Gather the unified sequence of 7 dynamic lanes
-                const dynamicLanesLeft = Array.from(leftContainer.querySelectorAll('.mod-lane:not([data-lane="1"])'));
-                const dynamicLanesRight = Array.from(rightContainer.querySelectorAll('.mod-lane:not([data-lane="1"])'));
-                const unifiedSequence = [...dynamicLanesLeft, ...dynamicLanesRight];
-                
-                const lane1 = document.querySelector('.mod-lane[data-lane="1"]');
-                
-                // We append them in order, which moves them in the DOM automatically
-                if (lane1) leftContainer.appendChild(lane1);
-                
-                for (let i = 0; i < 3; i++) {
-                    if (unifiedSequence[i]) leftContainer.appendChild(unifiedSequence[i]);
-                }
-                for (let i = 3; i < 7; i++) {
-                    if (unifiedSequence[i]) rightContainer.appendChild(unifiedSequence[i]);
-                }
-                
-                this.updateRoutingOrder();
-            });
-        });
-
-        document.addEventListener('dragover', (e) => {
-            if (!draggedLane) return;
-            e.preventDefault();
-
-            const leftContainer = document.getElementById('lanes-left');
-            const rightContainer = document.getElementById('lanes-right');
-
-            // Collect all draggable elements
-            const allStaticLanes = Array.from(document.querySelectorAll('.mod-lane:not(.dragging):not([data-lane="1"])'));
-            
-            // Find the closest element based on Y position (and X column)
-            let closestNode = null;
-            let closestOffset = Number.NEGATIVE_INFINITY;
-            
-            // Check if we are over the left or right column
-            const isLeftColumn = e.clientX < window.innerWidth / 2;
-
-            allStaticLanes.forEach(child => {
-                const box = child.getBoundingClientRect();
-                const childIsLeft = box.left < window.innerWidth / 2;
-                
-                if (isLeftColumn === childIsLeft) {
-                    const offset = e.clientY - box.top - box.height / 2;
-                    if (offset < 0 && offset > closestOffset) {
-                        closestOffset = offset;
-                        closestNode = child;
+            if (rightBtn) {
+                rightBtn.addEventListener('click', () => {
+                    if (rightBtn.classList.contains('disabled')) return;
+                    
+                    const swappableLanes = [...leftContainer.querySelectorAll('.mod-lane:not([data-lane="1"])'), 
+                                            ...rightContainer.querySelectorAll('.mod-lane:not([data-lane="1"])')];
+                                            
+                    const index = swappableLanes.indexOf(lane);
+                    if (index < swappableLanes.length - 1) {
+                        const nextLane = swappableLanes[index + 1];
+                        // Swap DOM nodes
+                        const nextParent = nextLane.parentNode;
+                        const laneParent = lane.parentNode;
+                        const laneNextSibling = lane.nextSibling;
+                        const nextNextSibling = nextLane.nextSibling;
+                        
+                        // Edge case: if they are next to each other
+                        if (laneNextSibling === nextLane) {
+                            nextParent.insertBefore(nextLane, lane);
+                        } else {
+                            nextParent.insertBefore(lane, nextNextSibling);
+                            laneParent.insertBefore(nextLane, laneNextSibling);
+                        }
+                        
+                        this.enforceLaneLayout();
                     }
-                }
-            });
-
-            // Insert placeholder in the correct column based on hover
-            const targetContainer = isLeftColumn ? leftContainer : rightContainer;
-            
-            if (closestNode) {
-                targetContainer.insertBefore(placeholder, closestNode);
-            } else {
-                targetContainer.appendChild(placeholder);
+                });
             }
-        });
-
-        document.addEventListener('drop', (e) => {
-            if (draggedLane) e.preventDefault();
         });
         
+        this.updateLaneMoverButtons();
+
         // Signal to C++ that JS is ready to receive full parameter state
         setTimeout(() => {
             this.sendParamToCpp("js_ready", 1.0);
         }, 50);
+    }
+
+    enforceLaneLayout() {
+        const leftContainer = document.getElementById('lanes-left');
+        const rightContainer = document.getElementById('lanes-right');
+        
+        const dynamicLanesLeft = Array.from(leftContainer.querySelectorAll('.mod-lane:not([data-lane="1"])'));
+        const dynamicLanesRight = Array.from(rightContainer.querySelectorAll('.mod-lane:not([data-lane="1"])'));
+        const unifiedSequence = [...dynamicLanesLeft, ...dynamicLanesRight];
+        
+        const lane1 = document.querySelector('.mod-lane[data-lane="1"]');
+        
+        // Append sequentially
+        if (lane1) leftContainer.appendChild(lane1);
+        
+        for (let i = 0; i < 3; i++) {
+            if (unifiedSequence[i]) leftContainer.appendChild(unifiedSequence[i]);
+        }
+        for (let i = 3; i < 7; i++) {
+            if (unifiedSequence[i]) rightContainer.appendChild(unifiedSequence[i]);
+        }
+        
+        this.updateLaneMoverButtons();
+        this.updateRoutingOrder();
+    }
+    
+    updateLaneMoverButtons() {
+        const leftContainer = document.getElementById('lanes-left');
+        const rightContainer = document.getElementById('lanes-right');
+        const swappableLanes = [...leftContainer.querySelectorAll('.mod-lane:not([data-lane="1"])'), 
+                                ...rightContainer.querySelectorAll('.mod-lane:not([data-lane="1"])')];
+                                
+        swappableLanes.forEach((lane, index) => {
+            const leftBtn = lane.querySelector('.move-left');
+            const rightBtn = lane.querySelector('.move-right');
+            
+            if (leftBtn) {
+                if (index === 0) leftBtn.classList.add('disabled');
+                else leftBtn.classList.remove('disabled');
+            }
+            
+            if (rightBtn) {
+                if (index === swappableLanes.length - 1) rightBtn.classList.add('disabled');
+                else rightBtn.classList.remove('disabled');
+            }
+        });
     }
 
     updateRoutingOrder() {
