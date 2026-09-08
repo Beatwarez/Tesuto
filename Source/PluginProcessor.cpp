@@ -504,7 +504,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     }
 
     // Mix into output buffers
-    float scaleFactor = 0.090f; // Level normalization per voice
+    float scaleFactor = 2.0148f; // Level normalization per voice (+27 dB increase)
 
     for (int s = 0; s < numSamples; ++s) {
       float envVal = adsr.getNextSample();
