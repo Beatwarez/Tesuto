@@ -21,7 +21,7 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p2_mod", 1), "mod1_p2_mod", -1.0f, 1.0f, 0.0f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p3", 1), "mod1_p3", -1.0f, 1.0f, 0.0f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p3_mod", 1), "mod1_p3_mod", -1.0f, 1.0f, 0.0f));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p4", 1), "mod1_p4", -1.0f, 1.0f, 0.0f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p4", 1), "mod1_p4", -36.0f, 36.0f, 0.0f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p4_mod", 1), "mod1_p4_mod", -1.0f, 1.0f, 0.0f));
     for (int p = 5; p <= 8; ++p) {
         layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p" + juce::String(p), 1), "mod1_p" + juce::String(p), -1.0f, 1.0f, 0.0f));
@@ -412,7 +412,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     float currentPartials = std::clamp(partials_param + sourceMacro * partials_mod * 512.0f, 1.0f, 512.0f);
     float currentBalance  = std::clamp(balance_param + sourceMacro * balance_mod, -1.0f, 1.0f);
     float currentWidth    = std::clamp(width_param + sourceMacro * width_mod, -1.0f, 1.0f);
-    float currentPitch    = std::clamp(pitch_param + sourceMacro * pitch_mod, -1.0f, 1.0f) * 36.0f; // Scale -1.0 to 1.0 -> -36 to 36 semitones
+    float currentPitch    = std::clamp(pitch_param + sourceMacro * pitch_mod * 36.0f, -36.0f, 36.0f); // Range is already -36 to 36
     
     // Convert currentPitch from semitones to frequency multiplier
     float pitchMult = std::pow(2.0f, currentPitch / 12.0f);
@@ -551,7 +551,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     }
 
     // Mix into output buffers
-    float scaleFactor = 1.0f; // Flat output
+    float scaleFactor = 1.0f / std::sqrt((float)std::max(1, targetPartials));
 
     for (int s = 0; s < numSamples; ++s) {
       float envVal = adsr.getNextSample();
