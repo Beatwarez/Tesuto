@@ -1199,6 +1199,23 @@ class KronosSynth {
         
         this.updateLaneMoverButtons();
         this.updateRoutingOrder();
+        
+        // Ensure active UI lanes haven't been physically moved to the wrong container
+        const activeLeftLane = this.activeLeftFocus ? document.querySelector(`.mod-lane[data-lane="${this.activeLeftFocus}"]`) : null;
+        if (activeLeftLane && activeLeftLane.closest('#lanes-right')) {
+            this.activeLeftFocus = null;
+            this.sendParamToCpp('ui_active_left', 0);
+            this.renderSidePanels();
+            this.updateToggleUI();
+        }
+        
+        const activeRightLane = this.activeRightFocus ? document.querySelector(`.mod-lane[data-lane="${this.activeRightFocus}"]`) : null;
+        if (activeRightLane && activeRightLane.closest('#lanes-left')) {
+            this.activeRightFocus = null;
+            this.sendParamToCpp('ui_active_right', 0);
+            this.renderSidePanels();
+            this.updateToggleUI();
+        }
     }
     
     updateLaneMoverButtons() {
