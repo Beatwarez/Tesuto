@@ -464,7 +464,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             if (freqs[p] >= currentSampleRate * 0.49f) {
                 targetAmps[p] = 0.0f;
             } else {
-                targetAmps[p] = targetAmp * (1.0f / std::sqrt(virtualHarmonicIndex + 1.0f));
+                targetAmps[p] = targetAmp * (1.0f / (float)(p + 1));
             }
         } else {
             freqs[p] = 0.0f;
