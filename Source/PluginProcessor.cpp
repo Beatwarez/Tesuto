@@ -36,15 +36,24 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         juce::StringArray filterTypes = { "LP", "HP", "BP", "NOTCH", "COMB", "VOWEL" };
         for (int p = 1; p <= 8; ++p) {
             juce::String pStr = juce::String(p);
-            if (p == 6 || p == 7) {
+            if (p == 6) {
                 layout.add(std::make_unique<juce::AudioParameterFloat>(
-                    juce::ParameterID("mod" + mStr + "_p" + pStr, 1), 
-                    "mod" + mStr + "_p" + pStr, 
+                    juce::ParameterID("mod" + mStr + "_typeA", 1), 
+                    "mod" + mStr + "_typeA", 
                     juce::NormalisableRange<float>(0.0f, 5.0f, 1.0f),
                     0.0f,
                     juce::AudioParameterFloatAttributes().withAutomatable(false)
                 ));
-                layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr + "_mod", 1), "mod" + mStr + "_p" + pStr + "_mod", -1.0f, 1.0f, 0.0f));
+                layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_typeA_mod", 1), "mod" + mStr + "_typeA_mod", -1.0f, 1.0f, 0.0f));
+            } else if (p == 7) {
+                layout.add(std::make_unique<juce::AudioParameterFloat>(
+                    juce::ParameterID("mod" + mStr + "_typeB", 1), 
+                    "mod" + mStr + "_typeB", 
+                    juce::NormalisableRange<float>(0.0f, 5.0f, 1.0f),
+                    0.0f,
+                    juce::AudioParameterFloatAttributes().withAutomatable(false)
+                ));
+                layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_typeB_mod", 1), "mod" + mStr + "_typeB_mod", -1.0f, 1.0f, 0.0f));
             } else {
                 layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr, 1), "mod" + mStr + "_p" + pStr, -512.0f, 512.0f, 0.0f));
                 layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr + "_mod", 1), "mod" + mStr + "_p" + pStr + "_mod", -1.0f, 1.0f, 0.0f));
@@ -102,8 +111,16 @@ KronosAudioProcessor::KronosAudioProcessor()
         mod_macro[m-2] = apvts.getRawParameterValue("mod" + mStr + "_macro");
         for (int p = 1; p <= 8; ++p) {
             juce::String pStr = juce::String(p);
-            mod_p[m-2][p-1] = apvts.getRawParameterValue("mod" + mStr + "_p" + pStr);
-            mod_pMod[m-2][p-1] = apvts.getRawParameterValue("mod" + mStr + "_p" + pStr + "_mod");
+            if (p == 6) {
+                mod_p[m-2][5] = apvts.getRawParameterValue("mod" + mStr + "_typeA");
+                mod_pMod[m-2][5] = apvts.getRawParameterValue("mod" + mStr + "_typeA_mod");
+            } else if (p == 7) {
+                mod_p[m-2][6] = apvts.getRawParameterValue("mod" + mStr + "_typeB");
+                mod_pMod[m-2][6] = apvts.getRawParameterValue("mod" + mStr + "_typeB_mod");
+            } else {
+                mod_p[m-2][p-1] = apvts.getRawParameterValue("mod" + mStr + "_p" + pStr);
+                mod_pMod[m-2][p-1] = apvts.getRawParameterValue("mod" + mStr + "_p" + pStr + "_mod");
+            }
         }
     }
     

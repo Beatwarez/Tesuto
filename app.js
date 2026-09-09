@@ -1439,9 +1439,9 @@ class KronosSynth {
             }
             this.knobs[param].value = val;
             this.knobs[param].updateUI();
-        } else if (param.endsWith('_p6') || param.endsWith('_p7')) {
+        } else if (param.endsWith('_typeA') || param.endsWith('_typeB')) {
             const laneId = param.replace('mod', '').split('_')[0];
-            const isTypeA = param.endsWith('_p6');
+            const isTypeA = param.endsWith('_typeA');
             const selectorId = isTypeA ? `#filter-type-a-${laneId}` : `#filter-type-b-${laneId}`;
             const typeLabel = document.querySelector(`${selectorId} .type-label`);
             if (typeLabel) {
@@ -1715,8 +1715,8 @@ class KronosSynth {
     }
 
     setupDynamicFilterSelectors(container, laneId) {
-        const paramIdA = `mod${laneId}_p6`;
-        const paramIdB = `mod${laneId}_p7`;
+        const paramIdA = `mod${laneId}_typeA`;
+        const paramIdB = `mod${laneId}_typeB`;
         
         if (this.values[paramIdA] === undefined) this.values[paramIdA] = 0;
         if (this.values[paramIdB] === undefined) this.values[paramIdB] = 0;
