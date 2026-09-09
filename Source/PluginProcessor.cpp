@@ -15,7 +15,7 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     
     // Modulator 1 (Source)
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_macro", 1), "mod1_macro", 0.0f, 1.0f, 0.0f));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p1", 1), "mod1_p1", juce::NormalisableRange<float>(1.0f, 512.0f, 1.0f, 1.0f), 256.0f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p1", 1), "mod1_p1", juce::NormalisableRange<float>(1.0f, 256.0f, 1.0f, 1.0f), 256.0f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p1_mod", 1), "mod1_p1_mod", -1.0f, 1.0f, 0.0f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p2", 1), "mod1_p2", -1.0f, 1.0f, 0.0f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p2_mod", 1), "mod1_p2_mod", -1.0f, 1.0f, 0.0f));
@@ -423,7 +423,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
     float sourceMacro    = processor->mod1_macro ? processor->mod1_macro->load() : 0.0f;
 
-    float currentPartials = std::clamp(partials_param + sourceMacro * partials_mod * 512.0f, 1.0f, 512.0f);
+    float currentPartials = std::clamp(partials_param + sourceMacro * partials_mod * 256.0f, 1.0f, 256.0f);
     float currentBalance  = std::clamp(balance_param + sourceMacro * balance_mod, -1.0f, 1.0f);
     float currentWidth    = std::clamp(width_param + sourceMacro * width_mod, -1.0f, 1.0f);
     float currentPitch    = std::clamp(pitch_param + sourceMacro * pitch_mod * 36.0f, -36.0f, 36.0f); // Range is already -36 to 36
@@ -451,7 +451,9 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         if (maxStart < 1.0f) maxStart = 1.0f;
         clusterStart = 1.0f + currentBalance * (maxStart - 1.0f);
     } else if (currentBalance < 0.0f) {
-        clusterStart = 1.0f; // Could be modified for sub harmonics later
+        float maxStart = maxHarmonics - totalClusterSpan;
+        if (maxStart < 1.0f) maxStart = 1.0f;
+        clusterStart = 1.0f + currentBalance * maxStart; // Pushes down to roughly -maxStart
     }
 
     float freqs[512];
@@ -463,12 +465,13 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     for (int p = 0; p < 512; ++p) {
         if (p < targetPartials) {
             float virtualHarmonicIndex = clusterStart + (float)p * spacing;
-            freqs[p] = renderFreq * virtualHarmonicIndex;
+            float absVH = std::abs(virtualHarmonicIndex);
+            freqs[p] = renderFreq * absVH;
             
             if (freqs[p] >= currentSampleRate * 0.49f) {
                 targetAmps[p] = 0.0f;
             } else {
-                targetAmps[p] = targetAmp * (1.0f / std::sqrt(virtualHarmonicIndex + 1.0f));
+                targetAmps[p] = targetAmp * std::min(1.0f, 1.0f / std::max(0.001f, absVH));
             }
         } else {
             freqs[p] = 0.0f;

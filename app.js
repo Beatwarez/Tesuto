@@ -2095,8 +2095,8 @@ class KronosSynth {
         const p2_mod = this.values.mod1_p2_mod || 0.0;
         const p3_mod = this.values.mod1_p3_mod || 0.0;
         
-        let partialsVal = (this.values.mod1_p1 !== undefined ? this.values.mod1_p1 : 256.0) + macroVal * p1_mod * 512.0;
-        partialsVal = Math.max(1.0, Math.min(partialsVal, 512.0));
+        let partialsVal = (this.values.mod1_p1 !== undefined ? this.values.mod1_p1 : 256.0) + macroVal * p1_mod * 256.0;
+        partialsVal = Math.max(1.0, Math.min(partialsVal, 256.0));
         
         let balanceVal = (this.values.mod1_p2 || 0.0) + macroVal * p2_mod;
         balanceVal = Math.max(-1.0, Math.min(balanceVal, 1.0));
@@ -2104,8 +2104,8 @@ class KronosSynth {
         let widthVal = (this.values.mod1_p3 || 0.0) + macroVal * p3_mod;
         widthVal = Math.max(-1.0, Math.min(widthVal, 1.0));
         
-        // The canvas X-axis maps to exactly 512 slots
-        const maxSlots = 512.0; 
+        // The canvas X-axis maps to exactly 256 slots
+        const maxSlots = 256.0; 
         
         let spacing = 1.0;
         if (widthVal > 0) {
@@ -2122,15 +2122,16 @@ class KronosSynth {
             const maxStart = Math.max(0.0, maxSlots - totalClusterSpan);
             clusterStart = balanceVal * maxStart;
         } else if (balanceVal < 0) {
-            clusterStart = 0.0;
+            const maxStart = Math.max(0.0, maxSlots - totalClusterSpan);
+            clusterStart = balanceVal * maxStart;
         }
         
         // Draw bars
         const computedGray = getComputedStyle(document.documentElement).getPropertyValue('--fg-main').trim() || '#e0e0e6';
         ctx.fillStyle = computedGray;
         
-        // Proportional lines based on 512 = 50 lines
-        const numDraws = Math.max(1, Math.round((partialsVal / 512.0) * 50)); 
+        // Proportional lines based on 256 = 50 lines
+        const numDraws = Math.max(1, Math.round((partialsVal / 256.0) * 50)); 
         const partialStep = partialsVal / Math.max(1, numDraws - 1);
         
         for (let i = 0; i < numDraws; i++) {
@@ -2144,8 +2145,9 @@ class KronosSynth {
             // Fixed thin lines
             const barW = 2;
             
-            // Mirror the exact DSP amplitude math: 1.0 / sqrt(harmonicIndex + 1.0)
-            const rolloff = 1.0 / Math.sqrt(slotIndex + 1.0);
+            // Mirror the exact DSP amplitude math: min(1.0, 1.0 / abs(vH))
+            const absVH = Math.abs(slotIndex + 1.0); // +1.0 because JS slotIndex starts at 0
+            const rolloff = Math.min(1.0, 1.0 / Math.max(0.001, absVH));
             const lineH = h * 0.8 * rolloff;
             const yOffset = h * 0.1 + (h * 0.8 - lineH); // Align to bottom
             
