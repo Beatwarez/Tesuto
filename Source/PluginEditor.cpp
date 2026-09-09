@@ -86,3 +86,17 @@ void KronosAudioProcessorEditor::timerCallback()
         }
     }
 }
+
+void KronosAudioProcessorEditor::triggerQueryAll()
+{
+    juce::MessageManager::callAsync([this]() {
+        for (auto& pair : webView.localParams)
+            pair.second = -999.0f;
+        for (int i = 0; i < 128; ++i)
+            webView.localActiveNotes[i] = false;
+            
+        webView.evaluateJavascript("if (window.kronosSynth) window.kronosSynth.updateRoutingFromCpp('" + audioProcessor.apvts.state.getProperty("routingOrder", "2,3,4,5,6,7,8").toString() + "');");
+        webView.evaluateJavascript("if (window.kronosSynth) window.kronosSynth.updateParamFromCpp('ui_active_left', " + audioProcessor.apvts.state.getProperty("ui_active_left", "0.0").toString() + ");");
+        webView.evaluateJavascript("if (window.kronosSynth) window.kronosSynth.updateParamFromCpp('ui_active_right', " + audioProcessor.apvts.state.getProperty("ui_active_right", "0.0").toString() + ");");
+    });
+}

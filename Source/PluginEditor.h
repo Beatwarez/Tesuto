@@ -159,6 +159,7 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     void timerCallback() override;
+    void triggerQueryAll();
 
 private:
     KronosAudioProcessor& audioProcessor;

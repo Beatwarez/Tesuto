@@ -375,8 +375,12 @@ void KronosAudioProcessor::setStateInformation (const void* data, int sizeInByte
             juce::String savedRouting = apvts.state.getProperty("routingOrder", "2,3,4,5,6,7,8").toString();
             updateRoutingOrder(savedRouting);
             
-            // Note: ui_active_left and ui_active_right are preserved as properties
-            // in apvts.state natively, and they will be queried by PluginEditor later.
+            // Push updated state to the UI if it is already open
+            if (auto* editor = getActiveEditor()) {
+                if (auto* myEditor = dynamic_cast<KronosAudioProcessorEditor*>(editor)) {
+                    myEditor->triggerQueryAll();
+                }
+            }
         }
     }
 }

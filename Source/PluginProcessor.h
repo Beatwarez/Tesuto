@@ -82,8 +82,8 @@ public:
           float denom = std::pow(D, n * 0.5f);
           if (denom < 0.000001f) denom = 0.000001f;
           if (type == 0) return 1.0f / denom;
-          if (type == 1) return (std::pow(x / q, n) / denom) * (1.0f + rawReso * rawReso * 10.0f);
-          if (type == 2) return std::pow(x2, n) / denom;
+          if (type == 1) return std::pow(x2, n) / denom;
+          if (type == 2) return std::pow(x, n) / denom;
           if (type == 3) return std::pow(std::abs(1.0f - x2), n) / denom;
       }
       if (type == 4) {
