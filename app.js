@@ -2172,14 +2172,15 @@ class KronosSynth {
             const x2 = x * x;
             
             if (type <= 3) {
-                const q = 0.707 * Math.exp(rawReso * 3.0);
+                const scaledReso = (type <= 2) ? (rawReso * 0.36) : rawReso;
+                const q = 0.707 * Math.exp(scaledReso * 3.0);
                 const n = 1.0 + rawSlope * 3.0;
                 const D = (1.0 - x2) * (1.0 - x2) + (x2 / (q * q));
                 let denom = Math.pow(D, n * 0.5);
                 if (denom < 0.000001) denom = 0.000001;
                 if (type === 0) return 1.0 / denom;
                 if (type === 1) return Math.pow(x2, n) / denom;
-                if (type === 2) return (Math.pow(x / q, n) / denom) * (1.0 + rawReso * rawReso * 10.0);
+                if (type === 2) return (Math.pow(x / q, n) / denom) * (1.0 + scaledReso * scaledReso * 10.0);
                 if (type === 3) return Math.pow(Math.abs(1.0 - x2), n) / denom;
             }
 

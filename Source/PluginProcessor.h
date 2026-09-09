@@ -76,7 +76,8 @@ public:
       float x2 = x * x;
       
       if (type <= 3) {
-          float q = 0.707f * std::exp(rawReso * 3.0f);
+          float scaledReso = (type <= 2) ? (rawReso * 0.36f) : rawReso;
+          float q = 0.707f * std::exp(scaledReso * 3.0f);
           float n = 1.0f + rawSlope * 3.0f;
           float D = (1.0f - x2) * (1.0f - x2) + (x2 / (q * q));
           float denom = std::pow(D, n * 0.5f);
