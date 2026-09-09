@@ -482,11 +482,11 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     float alterVal = 0.0f;
 
     for (int i = 0; i < 7; ++i) {
-        int laneNumber = processor->routingOrder[i].load();
+        int laneNumber = std::round(processor->routingOrder[i].load());
         if (laneNumber < 2 || laneNumber > 8) continue;
         
         int laneIdx = laneNumber - 2;
-        int engineType = processor->mod_engine[laneIdx] ? processor->mod_engine[laneIdx]->load() : 0;
+        int engineType = processor->mod_engine[laneIdx] ? std::round(processor->mod_engine[laneIdx]->load()) : 0;
         float macroVal = processor->mod_macro[laneIdx] ? processor->mod_macro[laneIdx]->load() : 0.0f;
         
         if (engineType == 2) { // FILTER
@@ -501,8 +501,8 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             float morph_param  = processor->mod_p[laneIdx][4] ? processor->mod_p[laneIdx][4]->load() : 0.0f;
             float morph_mod    = processor->mod_pMod[laneIdx][4] ? processor->mod_pMod[laneIdx][4]->load() : 0.0f;
             
-            int typeA = processor->mod_p[laneIdx][5] ? (int)processor->mod_p[laneIdx][5]->load() : 0;
-            int typeB = processor->mod_p[laneIdx][6] ? (int)processor->mod_p[laneIdx][6]->load() : 0;
+            int typeA = processor->mod_p[laneIdx][5] ? std::round(processor->mod_p[laneIdx][5]->load()) : 0;
+            int typeB = processor->mod_p[laneIdx][6] ? std::round(processor->mod_p[laneIdx][6]->load()) : 0;
 
             float currentCutoff = std::clamp(cutoff_param + macroVal * cutoff_mod, 0.0f, 1.0f);
             float currentOffset = std::clamp(offset_param + macroVal * offset_mod, -1.0f, 1.0f);
