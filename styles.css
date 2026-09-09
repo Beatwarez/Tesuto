@@ -793,7 +793,11 @@ select.slider-name option {
     justify-content: space-evenly;
     align-items: flex-end;
     box-sizing: border-box;
-    transform: translateY(14px); /* Pushes the 4 knobs down by exactly 14px */
+}
+
+/* Push the 4 knobs down by exactly 14px ONLY in the FILTER engine */
+.engine-filter-panel .filter-params-row {
+    transform: translateY(14px);
 }
 
 /* Mod Ring Outer SVG */
