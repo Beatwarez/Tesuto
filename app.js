@@ -1440,6 +1440,7 @@ class KronosSynth {
             this.knobs[param].value = val;
             this.knobs[param].updateUI();
         } else if (param.endsWith('_typeA') || param.endsWith('_typeB')) {
+            this.values[param] = val;
             const laneId = param.replace('mod', '').split('_')[0];
             const isTypeA = param.endsWith('_typeA');
             const selectorId = isTypeA ? `#filter-type-a-${laneId}` : `#filter-type-b-${laneId}`;
