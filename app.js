@@ -2144,8 +2144,8 @@ class KronosSynth {
             // Fixed thin lines
             const barW = 2;
             
-            // Mirror the exact DSP amplitude math: 1.0 / (harmonicIndex + 1.0)
-            const rolloff = 1.0 / (p + 1.0);
+            // Mirror the exact DSP amplitude math: 1.0 / sqrt(harmonicIndex + 1.0)
+            const rolloff = 1.0 / Math.sqrt(slotIndex + 1.0);
             const lineH = h * 0.8 * rolloff;
             const yOffset = h * 0.1 + (h * 0.8 - lineH); // Align to bottom
             
