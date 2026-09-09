@@ -1444,9 +1444,9 @@ class KronosSynth {
             const laneId = param.replace('mod', '').split('_')[0];
             const isFilterA = param.endsWith('_filterA');
             const selectorId = isFilterA ? `#filter-type-a-${laneId}` : `#filter-type-b-${laneId}`;
-            const typeLabel = document.querySelector(`${selectorId} .type-label`);
-            if (typeLabel) {
-                typeLabel.textContent = this.filterTypes[Math.round(val)] || 'LP';
+            const selectEl = document.querySelector(`${selectorId} .filter-type-select`);
+            if (selectEl) {
+                selectEl.value = Math.round(val);
             }
         } else if (param === 'filterMorphMod') {
             if (this.sliders.filterMorph) this.sliders.filterMorph.updateModLine();
@@ -1722,34 +1722,34 @@ class KronosSynth {
         if (this.values[paramIdA] === undefined) this.values[paramIdA] = 0;
         if (this.values[paramIdB] === undefined) this.values[paramIdB] = 0;
         
-        const typeALabel = container.querySelector(`#filter-type-a-${laneId} .type-label`);
-        const typeBLabel = container.querySelector(`#filter-type-b-${laneId} .type-label`);
+        const selectA = container.querySelector(`#filter-type-a-${laneId} .filter-type-select`);
+        const selectB = container.querySelector(`#filter-type-b-${laneId} .filter-type-select`);
         
-        if (typeALabel) {
-            typeALabel.textContent = this.filterTypes[Math.round(this.values[paramIdA])] || 'LP';
-            container.querySelector(`#filter-type-a-${laneId} .cycle-left`).addEventListener('click', () => {
-                this.values[paramIdA] = (Math.round(this.values[paramIdA]) - 1 + 6) % 6;
-                typeALabel.textContent = this.filterTypes[this.values[paramIdA]];
-                this.onSliderChange(paramIdA, this.values[paramIdA]);
+        if (selectA) {
+            selectA.innerHTML = '';
+            this.filterTypes.forEach((type, index) => {
+                selectA.appendChild(new Option(type, index));
             });
-            container.querySelector(`#filter-type-a-${laneId} .cycle-right`).addEventListener('click', () => {
-                this.values[paramIdA] = (Math.round(this.values[paramIdA]) + 1) % 6;
-                typeALabel.textContent = this.filterTypes[this.values[paramIdA]];
-                this.onSliderChange(paramIdA, this.values[paramIdA]);
+            selectA.value = Math.round(this.values[paramIdA]);
+            
+            selectA.addEventListener('change', (e) => {
+                const val = parseInt(e.target.value, 10);
+                this.values[paramIdA] = val;
+                this.onSliderChange(paramIdA, val);
             });
         }
         
-        if (typeBLabel) {
-            typeBLabel.textContent = this.filterTypes[Math.round(this.values[paramIdB])] || 'LP';
-            container.querySelector(`#filter-type-b-${laneId} .cycle-left`).addEventListener('click', () => {
-                this.values[paramIdB] = (Math.round(this.values[paramIdB]) - 1 + 6) % 6;
-                typeBLabel.textContent = this.filterTypes[this.values[paramIdB]];
-                this.onSliderChange(paramIdB, this.values[paramIdB]);
+        if (selectB) {
+            selectB.innerHTML = '';
+            this.filterTypes.forEach((type, index) => {
+                selectB.appendChild(new Option(type, index));
             });
-            container.querySelector(`#filter-type-b-${laneId} .cycle-right`).addEventListener('click', () => {
-                this.values[paramIdB] = (Math.round(this.values[paramIdB]) + 1) % 6;
-                typeBLabel.textContent = this.filterTypes[this.values[paramIdB]];
-                this.onSliderChange(paramIdB, this.values[paramIdB]);
+            selectB.value = Math.round(this.values[paramIdB]);
+            
+            selectB.addEventListener('change', (e) => {
+                const val = parseInt(e.target.value, 10);
+                this.values[paramIdB] = val;
+                this.onSliderChange(paramIdB, val);
             });
         }
     }
