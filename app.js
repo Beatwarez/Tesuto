@@ -2157,8 +2157,8 @@ class KronosSynth {
         const filterSlopeVal = Math.max(0.0, Math.min(1.0, baseSlope + macroVal * (this.values[`mod${laneId}_p4_mod`] || 0.0)));
         const morph = Math.max(0.0, Math.min(1.0, baseMorph + macroVal * (this.values[`mod${laneId}_p5_mod`] || 0.0)));
 
-        const typeA = this.values[`mod${laneId}_p6`] !== undefined ? this.values[`mod${laneId}_p6`] : 0;
-        const typeB = this.values[`mod${laneId}_p7`] !== undefined ? this.values[`mod${laneId}_p7`] : 0;
+        const typeA = this.values[`mod${laneId}_typeA`] !== undefined ? Math.round(this.values[`mod${laneId}_typeA`]) : 0;
+        const typeB = this.values[`mod${laneId}_typeB`] !== undefined ? Math.round(this.values[`mod${laneId}_typeB`]) : 0;
         
         const cutoffA_norm = Math.min(1.0, Math.max(0.0, filterVal - filterOffsetVal * 0.165));
         const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.165));
