@@ -530,10 +530,45 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             float warp_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
             float currentWarp = std::clamp(warp_param + macroVal * warp_mod, 0.0f, 1.0f);
             
+            float fold_param = processor->mod_p[laneIdx][1] ? processor->mod_p[laneIdx][1]->load() : 0.0f;
+            float fold_mod   = processor->mod_pMod[laneIdx][1] ? processor->mod_pMod[laneIdx][1]->load() : 0.0f;
+            float currentFold = std::clamp(fold_param + macroVal * fold_mod, -1.0f, 1.0f);
+
+            float tension_param = processor->mod_p[laneIdx][2] ? processor->mod_p[laneIdx][2]->load() : 0.0f;
+            float tension_mod   = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
+            float currentTension = std::clamp(tension_param + macroVal * tension_mod, 0.0f, 1.0f);
+
+            float shape_param = processor->mod_p[laneIdx][3] ? processor->mod_p[laneIdx][3]->load() : 0.0f;
+            float shape_mod   = processor->mod_pMod[laneIdx][3] ? processor->mod_pMod[laneIdx][3]->load() : 0.0f;
+            float currentShape = std::clamp(shape_param + macroVal * shape_mod, 0.0f, 1.0f);
+
+            float phaseShift = currentFold * 6.2831853f;
+            float freqMult = 1.0f + currentTension * 3.0f;
+
             for (int p = 0; p < targetPartials; ++p) {
-                float stretch = currentWarp * currentWarp * 3.5f * std::sin((float)(p + 1) * 1.57f + (float)p * 0.1f);
+                float phase = (((float)(p + 1) * 1.57f + (float)p * 0.1f) * freqMult) + phaseShift;
+                // Wrap phase to 0 - 2PI for reliable waveform calculation
+                float wrappedPhase = std::fmod(phase, 6.2831853f);
+                if (wrappedPhase < 0.0f) wrappedPhase += 6.2831853f;
+
+                float sineVal = std::sin(wrappedPhase);
+                float rampVal = (wrappedPhase / 3.14159265f) - 1.0f; // -1.0 to 1.0
+                float squareVal = (wrappedPhase < 3.14159265f) ? 1.0f : -1.0f;
+
+                float waveOutput = 0.0f;
+                if (currentShape <= 0.33f) {
+                    float morph = currentShape / 0.33f;
+                    waveOutput = sineVal * (1.0f - morph) + rampVal * morph;
+                } else if (currentShape <= 0.66f) {
+                    float morph = (currentShape - 0.33f) / 0.33f;
+                    waveOutput = rampVal * (1.0f - morph) + squareVal * morph;
+                } else {
+                    waveOutput = squareVal;
+                }
+
+                float stretch = currentWarp * currentWarp * 3.5f * waveOutput;
                 freqs[p] += currentFundamentalFreq * stretch;
-                if (freqs[p] < 0.0f) freqs[p] = std::abs(freqs[p]); // Prevent negative frequencies (NaN filter math crash)
+                if (freqs[p] < 0.0f) freqs[p] = std::abs(freqs[p]);
             }
         }
     }

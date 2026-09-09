@@ -1,8 +1,8 @@
 # Antigravity Workflow Rules
 
 1. **Implementation Plan Workflow**:
-   - Whenever the user presents a problem, the agent must first research, formulate a detailed implementation plan (implementation_plan.md), and present it to the user.
-   - The agent must **wait** for the user's explicit command or approval to proceed (e.g. "proceed", "go ahead").
+   - Whenever the user presents a problem or requests a change, the agent MUST first research, formulate a detailed implementation plan (`implementation_plan.md`), and present it to the user.
+   - **STRICT RULE**: The agent is explicitly forbidden from making ANY code edits to any files before presenting the implementation plan and receiving the user's explicit command or approval to proceed (e.g. "proceed", "go ahead"). No matter how small the tweak, a plan must be approved first.
    - Once the command/approval to proceed is given, the agent must start execution immediately.
 2. **Implicit Permission / Auto-execution**:
    - Once the user gives the proceed order, the agent should perform all edits, builds, and verifications **completely autonomously**.
