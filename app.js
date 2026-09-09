@@ -2178,8 +2178,8 @@ class KronosSynth {
                 let denom = Math.pow(D, n * 0.5);
                 if (denom < 0.000001) denom = 0.000001;
                 if (type === 0) return 1.0 / denom;
-                if (type === 1) return (Math.pow(x / q, n) / denom) * (1.0 + rawReso * rawReso * 10.0);
-                if (type === 2) return Math.pow(x2, n) / denom;
+                if (type === 1) return Math.pow(x2, n) / denom;
+                if (type === 2) return (Math.pow(x / q, n) / denom) * (1.0 + rawReso * rawReso * 10.0);
                 if (type === 3) return Math.pow(Math.abs(1.0 - x2), n) / denom;
             }
 
