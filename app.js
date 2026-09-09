@@ -1725,28 +1725,28 @@ class KronosSynth {
         const typeBLabel = container.querySelector(`#filter-type-b-${laneId} .type-label`);
         
         if (typeALabel) {
-            typeALabel.textContent = this.filterTypes[this.values[paramIdA]] || 'LP';
+            typeALabel.textContent = this.filterTypes[Math.round(this.values[paramIdA])] || 'LP';
             container.querySelector(`#filter-type-a-${laneId} .cycle-left`).addEventListener('click', () => {
-                this.values[paramIdA] = (this.values[paramIdA] - 1 + 6) % 6;
+                this.values[paramIdA] = (Math.round(this.values[paramIdA]) - 1 + 6) % 6;
                 typeALabel.textContent = this.filterTypes[this.values[paramIdA]];
                 this.onSliderChange(paramIdA, this.values[paramIdA]);
             });
             container.querySelector(`#filter-type-a-${laneId} .cycle-right`).addEventListener('click', () => {
-                this.values[paramIdA] = (this.values[paramIdA] + 1) % 6;
+                this.values[paramIdA] = (Math.round(this.values[paramIdA]) + 1) % 6;
                 typeALabel.textContent = this.filterTypes[this.values[paramIdA]];
                 this.onSliderChange(paramIdA, this.values[paramIdA]);
             });
         }
         
         if (typeBLabel) {
-            typeBLabel.textContent = this.filterTypes[this.values[paramIdB]] || 'LP';
+            typeBLabel.textContent = this.filterTypes[Math.round(this.values[paramIdB])] || 'LP';
             container.querySelector(`#filter-type-b-${laneId} .cycle-left`).addEventListener('click', () => {
-                this.values[paramIdB] = (this.values[paramIdB] - 1 + 6) % 6;
+                this.values[paramIdB] = (Math.round(this.values[paramIdB]) - 1 + 6) % 6;
                 typeBLabel.textContent = this.filterTypes[this.values[paramIdB]];
                 this.onSliderChange(paramIdB, this.values[paramIdB]);
             });
             container.querySelector(`#filter-type-b-${laneId} .cycle-right`).addEventListener('click', () => {
-                this.values[paramIdB] = (this.values[paramIdB] + 1) % 6;
+                this.values[paramIdB] = (Math.round(this.values[paramIdB]) + 1) % 6;
                 typeBLabel.textContent = this.filterTypes[this.values[paramIdB]];
                 this.onSliderChange(paramIdB, this.values[paramIdB]);
             });
@@ -2111,12 +2111,11 @@ class KronosSynth {
             const barW = 2;
             
             // Mirror the exact DSP amplitude math: min(1.0, 1.0 / abs(vH))
-            const absVH = Math.abs(slotIndex + 1.0); // +1.0 because JS slotIndex starts at 0
-            const rolloff = Math.min(1.0, 1.0 / Math.max(0.001, absVH));
-            const lineH = h * 0.8 * rolloff;
-            const yOffset = h * 0.1 + (h * 0.8 - lineH); // Align to bottom
+            // Disabled: Render all partials at full height for visual clarity
+            const lineH = h * 0.8;
+            const yOffset = h * 0.1; // Align to top/bottom
             
-            ctx.globalAlpha = Math.max(0.1, rolloff);
+            ctx.globalAlpha = 1.0;
             ctx.fillStyle = '#d1d1d6';
             
             ctx.fillRect(x, yOffset, barW, lineH);
@@ -2146,11 +2145,11 @@ class KronosSynth {
         if (!laneId) return;
 
         const macroVal = this.values[`mod${laneId}_macro`] || 0.0;
-        const baseCutoff = this.values[`mod${laneId}_p1`] !== undefined ? this.values[`mod${laneId}_p1`] : 0.75;
-        const baseOffset = this.values[`mod${laneId}_p2`] || 0.0;
-        const baseReso = this.values[`mod${laneId}_p3`] || 0.2;
-        const baseSlope = this.values[`mod${laneId}_p4`] || 0.5;
-        const baseMorph = this.values[`mod${laneId}_p5`] || 0.0;
+        const baseCutoff = this.values[`mod${laneId}_p1`] !== undefined ? this.values[`mod${laneId}_p1`] : 0.5;
+        const baseOffset = this.values[`mod${laneId}_p2`] !== undefined ? this.values[`mod${laneId}_p2`] : 0.0;
+        const baseReso = this.values[`mod${laneId}_p3`] !== undefined ? this.values[`mod${laneId}_p3`] : 0.2;
+        const baseSlope = this.values[`mod${laneId}_p4`] !== undefined ? this.values[`mod${laneId}_p4`] : 0.5;
+        const baseMorph = this.values[`mod${laneId}_p5`] !== undefined ? this.values[`mod${laneId}_p5`] : 0.0;
         
         const filterVal = Math.max(0.0, Math.min(1.0, baseCutoff + macroVal * (this.values[`mod${laneId}_p1_mod`] || 0.0)));
         const filterOffsetVal = Math.max(-1.0, Math.min(1.0, baseOffset + macroVal * (this.values[`mod${laneId}_p2_mod`] || 0.0)));
@@ -2158,8 +2157,8 @@ class KronosSynth {
         const filterSlopeVal = Math.max(0.0, Math.min(1.0, baseSlope + macroVal * (this.values[`mod${laneId}_p4_mod`] || 0.0)));
         const morph = Math.max(0.0, Math.min(1.0, baseMorph + macroVal * (this.values[`mod${laneId}_p5_mod`] || 0.0)));
 
-        const typeA = this.values[`mod${laneId}_p6`] || 0;
-        const typeB = this.values[`mod${laneId}_p7`] || 0;
+        const typeA = this.values[`mod${laneId}_p6`] !== undefined ? this.values[`mod${laneId}_p6`] : 0;
+        const typeB = this.values[`mod${laneId}_p7`] !== undefined ? this.values[`mod${laneId}_p7`] : 0;
         
         const cutoffA_norm = Math.min(1.0, Math.max(0.0, filterVal - filterOffsetVal * 0.165));
         const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.165));
