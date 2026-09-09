@@ -21,7 +21,7 @@
                 <span class="tagline">drone synthesis laboratory</span>
             </div>
             <div class="header-right">
-                <span class="build-version">BUILD #0.41</span>
+                <span class="build-version">BUILD #0.40</span>
             </div>
         </header>
 
@@ -408,3 +408,197 @@
 </script>
 </body>
 </html>
+<style>
+/* Editor Overrides */
+#export-btn {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 10000;
+    padding: 15px 30px;
+    background: #f97316;
+    color: white;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.filter-ui-canvas-container {
+    outline: 2px dashed #007acc;
+    pointer-events: none !important;
+}
+.morph-slider-container {
+    outline: 2px dashed #007acc;
+    min-height: 20px;
+}
+.draggable {
+    cursor: grab !important;
+    margin: 0 !important;
+    transform-origin: top left;
+}
+.draggable:active {
+    cursor: grabbing !important;
+}
+.scale-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 10px;
+    height: 10px;
+    background: #007acc;
+    cursor: se-resize;
+    z-index: 100;
+}
+.slider-fill.horizontal-fill { width: 50% !important; left: 25% !important; }
+.mod-line-fill { width: 40% !important; left: 30% !important; }
+</style>
+<button id="export-btn">Export Final HTML</button>
+<script>
+window.addEventListener('load', () => {
+    // 1. Hide everything except Lane 2
+    document.querySelectorAll('.mod-lane').forEach(lane => {
+        if(lane.getAttribute('data-lane') !== '2') {
+            lane.style.visibility = 'hidden';
+            lane.style.pointerEvents = 'none';
+        }
+    });
+    
+    // 2. Inject FILTER template into Lane 2
+    const lane2 = document.querySelector('.mod-lane[data-lane="2"]');
+    const tmpl = document.getElementById('tmpl-engine-filter').innerHTML.replace(/{{LANE}}/g, 2);
+    // Remove the slider-header and custom-slider to mimic app.js injection
+    const header = lane2.querySelector('.slider-header');
+    const slider = lane2.querySelector('.custom-slider');
+    lane2.innerHTML = '';
+    lane2.appendChild(header);
+    lane2.appendChild(slider);
+    
+    const dspWrapper = document.createElement('div');
+    dspWrapper.innerHTML = tmpl;
+    lane2.appendChild(dspWrapper.firstElementChild); // Appends .engine-filter-panel
+    
+    setTimeout(() => {
+        const panel = document.querySelector('.engine-filter-panel');
+        const panelRect = panel.getBoundingClientRect();
+        
+        const elementsToFlatten = panel.querySelectorAll('.knob-wrapper, .filter-type, .morph-slider-container');
+        
+        const positions = [];
+        elementsToFlatten.forEach(el => {
+            const rect = el.getBoundingClientRect();
+            positions.push({
+                el: el,
+                leftPct: ((rect.left - panelRect.left) / panelRect.width) * 100,
+                topPct: ((rect.top - panelRect.top) / panelRect.height) * 100
+            });
+        });
+
+        const rows = panel.querySelectorAll('.filter-morph-row, .filter-params-row');
+        rows.forEach(row => row.remove());
+        
+        positions.forEach(pos => {
+            pos.el.style.position = 'absolute';
+            pos.el.style.left = pos.leftPct + '%';
+            pos.el.style.top = pos.topPct + '%';
+            pos.el.classList.add('draggable');
+            
+            const handle = document.createElement('div');
+            handle.className = 'scale-handle';
+            pos.el.appendChild(handle);
+            
+            panel.appendChild(pos.el);
+        });
+
+        initDragAndDrop();
+    }, 100);
+});
+
+function initDragAndDrop() {
+    let activeEl = null, offsetX = 0, offsetY = 0;
+    let activeScaleEl = null, startMouseX = 0, startMouseY = 0, startScale = 1;
+    const GRID_SIZE = 5; // Fine grid
+
+    document.addEventListener('mousedown', (e) => {
+        if (e.target.classList.contains('scale-handle')) {
+            e.preventDefault();
+            activeScaleEl = e.target.closest('.draggable');
+            startMouseX = e.clientX;
+            startMouseY = e.clientY;
+            
+            const currentTransform = activeScaleEl.style.transform;
+            if (currentTransform && currentTransform.includes('scale')) {
+                const match = currentTransform.match(/scale\(([^)]+)\)/);
+                if (match) startScale = parseFloat(match[1]);
+            } else {
+                startScale = 1;
+            }
+            return;
+        }
+        
+        activeEl = e.target.closest('.draggable');
+        if (activeEl) {
+            const rect = activeEl.getBoundingClientRect();
+            offsetX = e.clientX - rect.left;
+            offsetY = e.clientY - rect.top;
+        }
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (activeScaleEl) {
+            const delta = Math.max(e.clientX - startMouseX, e.clientY - startMouseY);
+            let newScale = startScale + (delta / 100);
+            if (newScale < 0.1) newScale = 0.1;
+            activeScaleEl.style.transform = scale();
+            return;
+        }
+        
+        if (!activeEl) return;
+        
+        const panel = document.querySelector('.engine-filter-panel');
+        const panelRect = panel.getBoundingClientRect();
+        
+        let rawLeft = e.clientX - panelRect.left - offsetX;
+        let rawTop = e.clientY - panelRect.top - offsetY;
+        
+        activeEl.style.left = (Math.round(rawLeft / GRID_SIZE) * GRID_SIZE) + 'px';
+        activeEl.style.top = (Math.round(rawTop / GRID_SIZE) * GRID_SIZE) + 'px';
+    });
+
+    document.addEventListener('mouseup', () => { 
+        if (activeScaleEl) activeScaleEl = null;
+        if (!activeEl) return;
+        
+        const panel = document.querySelector('.engine-filter-panel');
+        const panelRect = panel.getBoundingClientRect();
+        
+        const currentLeftPx = parseFloat(activeEl.style.left);
+        const currentTopPx = parseFloat(activeEl.style.top);
+        
+        activeEl.style.left = ((currentLeftPx / panelRect.width) * 100).toFixed(2) + '%';
+        activeEl.style.top = ((currentTopPx / panelRect.height) * 100).toFixed(2) + '%';
+        
+        activeEl = null; 
+    });
+
+    document.getElementById('export-btn').addEventListener('click', () => {
+        const panel = document.querySelector('.engine-filter-panel');
+        const elements = panel.querySelectorAll('.draggable');
+        elements.forEach(el => el.classList.remove('draggable'));
+        const handles = panel.querySelectorAll('.scale-handle');
+        handles.forEach(h => h.remove());
+        
+        console.log("======================================");
+        console.log("FINAL HTML TO PASTE INTO INDEX.HTML:");
+        console.log("======================================");
+        console.log(panel.outerHTML);
+        
+        elements.forEach(el => {
+            el.classList.add('draggable');
+            const handle = document.createElement('div');
+            handle.className = 'scale-handle';
+            el.appendChild(handle);
+        });
+        alert("Exported to console! Press F12");
+    });
+}
+</script>
