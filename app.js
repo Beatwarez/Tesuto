@@ -1439,11 +1439,11 @@ class KronosSynth {
             }
             this.knobs[param].value = val;
             this.knobs[param].updateUI();
-        } else if (param.endsWith('_typeA') || param.endsWith('_typeB')) {
+        } else if (param.endsWith('_filterA') || param.endsWith('_filterB')) {
             this.values[param] = val;
             const laneId = param.replace('mod', '').split('_')[0];
-            const isTypeA = param.endsWith('_typeA');
-            const selectorId = isTypeA ? `#filter-type-a-${laneId}` : `#filter-type-b-${laneId}`;
+            const isFilterA = param.endsWith('_filterA');
+            const selectorId = isFilterA ? `#filter-type-a-${laneId}` : `#filter-type-b-${laneId}`;
             const typeLabel = document.querySelector(`${selectorId} .type-label`);
             if (typeLabel) {
                 typeLabel.textContent = this.filterTypes[Math.round(val)] || 'LP';
@@ -1716,8 +1716,8 @@ class KronosSynth {
     }
 
     setupDynamicFilterSelectors(container, laneId) {
-        const paramIdA = `mod${laneId}_typeA`;
-        const paramIdB = `mod${laneId}_typeB`;
+        const paramIdA = `mod${laneId}_filterA`;
+        const paramIdB = `mod${laneId}_filterB`;
         
         if (this.values[paramIdA] === undefined) this.values[paramIdA] = 0;
         if (this.values[paramIdB] === undefined) this.values[paramIdB] = 0;
@@ -2157,9 +2157,9 @@ class KronosSynth {
         const filterResoVal = Math.max(0.0, Math.min(1.0, baseReso + macroVal * (this.values[`mod${laneId}_p3_mod`] || 0.0)));
         const filterSlopeVal = Math.max(0.0, Math.min(1.0, baseSlope + macroVal * (this.values[`mod${laneId}_p4_mod`] || 0.0)));
         const morph = Math.max(0.0, Math.min(1.0, baseMorph + macroVal * (this.values[`mod${laneId}_p5_mod`] || 0.0)));
-
-        const typeA = this.values[`mod${laneId}_typeA`] !== undefined ? Math.round(this.values[`mod${laneId}_typeA`]) : 0;
-        const typeB = this.values[`mod${laneId}_typeB`] !== undefined ? Math.round(this.values[`mod${laneId}_typeB`]) : 0;
+        // 2. Fetch the current DSP values for filter types
+        const typeA = this.values[`mod${laneId}_filterA`] !== undefined ? Math.round(this.values[`mod${laneId}_filterA`]) : 0;
+        const typeB = this.values[`mod${laneId}_filterB`] !== undefined ? Math.round(this.values[`mod${laneId}_filterB`]) : 0;
         
         const cutoffA_norm = Math.min(1.0, Math.max(0.0, filterVal - filterOffsetVal * 0.165));
         const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.165));
