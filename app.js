@@ -1457,14 +1457,14 @@ class KronosSynth {
             }
             this.knobs[param].value = val;
             this.knobs[param].updateUI();
-        } else if (param === 'filterTypeA') {
-            const typeALabel = document.querySelector('#filter-type-a .type-label');
-            if (typeALabel) typeALabel.textContent = this.filterTypes[Math.round(val)];
-            this.updateFilterLabels();
-        } else if (param === 'filterTypeB') {
-            const typeBLabel = document.querySelector('#filter-type-b .type-label');
-            if (typeBLabel) typeBLabel.textContent = this.filterTypes[Math.round(val)];
-            this.updateFilterLabels();
+        } else if (param.endsWith('_p6') || param.endsWith('_p7')) {
+            const laneId = param.replace('mod', '').split('_')[0];
+            const isTypeA = param.endsWith('_p6');
+            const selectorId = isTypeA ? `#filter-type-a-${laneId}` : `#filter-type-b-${laneId}`;
+            const typeLabel = document.querySelector(`${selectorId} .type-label`);
+            if (typeLabel) {
+                typeLabel.textContent = this.filterTypes[Math.round(val)] || 'LP';
+            }
         } else if (param === 'filterMorphMod') {
             if (this.sliders.filterMorph) this.sliders.filterMorph.updateModLine();
         } else if (param.endsWith('_mod')) {
@@ -2128,11 +2128,14 @@ class KronosSynth {
             const barW = 2;
             
             // Mirror the exact DSP amplitude math: 1.0 / sqrt(harmonicIndex + 1.0)
-            const opacity = 1.0 / Math.sqrt(p + 1.0);
-            ctx.globalAlpha = Math.max(0.1, opacity);
+            const rolloff = 1.0 / Math.sqrt(p + 1.0);
+            const lineH = h * 0.8 * rolloff;
+            const yOffset = h * 0.1 + (h * 0.8 - lineH); // Align to bottom
+            
+            ctx.globalAlpha = Math.max(0.1, rolloff);
             ctx.fillStyle = '#d1d1d6';
             
-            ctx.fillRect(x, h * 0.1, barW, h * 0.8);
+            ctx.fillRect(x, yOffset, barW, lineH);
             ctx.globalAlpha = 1.0;
         }
     }

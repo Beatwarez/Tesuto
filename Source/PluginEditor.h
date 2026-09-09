@@ -94,6 +94,11 @@ public:
                             pair.second = -999.0f;
                         for (int i = 0; i < 128; ++i)
                             webViewInstance->localActiveNotes[i] = false;
+                            
+                        // Push routing and UI state explicitly on queryall
+                        webViewInstance->evaluateJavascript("if (window.kronosSynth) window.kronosSynth.updateRoutingFromCpp('" + p.apvts.state.getProperty("routingOrder", "2,3,4,5,6,7,8").toString() + "');");
+                        webViewInstance->evaluateJavascript("if (window.kronosSynth) window.kronosSynth.updateParamFromCpp('ui_active_left', " + p.apvts.state.getProperty("ui_active_left", "0.0").toString() + ");");
+                        webViewInstance->evaluateJavascript("if (window.kronosSynth) window.kronosSynth.updateParamFromCpp('ui_active_right', " + p.apvts.state.getProperty("ui_active_right", "0.0").toString() + ");");
                     }
                     else if (paramName == "noteon")
                     {
@@ -107,6 +112,10 @@ public:
                     {
                         if (paramName == "routingOrder") {
                             p.updateRoutingOrder(args[1].toString());
+                        } else if (paramName == "ui_active_left") {
+                            p.apvts.state.setProperty("ui_active_left", args[1].toString(), nullptr);
+                        } else if (paramName == "ui_active_right") {
+                            p.apvts.state.setProperty("ui_active_right", args[1].toString(), nullptr);
                         } else {
                             // 1. Force raw parameter update directly to guarantee instant audio thread response
                             if (auto* rawVal = p.apvts.getRawParameterValue (paramName))

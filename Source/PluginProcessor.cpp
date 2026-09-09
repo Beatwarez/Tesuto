@@ -46,9 +46,6 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("sustain", 1), "Sustain", 0.0f, 1.0f, 0.80f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("release", 1), "Release", juce::NormalisableRange<float>(0.01f, 8.0f, 0.01f, 0.35f), 1.00f));
     
-    // UI State
-    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("ui_active_left", 1), "ui_active_left", 0.0f, 8.0f, 0.0f));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("ui_active_right", 1), "ui_active_right", 0.0f, 8.0f, 0.0f));
     
     return layout;
 }
@@ -377,6 +374,9 @@ void KronosAudioProcessor::setStateInformation (const void* data, int sizeInByte
             // Restore routing order from the state tree property
             juce::String savedRouting = apvts.state.getProperty("routingOrder", "2,3,4,5,6,7,8").toString();
             updateRoutingOrder(savedRouting);
+            
+            // Note: ui_active_left and ui_active_right are preserved as properties
+            // in apvts.state natively, and they will be queried by PluginEditor later.
         }
     }
 }
