@@ -86,31 +86,13 @@ public:
           if (type == 2) return std::pow(x, n) / denom;
           if (type == 3) return std::pow(std::abs(1.0f - x2), n) / denom;
       }
+
       if (type == 4) {
-          if (freq <= fc) {
-              float peakDist = 1.0f - x;
-              if (peakDist < 0.1f && peakDist >= 0.0f) return 1.0f + rawReso * (0.1f - peakDist) * 20.0f;
-              return 1.0f;
-          } else {
-              return rawSlope * rawSlope;
-          }
-      }
-      if (type == 5) {
-          float h_idx = std::round(freq / 50.0f);
-          float threshH = fc / 50.0f;
-          if (h_idx > threshH) {
-              bool isOdd = ((int)h_idx % 2) != 0;
-              bool targetOdd = rawSlope >= 0.5f;
-              if (isOdd == targetOdd) return 1.0f - rawReso;
-          }
-          return 1.0f;
-      }
-      if (type == 6) {
           float phase = rawSlope * 6.283185307f;
           float comb = 0.5f - 0.5f * std::cos(freq * 6.283185307f / fc + phase);
           return 1.0f - rawReso * comb;
       }
-      if (type == 7) {
+      if (type == 5) {
           float v = rawSlope;
           float p1 = 700.0f * (1.0f - v) * (1.0f - v) + 300.0f * 2.0f * v * (1.0f - v) + 270.0f * v * v;
           float p2 = 1100.0f * (1.0f - v) * (1.0f - v) + 870.0f * 2.0f * v * (1.0f - v) + 2300.0f * v * v;
@@ -125,24 +107,7 @@ public:
           float mult = g(p1) + 0.5f * g(p2) + 0.2f * g(p3);
           return 0.1f + mult * 2.0f;
       }
-      if (type == 8) {
-          if (freq > fc) {
-              float h_val = std::fmod(freq * 12.9898f + 78.233f, 1.0f);
-              h_val = std::fmod(h_val * 43758.5453f, 1.0f);
-              if (h_val > rawReso) return 1.0f - rawSlope;
-          }
-          return 1.0f;
-      }
-      if (type == 9) {
-          float angle = rawSlope * 2.0f - 1.0f;
-          float tilt = std::pow(freq / fc, angle);
-          float peak = 0.0f;
-          if (rawReso > 0.01f) {
-              float dist = std::abs(1.0f - x);
-              if (dist < 0.2f) peak = rawReso * (0.2f - dist) * 5.0f;
-          }
-          return tilt + peak;
-      }
+
       return 1.0f;
   }
 

@@ -964,7 +964,7 @@ class KronosSynth {
         this.sliders.filterMorph = new CustomSlider('slider-filterMorph', 0, 1, this.values.filterMorph, 0.001, (v) => this.onSliderChange('filterMorph', v), true);
         this.sliders.filterMorph.updateModLine();
         
-        this.filterTypes = ['LP', 'BP', 'HP', 'NOTCH', 'BRICK', 'SIEVE', 'COMB', 'VOWEL', 'GLITCH', 'TILT'];
+        this.filterTypes = ['LP', 'HP', 'BP', 'NOTCH', 'COMB', 'VOWEL'];
         this.setupFilterTypeSelectors();
 
         // Build UI overlays and canvas sizing
@@ -1247,22 +1247,22 @@ class KronosSynth {
         const typeBLabel = document.querySelector('#filter-type-b .type-label');
         
         document.querySelector('#filter-type-a .cycle-left').addEventListener('click', () => {
-            this.values.filterTypeA = (this.values.filterTypeA - 1 + 10) % 10;
+            this.values.filterTypeA = (this.values.filterTypeA - 1 + 6) % 6;
             typeALabel.textContent = this.filterTypes[this.values.filterTypeA];
             this.onSliderChange('filterTypeA', this.values.filterTypeA);
         });
         document.querySelector('#filter-type-a .cycle-right').addEventListener('click', () => {
-            this.values.filterTypeA = (this.values.filterTypeA + 1) % 10;
+            this.values.filterTypeA = (this.values.filterTypeA + 1) % 6;
             typeALabel.textContent = this.filterTypes[this.values.filterTypeA];
             this.onSliderChange('filterTypeA', this.values.filterTypeA);
         });
         document.querySelector('#filter-type-b .cycle-left').addEventListener('click', () => {
-            this.values.filterTypeB = (this.values.filterTypeB - 1 + 10) % 10;
+            this.values.filterTypeB = (this.values.filterTypeB - 1 + 6) % 6;
             typeBLabel.textContent = this.filterTypes[this.values.filterTypeB];
             this.onSliderChange('filterTypeB', this.values.filterTypeB);
         });
         document.querySelector('#filter-type-b .cycle-right').addEventListener('click', () => {
-            this.values.filterTypeB = (this.values.filterTypeB + 1) % 10;
+            this.values.filterTypeB = (this.values.filterTypeB + 1) % 6;
             typeBLabel.textContent = this.filterTypes[this.values.filterTypeB];
             this.onSliderChange('filterTypeB', this.values.filterTypeB);
         });

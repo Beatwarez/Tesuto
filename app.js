@@ -220,31 +220,13 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 if (type === 2) return Math.pow(x, n) / denom;
                 if (type === 3) return Math.pow(Math.abs(1.0 - x2), n) / denom;
             }
+
             if (type === 4) {
-                if (freq <= fc) {
-                    const peakDist = 1.0 - x;
-                    if (peakDist < 0.1 && peakDist >= 0.0) return 1.0 + rawReso * (0.1 - peakDist) * 20.0;
-                    return 1.0;
-                } else {
-                    return rawSlope * rawSlope;
-                }
-            }
-            if (type === 5) {
-                const h_idx = Math.round(freq / 50.0);
-                const threshH = fc / 50.0;
-                if (h_idx > threshH) {
-                    const isOdd = (h_idx % 2) !== 0;
-                    const targetOdd = rawSlope >= 0.5;
-                    if (isOdd === targetOdd) return 1.0 - rawReso;
-                }
-                return 1.0;
-            }
-            if (type === 6) {
                 const phase = rawSlope * 6.283185307;
                 const comb = 0.5 - 0.5 * Math.cos(freq * 6.283185307 / fc + phase);
                 return 1.0 - rawReso * comb;
             }
-            if (type === 7) {
+            if (type === 5) {
                 const v = rawSlope;
                 let p1 = 700.0 * (1.0 - v) * (1.0 - v) + 300.0 * 2.0 * v * (1.0 - v) + 270.0 * v * v;
                 let p2 = 1100.0 * (1.0 - v) * (1.0 - v) + 870.0 * 2.0 * v * (1.0 - v) + 2300.0 * v * v;
@@ -259,24 +241,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 const mult = g(p1) + 0.5 * g(p2) + 0.2 * g(p3);
                 return 0.1 + mult * 2.0;
             }
-            if (type === 8) {
-                if (freq > fc) {
-                    let h_val = (freq * 12.9898 + 78.233) % 1.0;
-                    h_val = (h_val * 43758.5453) % 1.0;
-                    if (h_val > rawReso) return 1.0 - rawSlope;
-                }
-                return 1.0;
-            }
-            if (type === 9) {
-                const angle = rawSlope * 2.0 - 1.0;
-                const tilt = Math.pow(freq / fc, angle);
-                let peak = 0.0;
-                if (rawReso > 0.01) {
-                    const dist = Math.abs(1.0 - x);
-                    if (dist < 0.2) peak = rawReso * (0.2 - dist) * 5.0;
-                }
-                return tilt + peak;
-            }
+
             return 1.0;
         };
 
@@ -1074,7 +1039,7 @@ class KronosSynth {
             });
         }
 
-        this.filterTypes = ['LP', 'BP', 'HP', 'NOTCH', 'BRICK', 'SIEVE', 'COMB', 'VOWEL', 'GLITCH', 'TILT'];
+        this.filterTypes = ['LP', 'HP', 'BP', 'NOTCH', 'COMB', 'VOWEL'];
         // Build UI overlays and canvas sizing
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
@@ -1762,12 +1727,12 @@ class KronosSynth {
         if (typeALabel) {
             typeALabel.textContent = this.filterTypes[this.values[paramIdA]] || 'LP';
             container.querySelector(`#filter-type-a-${laneId} .cycle-left`).addEventListener('click', () => {
-                this.values[paramIdA] = (this.values[paramIdA] - 1 + 10) % 10;
+                this.values[paramIdA] = (this.values[paramIdA] - 1 + 6) % 6;
                 typeALabel.textContent = this.filterTypes[this.values[paramIdA]];
                 this.onSliderChange(paramIdA, this.values[paramIdA]);
             });
             container.querySelector(`#filter-type-a-${laneId} .cycle-right`).addEventListener('click', () => {
-                this.values[paramIdA] = (this.values[paramIdA] + 1) % 10;
+                this.values[paramIdA] = (this.values[paramIdA] + 1) % 6;
                 typeALabel.textContent = this.filterTypes[this.values[paramIdA]];
                 this.onSliderChange(paramIdA, this.values[paramIdA]);
             });
@@ -1776,12 +1741,12 @@ class KronosSynth {
         if (typeBLabel) {
             typeBLabel.textContent = this.filterTypes[this.values[paramIdB]] || 'LP';
             container.querySelector(`#filter-type-b-${laneId} .cycle-left`).addEventListener('click', () => {
-                this.values[paramIdB] = (this.values[paramIdB] - 1 + 10) % 10;
+                this.values[paramIdB] = (this.values[paramIdB] - 1 + 6) % 6;
                 typeBLabel.textContent = this.filterTypes[this.values[paramIdB]];
                 this.onSliderChange(paramIdB, this.values[paramIdB]);
             });
             container.querySelector(`#filter-type-b-${laneId} .cycle-right`).addEventListener('click', () => {
-                this.values[paramIdB] = (this.values[paramIdB] + 1) % 10;
+                this.values[paramIdB] = (this.values[paramIdB] + 1) % 6;
                 typeBLabel.textContent = this.filterTypes[this.values[paramIdB]];
                 this.onSliderChange(paramIdB, this.values[paramIdB]);
             });
@@ -2218,31 +2183,13 @@ class KronosSynth {
                 if (type === 2) return Math.pow(x2, n) / denom;
                 if (type === 3) return Math.pow(Math.abs(1.0 - x2), n) / denom;
             }
+
             if (type === 4) {
-                if (freq <= fc) {
-                    const peakDist = 1.0 - x;
-                    if (peakDist < 0.1 && peakDist >= 0.0) return 1.0 + rawReso * (0.1 - peakDist) * 20.0;
-                    return 1.0;
-                } else {
-                    return rawSlope * rawSlope;
-                }
-            }
-            if (type === 5) {
-                const h_idx = Math.round(freq / 50.0);
-                const threshH = fc / 50.0;
-                if (h_idx > threshH) {
-                    const isOdd = (h_idx % 2) !== 0;
-                    const targetOdd = rawSlope >= 0.5;
-                    if (isOdd === targetOdd) return 1.0 - rawReso;
-                }
-                return 1.0;
-            }
-            if (type === 6) {
                 const phase = rawSlope * 6.283185307;
                 const comb = 0.5 - 0.5 * Math.cos(freq * 6.283185307 / fc + phase);
                 return 1.0 - rawReso * comb;
             }
-            if (type === 7) {
+            if (type === 5) {
                 const v = rawSlope;
                 let p1 = 700.0 * (1.0 - v) * (1.0 - v) + 300.0 * 2.0 * v * (1.0 - v) + 270.0 * v * v;
                 let p2 = 1100.0 * (1.0 - v) * (1.0 - v) + 870.0 * 2.0 * v * (1.0 - v) + 2300.0 * v * v;
@@ -2257,24 +2204,7 @@ class KronosSynth {
                 const mult = g(p1) + 0.5 * g(p2) + 0.2 * g(p3);
                 return 0.1 + mult * 2.0;
             }
-            if (type === 8) {
-                if (freq > fc) {
-                    let h_val = (freq * 12.9898 + 78.233) % 1.0;
-                    h_val = (h_val * 43758.5453) % 1.0;
-                    if (h_val > rawReso) return 1.0 - rawSlope;
-                }
-                return 1.0;
-            }
-            if (type === 9) {
-                const angle = rawSlope * 2.0 - 1.0;
-                const tilt = Math.pow(freq / fc, angle);
-                let peak = 0.0;
-                if (rawReso > 0.01) {
-                    const dist = Math.abs(1.0 - x);
-                    if (dist < 0.2) peak = rawReso * (0.2 - dist) * 5.0;
-                }
-                return tilt + peak;
-            }
+
             return 1.0;
         };
 
