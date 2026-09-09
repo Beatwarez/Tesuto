@@ -117,27 +117,20 @@ public:
                         } else if (paramName == "ui_active_right") {
                             p.apvts.state.setProperty("ui_active_right", args[1].toString(), nullptr);
                         } else {
-                            // 1. Force raw parameter update directly to guarantee instant audio thread response
-                            if (auto* rawVal = p.apvts.getRawParameterValue (paramName))
+                            // Notify the host of the parameter change (which also updates internal memory)
+                            if (auto* param = p.apvts.getParameter (paramName))
                             {
-                                rawVal->store (paramValue);
+                                param->beginChangeGesture();
+                                if (auto* rangedParam = dynamic_cast<juce::RangedAudioParameter*> (param))
+                                {
+                                    rangedParam->setValueNotifyingHost (rangedParam->getNormalisableRange().convertTo0to1 (paramValue));
+                                }
+                                else
+                                {
+                                    param->setValueNotifyingHost (paramValue);
+                                }
+                                param->endChangeGesture();
                             }
-                        }
-                        
-                        // 2. Notify the host of the parameter change for automation recording
-                        if (auto* param = p.apvts.getParameter (paramName))
-                        {
-                            param->beginChangeGesture();
-                            if (auto* rangedParam = dynamic_cast<juce::RangedAudioParameter*> (param))
-                            {
-                                rangedParam->setValueNotifyingHost (rangedParam->getNormalisableRange().convertTo0to1 (paramValue));
-                            }
-                            else
-                            {
-                                param->setValueNotifyingHost (paramValue);
-                            }
-                            
-                            param->endChangeGesture();
                         }
                     }
                 }
