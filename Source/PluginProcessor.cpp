@@ -37,7 +37,20 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         for (int p = 1; p <= 8; ++p) {
             juce::String pStr = juce::String(p);
             if (p == 6 || p == 7) {
-                layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("mod" + mStr + "_p" + pStr, 1), "mod" + mStr + "_p" + pStr, filterTypes, 0));
+                layout.add(std::make_unique<juce::AudioParameterInt>(
+                    juce::ParameterID("mod" + mStr + "_p" + pStr, 1), 
+                    "mod" + mStr + "_p" + pStr, 
+                    0, 5, 0,
+                    juce::AudioParameterIntAttributes()
+                        .withStringFromValueFunction([filterTypes](int value, int) {
+                            if (value >= 0 && value < filterTypes.size()) return filterTypes[value];
+                            return juce::String("LP");
+                        })
+                        .withValueFromStringFunction([filterTypes](const juce::String& text) {
+                            int idx = filterTypes.indexOf(text);
+                            return idx >= 0 ? idx : 0;
+                        })
+                ));
                 layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr + "_mod", 1), "mod" + mStr + "_p" + pStr + "_mod", -1.0f, 1.0f, 0.0f));
             } else {
                 layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr, 1), "mod" + mStr + "_p" + pStr, -512.0f, 512.0f, 0.0f));

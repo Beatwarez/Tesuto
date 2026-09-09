@@ -128,14 +128,7 @@ public:
                         if (auto* param = p.apvts.getParameter (paramName))
                         {
                             param->beginChangeGesture();
-                            
-                            if (auto* choiceParam = dynamic_cast<juce::AudioParameterChoice*> (param))
-                            {
-                                int maxIndex = choiceParam->choices.size() - 1;
-                                float normVal = (maxIndex > 0) ? (paramValue / (float)maxIndex) : 0.0f;
-                                choiceParam->setValueNotifyingHost (normVal);
-                            }
-                            else if (auto* rangedParam = dynamic_cast<juce::RangedAudioParameter*> (param))
+                            if (auto* rangedParam = dynamic_cast<juce::RangedAudioParameter*> (param))
                             {
                                 rangedParam->setValueNotifyingHost (rangedParam->getNormalisableRange().convertTo0to1 (paramValue));
                             }
