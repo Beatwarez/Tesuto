@@ -16,6 +16,7 @@ public:
   KronosVoice(KronosAudioProcessor* proc) : processor(proc) {
     for (int p = 0; p < 512; ++p) {
       phases[p] = 0.0f;
+      syncedPhases[p] = 0.0f;
       phaseDrifts[p] = juce::Random::getSystemRandom().nextFloat() *
                        juce::MathConstants<float>::twoPi;
       float basePan = (p == 0) ? 0.5f : ((p % 2 == 0) ? 0.25f : 0.75f);
@@ -33,6 +34,7 @@ public:
     currentFundamentalFreq = targetFreq;
     for (int p = 0; p < 512; ++p) {
       phases[p] = 0.0f;
+      syncedPhases[p] = 0.0f;
       smoothedAmps[p] = 0.0f;
     }
     voiceActive = true;
@@ -140,6 +142,7 @@ private:
   float currentFundamentalFreq = 0.0f;
 
   float phases[512];
+  float syncedPhases[512];
   float phaseDrifts[512];
   float panLeft[512];
   float panRight[512];
@@ -239,6 +242,10 @@ private:
   int fdnDelayLengths[fdnSize] = { 997, 1201, 1439, 1753, 2053, 2411, 2851, 3307 };
   
   juce::AudioBuffer<float> sendBuffers;
+  std::atomic<float> *filter_cutoffMod = nullptr;
+  std::atomic<float> *filter_resMod = nullptr;
+
+  std::unique_ptr<juce::dsp::Oversampling<float>> oversampler;
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(KronosAudioProcessor)
 };

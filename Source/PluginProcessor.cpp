@@ -212,7 +212,11 @@ void KronosAudioProcessor::changeProgramName (int, const juce::String&)
 // ==========================================================================
 void KronosAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    synth.setCurrentPlaybackSampleRate (sampleRate);
+    oversampler.reset(new juce::dsp::Oversampling<float> (2, 2, juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple, true, false));
+    oversampler->initProcessing (static_cast<size_t> (samplesPerBlock));
+    
+    double oversampledRate = sampleRate * oversampler->getOversamplingFactor();
+    synth.setCurrentPlaybackSampleRate (oversampledRate);
     
     // Reset FDN reverb buffers on sample rate changes
     for (int i = 0; i < fdnSize; ++i) {
@@ -302,8 +306,23 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         // Removed MIDI CC handling per user request
     }
 
-    // Render Synth voices
-    synth.renderNextBlock (buffer, midiMessages, 0, buffer.getNumSamples());
+    // Render Synth voices with 4x internal oversampling
+    juce::dsp::AudioBlock<float> audioBlock (buffer);
+    juce::dsp::AudioBlock<float> oversampledBlock = oversampler->processSamplesUp (audioBlock);
+    
+    float* channels[2] = { oversampledBlock.getChannelPointer(0), oversampledBlock.getChannelPointer(1) };
+    juce::AudioBuffer<float> oversampledBuffer (channels, 2, (int)oversampledBlock.getNumSamples());
+    oversampledBuffer.clear(); // Ensure buffer is clean before synth rendering
+    
+    juce::MidiBuffer oversampledMidi;
+    int factor = (int)oversampler->getOversamplingFactor();
+    for (const auto meta : midiMessages) {
+        oversampledMidi.addEvent (meta.getMessage(), meta.samplePosition * factor);
+    }
+    
+    synth.renderNextBlock (oversampledBuffer, oversampledMidi, 0, oversampledBuffer.getNumSamples());
+    
+    oversampler->processSamplesDown (audioBlock);
 
     // Process 8-Channel Global FDN Reverb
     float size = 0.5f;
@@ -743,6 +762,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
     // Mix into output buffers
     float scaleFactor = 0.2818f; // Fixed -11dB attenuation
+    float syncMix = std::clamp(deSyncVal / 0.30f, 0.0f, 1.0f);
 
     for (int s = 0; s < numSamples; ++s) {
       float envVal = adsr.getNextSample();
@@ -774,15 +794,19 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         // 2. Update phase for partial p
         if (p > 0) {
           phases[p] += phaseDeltas[p];
-          if (deSyncVal > 0.0f && masterWrapped) {
-            phases[p] = 0.0f; // Hard-sync reset!
-          } else if (phases[p] >= 1.0f) {
+          if (phases[p] >= 1.0f) {
             phases[p] -= 1.0f;
+          }
+          
+          syncedPhases[p] += phaseDeltas[p];
+          if (deSyncVal > 0.0f && masterWrapped) {
+            syncedPhases[p] = 0.0f; // Hard-sync reset!
+          } else if (syncedPhases[p] >= 1.0f) {
+            syncedPhases[p] -= 1.0f;
           }
         }
 
-        float modPhase = phases[p];
-
+        float modOffset = 0.0f;
         if (i > 0 && i <= maxModulatingIndex) {
           int p_prev = activePartials[i - 1];
           float distance = std::abs (freqs[p] - freqs[p_prev]);
@@ -790,14 +814,23 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
           float normDistance = distance / currentFundamentalFreq;
           float modIndex = (alterVal * alterVal * 10.0f * smoothedAmps[p_prev]) / (normDistance + 0.05f);
           if (modIndex > 5.0f) modIndex = 5.0f;
-          modPhase += modIndex * prevVal;
-          // Fix negative phase truncation by properly wrapping to [0, 1.0)
-          modPhase -= std::floor(modPhase);
+          modOffset = modIndex * prevVal;
         }
 
-        // Sine table lookup with bitwise wrapping
-        int idx = static_cast<int>(modPhase * 32768.0f) & 32767;
-        float val = sineTable[idx];
+        // Unsynced phase calculation
+        float modPhaseUnsync = phases[p] + modOffset;
+        modPhaseUnsync -= std::floor(modPhaseUnsync);
+        int idxUnsync = static_cast<int>(modPhaseUnsync * 32768.0f) & 32767;
+        float valUnsync = sineTable[idxUnsync];
+
+        // Synced phase calculation
+        float modPhaseSync = (p > 0) ? syncedPhases[p] + modOffset : modPhaseUnsync;
+        modPhaseSync -= std::floor(modPhaseSync);
+        int idxSync = static_cast<int>(modPhaseSync * 32768.0f) & 32767;
+        float valSync = sineTable[idxSync];
+
+        // Additive morph between unsynced and synced
+        float val = valUnsync * (1.0f - syncMix) + valSync * syncMix;
         prevVal = val;
 
         float dryVal = val * a;
