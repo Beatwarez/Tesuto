@@ -212,7 +212,7 @@ void KronosAudioProcessor::changeProgramName (int, const juce::String&)
 // ==========================================================================
 void KronosAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    oversampler.reset(new juce::dsp::Oversampling<float> (2, 2, juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple, true, false));
+    oversampler.reset(new juce::dsp::Oversampling<float> (2, 1, juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple, true, false));
     oversampler->initProcessing (static_cast<size_t> (samplesPerBlock));
     
     double oversampledRate = sampleRate * oversampler->getOversamplingFactor();
