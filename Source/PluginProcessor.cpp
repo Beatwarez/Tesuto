@@ -496,12 +496,12 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             case 0: rawVal = 1.0f / std::pow(harmonicIndex, 1.3f); break;
             case 1: rawVal = (p % 2 == 0) ? (1.0f / harmonicIndex) : (0.08f / harmonicIndex); break;
             case 2: rawVal = (std::sin(p * 0.22f) * 0.4f + 0.6f) / std::sqrt(harmonicIndex); break;
-            case 3: rawVal = (0.1f + 0.9f * ((float)p / 256.0f)) * (1.0f / std::sqrt(harmonicIndex)); break;
-            case 4: rawVal = std::exp(-std::pow(harmonicIndex - 3.0f, 2.0f) / 2.0f) + 0.5f * std::exp(-std::pow(harmonicIndex - 8.0f, 2.0f) / 8.0f) + 0.05f / harmonicIndex; break;
-            case 5: rawVal = std::exp(-std::pow(harmonicIndex - 6.0f, 2.0f) / 4.0f) + 0.4f * std::exp(-std::pow(harmonicIndex - 14.0f, 2.0f) / 16.0f) + 0.05f / harmonicIndex; break;
+            case 3: rawVal = (0.1f + 0.9f * ((float)p / 256.0f)) * (1.0f / std::pow(harmonicIndex, 0.8f)); break;
+            case 4: rawVal = (std::exp(-std::pow(harmonicIndex - 3.0f, 2.0f) / 2.0f) + 0.5f * std::exp(-std::pow(harmonicIndex - 8.0f, 2.0f) / 8.0f) + 0.05f) / std::pow(harmonicIndex, 0.4f); break;
+            case 5: rawVal = (std::exp(-std::pow(harmonicIndex - 6.0f, 2.0f) / 4.0f) + 0.4f * std::exp(-std::pow(harmonicIndex - 14.0f, 2.0f) / 16.0f) + 0.05f) / std::sqrt(harmonicIndex); break;
             case 6: rawVal = (p % 2 == 1) ? (1.0f / std::pow(harmonicIndex, 1.2f)) : (0.15f / harmonicIndex); break;
             case 7: rawVal = (std::sin(p * 1.618f) * 0.4f + 0.6f) / std::pow(harmonicIndex, 0.7f); break;
-            case 8: rawVal = (p == 0) ? 1.0f : (0.08f + 0.92f * std::exp(-std::pow(harmonicIndex - 12.0f, 2.0f) / 2.0f)); break;
+            case 8: rawVal = (p == 0) ? 1.0f : ((0.08f + 0.92f * std::exp(-std::pow(harmonicIndex - 12.0f, 2.0f) / 2.0f)) / std::pow(harmonicIndex, 0.7f)); break;
             case 9: rawVal = (std::sin(p * 123.456f) * 0.3f + 0.7f) / harmonicIndex; break;
             default: rawVal = 0.0f; break;
         }
