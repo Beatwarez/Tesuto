@@ -550,7 +550,6 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     float localCloudVal = 0.0f;
     float deSyncVal = 0.0f;
     float alterVal = 0.0f;
-    float alterSpreadVal = 0.0f;
 
     for (int i = 0; i < 7; ++i) {
         int laneNumber = std::round(processor->routingOrder[i].load());
@@ -643,15 +642,11 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             float fm_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
             alterVal = std::clamp(fm_param + macroVal * fm_mod, 0.0f, 1.0f);
             
-            float spread_param = processor->mod_p[laneIdx][1] ? processor->mod_p[laneIdx][1]->load() : 0.0f;
-            float spread_mod   = processor->mod_pMod[laneIdx][1] ? processor->mod_pMod[laneIdx][1]->load() : 0.0f;
-            alterSpreadVal = std::clamp(spread_param + macroVal * spread_mod, 0.0f, 1.0f);
-
             float desync_param = processor->mod_p[laneIdx][2] ? processor->mod_p[laneIdx][2]->load() : 0.0f;
             float desync_mod   = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
             deSyncVal = std::clamp(desync_param + macroVal * desync_mod, 0.0f, 1.0f);
 
-            float syncMultiplier = 1.0f + deSyncVal;
+            float syncMultiplier = 1.0f + deSyncVal * 9.0f;
             if (deSyncVal > 0.0f) {
                 for (int p = 1; p < targetPartials; ++p) {
                     freqs[p] *= syncMultiplier;
@@ -764,7 +759,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
       int maxModulatingIndex = 0;
       if (alterVal > 0.0f && numActivePartials > 1) {
-          maxModulatingIndex = 1 + (int)(alterSpreadVal * (numActivePartials - 2));
+          maxModulatingIndex = numActivePartials - 1;
       }
 
       for (int i = 0; i < numActivePartials; ++i) {
@@ -778,7 +773,9 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         // 2. Update phase for partial p
         if (p > 0) {
           phases[p] += phaseDeltas[p];
-          if (phases[p] >= 1.0f) {
+          if (deSyncVal > 0.0f && masterWrapped) {
+            phases[p] = 0.0f; // Hard-sync reset!
+          } else if (phases[p] >= 1.0f) {
             phases[p] -= 1.0f;
           }
         }
