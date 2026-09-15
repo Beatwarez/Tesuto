@@ -310,8 +310,12 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     juce::dsp::AudioBlock<float> audioBlock (buffer);
     juce::dsp::AudioBlock<float> oversampledBlock = oversampler->processSamplesUp (audioBlock);
     
-    float* channels[2] = { oversampledBlock.getChannelPointer(0), oversampledBlock.getChannelPointer(1) };
-    juce::AudioBuffer<float> oversampledBuffer (channels, 2, (int)oversampledBlock.getNumSamples());
+    int numOversampledChannels = (int)oversampledBlock.getNumChannels();
+    juce::Array<float*> channelPointers;
+    for (int i = 0; i < numOversampledChannels; ++i) {
+        channelPointers.add(oversampledBlock.getChannelPointer(i));
+    }
+    juce::AudioBuffer<float> oversampledBuffer (channelPointers.getRawDataPointer(), numOversampledChannels, (int)oversampledBlock.getNumSamples());
     oversampledBuffer.clear(); // Ensure buffer is clean before synth rendering
     
     juce::MidiBuffer oversampledMidi;
@@ -548,7 +552,8 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             float absVH = std::abs(virtualHarmonicIndex);
             freqs[p] = renderFreq * absVH;
             
-            if (freqs[p] >= currentSampleRate * 0.49f) {
+            float hostNyquist = processor->getSampleRate() * 0.49f;
+            if (freqs[p] >= hostNyquist) {
                 targetAmps[p] = 0.0f;
             } else {
                 float absVH_clamped = std::max(0.001f, absVH);
@@ -739,8 +744,9 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     int numActivePartials = 0;
 
     for (int p = 0; p < 512; ++p) {
-        if (freqs[p] >= currentSampleRate * 0.49f) {
-            targetAmps[p] = 0.0f; // Prevent aliasing
+        float hostNyquist = processor->getSampleRate() * 0.49f;
+        if (freqs[p] >= hostNyquist) {
+            targetAmps[p] = 0.0f; // Prevent aliasing based on HOST sample rate, not oversampled rate!
         }
         
         if (p < targetPartials && targetAmps[p] > 0.0f) {
@@ -780,6 +786,12 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
     for (int s = 0; s < numSamples; ++s) {
       float envVal = adsr.getNextSample();
+      
+      // Zombie Voice Optimization: if envelope is finished, stop rendering this voice entirely!
+      if (envVal <= 0.0001f && !adsr.isActive()) {
+          break;
+      }
+      
       float sampleL = 0.0f;
       float sampleR = 0.0f;
       float prevVal = 0.0f;
