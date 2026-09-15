@@ -1455,7 +1455,7 @@ class KronosSynth {
             if (this.knobs[baseParam]) this.knobs[baseParam].updateModArc();
         } else if (param.endsWith('_engine')) {
             const laneId = parseInt(param.replace('mod', '').replace('_engine', ''));
-            const engineIdMappingRev = { 0: 'empty', 1: 'source', 2: 'filter', 3: 'space', 4: 'pitch', 5: 'alter', 6: 'cloud', 7: 8: 'form' };
+            const engineIdMappingRev = { 0: 'empty', 1: 'source', 2: 'filter', 3: 'space', 4: 'pitch', 5: 'alter', 6: 'cloud', 7: 'infect', 8: 'form' };
             const engineType = engineIdMappingRev[Math.round(val)] || 'empty';
             this.laneEngines[laneId] = engineType;
             
@@ -1535,7 +1535,7 @@ class KronosSynth {
                 selector.addEventListener('change', (e) => {
                     const newEngine = e.target.value;
                     this.laneEngines[laneId] = newEngine;
-                    const engineIdMapping = { 'empty': 0, 'source': 1, 'filter': 2, 'space': 3, 'pitch': 4, 'alter': 5, 'cloud': 6, 'desync': 7, 'form': 8 };
+                    const engineIdMapping = { 'empty': 0, 'source': 1, 'filter': 2, 'space': 3, 'pitch': 4, 'alter': 5, 'cloud': 6, 'infect': 7, 'form': 8 };
                     this.sendParamToCpp(`mod${laneId}_engine`, engineIdMapping[newEngine] || 0);
                     
                     // Default parameters for the new engine to prevent bleed
@@ -2310,7 +2310,7 @@ class KronosSynth {
             else if (engine === 'space') visual4 = Math.max(visual4, macroVal);
             else if (engine === 'alter') visual5 = Math.max(visual5, macroVal);
             else if (engine === 'cloud') visual6 = Math.max(visual6, macroVal);
-            
+            else if (engine === 'infect') visual7 = Math.max(visual7, macroVal);
             else if (engine === 'pitch') {
                 if (Math.abs(macroVal - 0.5) > Math.abs(visual8 - 0.5)) {
                     visual8 = macroVal;

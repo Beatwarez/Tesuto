@@ -657,6 +657,17 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
                     freqs[p] *= syncMultiplier;
                 }
             }
+        } else if (engineType == 7) { // INFECT
+            float drive_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.0f;
+            float drive_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
+            float driveVal = std::clamp(drive_param + macroVal * drive_mod, 0.0f, 1.0f);
+            
+            float sym_param = processor->mod_p[laneIdx][1] ? processor->mod_p[laneIdx][1]->load() : 0.0f;
+            float sym_mod   = processor->mod_pMod[laneIdx][1] ? processor->mod_pMod[laneIdx][1]->load() : 0.0f;
+            float symVal = std::clamp(sym_param + macroVal * sym_mod, 0.0f, 1.0f);
+
+            // TODO: Implement INFECT logic here later
+            
         } else if (engineType == 3) { // SPACE
             float width_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.0f;
             float width_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
