@@ -2292,7 +2292,7 @@ class KronosSynth {
         const centerY = h / 2;
         const maxRadius = Math.min(w * 0.42, h * 0.42);
 
-        let visual1 = this.values.mod1_macro || 0.0; // Form/Warp
+        let visual1 = 0.0; // Form/Warp
         let visual2 = this.values.mod1_macro || 0.0; // Timbre
         let visual3 = 0.0; // Filter
         let visual4 = 0.0; // Space
@@ -2305,7 +2305,8 @@ class KronosSynth {
             let engine = this.laneEngines[lane];
             let macroVal = this.values[`mod${lane}_macro`] || 0.0;
             
-            if (engine === 'filter') visual3 = Math.max(visual3, macroVal);
+            if (engine === 'form') visual1 = Math.max(visual1, macroVal);
+            else if (engine === 'filter') visual3 = Math.max(visual3, macroVal);
             else if (engine === 'space') visual4 = Math.max(visual4, macroVal);
             else if (engine === 'alter') visual5 = Math.max(visual5, macroVal);
             else if (engine === 'cloud') visual6 = Math.max(visual6, macroVal);

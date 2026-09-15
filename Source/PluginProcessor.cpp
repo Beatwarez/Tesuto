@@ -634,6 +634,54 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
                 freqs[p] += currentFundamentalFreq * stretch;
                 if (freqs[p] < 0.0f) freqs[p] = std::abs(freqs[p]);
             }
+        } else if (engineType == 3) { // SPACE
+            float width_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.0f;
+            float width_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
+            float spaceVal = std::clamp(width_param + macroVal * width_mod, 0.0f, 1.0f);
+            
+            float orbit_param = processor->mod_p[laneIdx][1] ? processor->mod_p[laneIdx][1]->load() : 0.0f;
+            float orbit_mod   = processor->mod_pMod[laneIdx][1] ? processor->mod_pMod[laneIdx][1]->load() : 0.0f;
+            float orbitVal = std::clamp(orbit_param + macroVal * orbit_mod, -1.0f, 1.0f);
+
+            float smear_param = processor->mod_p[laneIdx][2] ? processor->mod_p[laneIdx][2]->load() : 0.0f;
+            float smear_mod   = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
+            float smearVal = std::clamp(smear_param + macroVal * smear_mod, 0.0f, 1.0f);
+
+            float orbitSpeedHz = orbitVal * 30.0f;
+            float blockDuration = (float)targetAmps[0] == 0.0f ? 0.0f : (1.0f / (float)currentSampleRate); // approx per sample
+            spaceOrbitPhase += (orbitSpeedHz * 6.2831853f) * 512.0f / (float)currentSampleRate; // accumulate per block
+
+            while (spaceOrbitPhase > 6.2831853f) spaceOrbitPhase -= 6.2831853f;
+            while (spaceOrbitPhase < -6.2831853f) spaceOrbitPhase += 6.2831853f;
+
+            float orbitPanL = 0.5f + 0.5f * std::cos(spaceOrbitPhase);
+            float orbitPanR = 0.5f + 0.5f * std::sin(spaceOrbitPhase);
+
+            for (int p = 0; p < targetPartials; ++p) {
+                if (targetAmps[p] > 0.0f) {
+                    float lfoDrift = std::sin((float)voiceTime * 1.2f + phaseDrifts[p]) * spaceVal * 0.3f;
+                    targetAmps[p] *= (1.0f + lfoDrift);
+                    
+                    if (smearVal > 0.0f) {
+                        freqs[p] += std::sin(phaseDrifts[p]) * smearVal * ((float)p * 0.2f);
+                    }
+                    
+                    if (p == 0) {
+                        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
+                        pR_block[p] = panRight[p] * (1.0f - spaceVal) + 0.707f * spaceVal;
+                    } else if (p % 2 == 0) {
+                        float evenLeft = orbitPanL;
+                        float evenRight = 1.0f - orbitPanL;
+                        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + evenLeft * spaceVal;
+                        pR_block[p] = panRight[p] * (1.0f - spaceVal) + evenRight * spaceVal;
+                    } else {
+                        float oddLeft = orbitPanR;
+                        float oddRight = 1.0f - orbitPanR;
+                        pL_block[p] = panLeft[p] * (1.0f - spaceVal) + oddLeft * spaceVal;
+                        pR_block[p] = panRight[p] * (1.0f - spaceVal) + oddRight * spaceVal;
+                    }
+                }
+            }
         }
     }
 

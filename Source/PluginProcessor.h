@@ -151,6 +151,8 @@ private:
 
   float p_send_gain[512];
   float* globalSendAccum[8] = { nullptr };
+  
+  float spaceOrbitPhase = 0.0f;
 };
 
 // ==========================================================================
