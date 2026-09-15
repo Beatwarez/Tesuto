@@ -764,6 +764,20 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     float scaleFactor = 0.2818f; // Fixed -11dB attenuation
     float syncMix = std::clamp(deSyncVal / 0.30f, 0.0f, 1.0f);
 
+    // Pre-calculate FM base modulation indices for all active partials to save millions of divisions
+    float baseModIndices[512] = {0.0f};
+    int maxModulatingIndex = 0;
+    if (alterVal > 0.0f && numActivePartials > 1) {
+        maxModulatingIndex = numActivePartials - 1;
+        for (int i = 1; i <= maxModulatingIndex; ++i) {
+            int p = activePartials[i];
+            int p_prev = activePartials[i - 1];
+            float distance = std::abs(freqs[p] - freqs[p_prev]);
+            float normDistance = distance / currentFundamentalFreq;
+            baseModIndices[i] = (alterVal * alterVal * 10.0f) / (normDistance + 0.05f);
+        }
+    }
+
     for (int s = 0; s < numSamples; ++s) {
       float envVal = adsr.getNextSample();
       float sampleL = 0.0f;
@@ -778,10 +792,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         masterWrapped = true;
       }
 
-      int maxModulatingIndex = 0;
-      if (alterVal > 0.0f && numActivePartials > 1) {
-          maxModulatingIndex = numActivePartials - 1;
-      }
+      // maxModulatingIndex is now pre-calculated before the loop!
 
       for (int i = 0; i < numActivePartials; ++i) {
         int p = activePartials[i];
@@ -809,28 +820,25 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         float modOffset = 0.0f;
         if (i > 0 && i <= maxModulatingIndex) {
           int p_prev = activePartials[i - 1];
-          float distance = std::abs (freqs[p] - freqs[p_prev]);
-          // Normalize the distance by the fundamental frequency to make it pitch-independent
-          float normDistance = distance / currentFundamentalFreq;
-          float modIndex = (alterVal * alterVal * 10.0f * smoothedAmps[p_prev]) / (normDistance + 0.05f);
+          float modIndex = baseModIndices[i] * smoothedAmps[p_prev];
           if (modIndex > 5.0f) modIndex = 5.0f;
           modOffset = modIndex * prevVal;
         }
 
-        // Unsynced phase calculation
+        // Unsynced phase calculation (using fast bitwise wrapping instead of std::floor)
         float modPhaseUnsync = phases[p] + modOffset;
-        modPhaseUnsync -= std::floor(modPhaseUnsync);
-        int idxUnsync = static_cast<int>(modPhaseUnsync * 32768.0f) & 32767;
+        int idxUnsync = static_cast<int>((modPhaseUnsync + 1024.0f) * 32768.0f) & 32767;
         float valUnsync = sineTable[idxUnsync];
 
-        // Synced phase calculation
-        float modPhaseSync = (p > 0) ? syncedPhases[p] + modOffset : modPhaseUnsync;
-        modPhaseSync -= std::floor(modPhaseSync);
-        int idxSync = static_cast<int>(modPhaseSync * 32768.0f) & 32767;
-        float valSync = sineTable[idxSync];
+        float val = valUnsync;
 
-        // Additive morph between unsynced and synced
-        float val = valUnsync * (1.0f - syncMix) + valSync * syncMix;
+        // Bypass heavy sync calculations if mix is 0
+        if (syncMix > 0.0f) {
+            float modPhaseSync = (p > 0) ? syncedPhases[p] + modOffset : modPhaseUnsync;
+            int idxSync = static_cast<int>((modPhaseSync + 1024.0f) * 32768.0f) & 32767;
+            float valSync = sineTable[idxSync];
+            val = valUnsync * (1.0f - syncMix) + valSync * syncMix;
+        }
         prevVal = val;
 
         float dryVal = val * a;
