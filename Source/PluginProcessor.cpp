@@ -646,7 +646,8 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             float desync_mod   = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
             deSyncVal = std::clamp(desync_param + macroVal * desync_mod, 0.0f, 1.0f);
 
-            float syncMultiplier = 1.0f + deSyncVal * 9.0f;
+            float curve = deSyncVal * deSyncVal * deSyncVal;
+            float syncMultiplier = 1.0f + curve * 9.0f;
             if (deSyncVal > 0.0f) {
                 for (int p = 1; p < targetPartials; ++p) {
                     freqs[p] *= syncMultiplier;
