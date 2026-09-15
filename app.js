@@ -2060,6 +2060,7 @@ class KronosSynth {
         const p1_mod = this.values.mod1_p1_mod || 0.0;
         const p2_mod = this.values.mod1_p2_mod || 0.0;
         const p3_mod = this.values.mod1_p3_mod || 0.0;
+        const shape_mod = this.values.mod1_shape_mod || 0.0;
         
         let partialsVal = (this.values.mod1_p1 !== undefined ? this.values.mod1_p1 : 256.0) + macroVal * p1_mod * 256.0;
         partialsVal = Math.max(1.0, Math.min(partialsVal, 256.0));
@@ -2069,6 +2070,36 @@ class KronosSynth {
         
         let widthVal = (this.values.mod1_p3 || 0.0) + macroVal * p3_mod;
         widthVal = Math.max(-1.0, Math.min(widthVal, 1.0));
+        
+        let shapeVal = (this.values.mod1_shape !== undefined ? this.values.mod1_shape : 0.0) + macroVal * shape_mod;
+        shapeVal = Math.max(0.0, Math.min(shapeVal, 1.0));
+        
+        const getSpectralShape = (p, harmonicIndex, shapeIndex) => {
+            let rawVal = 0.0;
+            switch (shapeIndex) {
+                case 0: rawVal = 1.0 / Math.pow(harmonicIndex, 1.3); break;
+                case 1: rawVal = (p % 2 === 0) ? (1.0 / harmonicIndex) : (0.08 / harmonicIndex); break;
+                case 2: rawVal = (Math.sin(p * 0.22) * 0.4 + 0.6) / Math.sqrt(harmonicIndex); break;
+                case 3: rawVal = (0.1 + 0.9 * (p / 256.0)) * (1.0 / Math.sqrt(harmonicIndex)); break;
+                case 4: rawVal = Math.exp(-Math.pow(harmonicIndex - 3, 2) / 2) + 0.5 * Math.exp(-Math.pow(harmonicIndex - 8, 2) / 8) + 0.05 / harmonicIndex; break;
+                case 5: rawVal = Math.exp(-Math.pow(harmonicIndex - 6, 2) / 4) + 0.4 * Math.exp(-Math.pow(harmonicIndex - 14, 2) / 16) + 0.05 / harmonicIndex; break;
+                case 6: rawVal = (p % 2 === 1) ? (1.0 / Math.pow(harmonicIndex, 1.2)) : (0.15 / harmonicIndex); break;
+                case 7: rawVal = (Math.sin(p * 1.618) * 0.4 + 0.6) / Math.pow(harmonicIndex, 0.7); break;
+                case 8: rawVal = (p === 0) ? 1.0 : (0.08 + 0.92 * Math.exp(-Math.pow(harmonicIndex - 12, 2) / 2)); break;
+                case 9: rawVal = (Math.sin(p * 123.456) * 0.3 + 0.7) / harmonicIndex; break;
+                default: rawVal = 0.0; break;
+            }
+            const baseline = 0.05 / Math.max(0.001, Math.sqrt(harmonicIndex));
+            return rawVal * 0.90 + baseline;
+        };
+
+        const scaledTimbre = shapeVal * 9.0;
+        let timbreIdx = Math.floor(scaledTimbre);
+        let timbreMix = scaledTimbre - timbreIdx;
+        if (timbreIdx >= 9) {
+            timbreIdx = 8;
+            timbreMix = 1.0;
+        }
         
         // The canvas X-axis maps to exactly 256 slots
         const maxSlots = 256.0; 
@@ -2111,10 +2142,14 @@ class KronosSynth {
             // Fixed thin lines
             const barW = 2;
             
-            // Mirror the exact DSP amplitude math: min(1.0, 1.0 / abs(vH))
-            // Disabled: Render all partials at full height for visual clarity
-            const lineH = h * 0.8;
-            const yOffset = h * 0.1; // Align to top/bottom
+            const absVH_clamped = Math.max(0.001, Math.abs(slotIndex));
+            const baseAmp = getSpectralShape(p, absVH_clamped, timbreIdx) * (1.0 - timbreMix) 
+                          + getSpectralShape(p, absVH_clamped, timbreIdx + 1) * timbreMix;
+                          
+            const ampClamped = Math.min(1.0, baseAmp);
+            
+            const lineH = h * 0.8 * ampClamped;
+            const yOffset = h * 0.9 - lineH; // Align to bottom (0.9h)
             
             ctx.globalAlpha = 1.0;
             ctx.fillStyle = '#d1d1d6';

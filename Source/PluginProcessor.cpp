@@ -23,7 +23,9 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p3_mod", 1), "mod1_p3_mod", -1.0f, 1.0f, 0.0f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p4", 1), "mod1_p4", -36.0f, 36.0f, 0.0f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p4_mod", 1), "mod1_p4_mod", -1.0f, 1.0f, 0.0f));
-    for (int p = 5; p <= 8; ++p) {
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_shape", 1), "mod1_shape", 0.0f, 1.0f, 0.0f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_shape_mod", 1), "mod1_shape_mod", -1.0f, 1.0f, 0.0f));
+    for (int p = 6; p <= 8; ++p) {
         layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p" + juce::String(p), 1), "mod1_p" + juce::String(p), -1.0f, 1.0f, 0.0f));
         layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod1_p" + juce::String(p) + "_mod", 1), "mod1_p" + juce::String(p) + "_mod", -1.0f, 1.0f, 0.0f));
     }
@@ -96,7 +98,10 @@ KronosAudioProcessor::KronosAudioProcessor()
 
     // Initialize Generic Parameter Pointers
     mod1_macro = apvts.getRawParameterValue("mod1_macro");
+    mod1_shape = apvts.getRawParameterValue("mod1_shape");
+    mod1_shapeMod = apvts.getRawParameterValue("mod1_shape_mod");
     for (int p = 1; p <= 8; ++p) {
+        if (p == 5) continue;
         mod1_p[p-1] = apvts.getRawParameterValue("mod1_p" + juce::String(p));
         mod1_pMod[p-1] = apvts.getRawParameterValue("mod1_p" + juce::String(p) + "_mod");
     }
@@ -446,12 +451,16 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     float pitch_param    = processor->mod1_p[3] ? processor->mod1_p[3]->load() : 0.0f;
     float pitch_mod      = processor->mod1_pMod[3] ? processor->mod1_pMod[3]->load() : 0.0f;
 
+    float shape_param    = processor->mod1_shape ? processor->mod1_shape->load() : 0.0f;
+    float shape_mod      = processor->mod1_shapeMod ? processor->mod1_shapeMod->load() : 0.0f;
+
     float sourceMacro    = processor->mod1_macro ? processor->mod1_macro->load() : 0.0f;
 
     float currentPartials = std::clamp(partials_param + sourceMacro * partials_mod * 256.0f, 1.0f, 256.0f);
     float currentBalance  = std::clamp(balance_param + sourceMacro * balance_mod, -1.0f, 1.0f);
     float currentWidth    = std::clamp(width_param + sourceMacro * width_mod, -1.0f, 1.0f);
     float currentPitch    = std::clamp(pitch_param + sourceMacro * pitch_mod * 36.0f, -36.0f, 36.0f); // Range is already -36 to 36
+    float currentShape    = std::clamp(shape_param + sourceMacro * shape_mod, 0.0f, 1.0f);
     
     // Convert currentPitch from semitones to frequency multiplier
     float pitchMult = std::pow(2.0f, currentPitch / 12.0f);
@@ -481,6 +490,33 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         clusterStart = 1.0f + currentBalance * maxStart; // Pushes down to roughly -maxStart
     }
 
+    auto getSpectralShape = [](int p, float harmonicIndex, int shapeIndex) -> float {
+        float rawVal = 0.0f;
+        switch (shapeIndex) {
+            case 0: rawVal = 1.0f / std::pow(harmonicIndex, 1.3f); break;
+            case 1: rawVal = (p % 2 == 0) ? (1.0f / harmonicIndex) : (0.08f / harmonicIndex); break;
+            case 2: rawVal = (std::sin(p * 0.22f) * 0.4f + 0.6f) / std::sqrt(harmonicIndex); break;
+            case 3: rawVal = (0.1f + 0.9f * ((float)p / 256.0f)) * (1.0f / std::sqrt(harmonicIndex)); break;
+            case 4: rawVal = std::exp(-std::pow(harmonicIndex - 3.0f, 2.0f) / 2.0f) + 0.5f * std::exp(-std::pow(harmonicIndex - 8.0f, 2.0f) / 8.0f) + 0.05f / harmonicIndex; break;
+            case 5: rawVal = std::exp(-std::pow(harmonicIndex - 6.0f, 2.0f) / 4.0f) + 0.4f * std::exp(-std::pow(harmonicIndex - 14.0f, 2.0f) / 16.0f) + 0.05f / harmonicIndex; break;
+            case 6: rawVal = (p % 2 == 1) ? (1.0f / std::pow(harmonicIndex, 1.2f)) : (0.15f / harmonicIndex); break;
+            case 7: rawVal = (std::sin(p * 1.618f) * 0.4f + 0.6f) / std::pow(harmonicIndex, 0.7f); break;
+            case 8: rawVal = (p == 0) ? 1.0f : (0.08f + 0.92f * std::exp(-std::pow(harmonicIndex - 12.0f, 2.0f) / 2.0f)); break;
+            case 9: rawVal = (std::sin(p * 123.456f) * 0.3f + 0.7f) / harmonicIndex; break;
+            default: rawVal = 0.0f; break;
+        }
+        float baseline = 0.05f / std::max(0.001f, std::sqrt(harmonicIndex));
+        return rawVal * 0.90f + baseline;
+    };
+
+    float scaledTimbre = currentShape * 9.0f;
+    int timbreIdx = (int)scaledTimbre;
+    float timbreMix = scaledTimbre - (float)timbreIdx;
+    if (timbreIdx >= 9) {
+        timbreIdx = 8;
+        timbreMix = 1.0f;
+    }
+
     float freqs[512];
     float targetAmps[512];
     float phaseDeltas[512];
@@ -496,7 +532,10 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             if (freqs[p] >= currentSampleRate * 0.49f) {
                 targetAmps[p] = 0.0f;
             } else {
-                targetAmps[p] = targetAmp * std::min(1.0f, 1.0f / std::max(0.001f, absVH));
+                float absVH_clamped = std::max(0.001f, absVH);
+                float baseAmp = getSpectralShape(p, absVH_clamped, timbreIdx) * (1.0f - timbreMix) 
+                              + getSpectralShape(p, absVH_clamped, timbreIdx + 1) * timbreMix;
+                targetAmps[p] = targetAmp * std::min(1.0f, baseAmp);
             }
         } else {
             freqs[p] = 0.0f;

@@ -142,3 +142,44 @@ All backups are saved as zipped archives inside the workspace under the `.\backu
   * Added `data-min`, `data-max`, and `data-default` to HTML templates and updated `injectEngineUI()` to respect them when instantiating custom knobs.
   * Standardized `drawSourceCanvas()` fill color to `#d1d1d6` for UI consistency.
 
+---
+
+## 6. Session Log - Filter UI, VST3 State Persistence & C++ Gesture Safety (Serialized: 2026-09-09 / 2026-09-10)
+
+### Overview
+This session resolved critical Filter engine UI parity issues, refined parameter scaling and layout boundaries, converted filter type selectors to discrete `AudioParameterInt` controls, and eliminated a deep-seated VST3 host notification bug affecting DAW project state saving.
+
+---
+
+### Work Accomplished
+
+#### 1. Filter Type Dropdown UI & Flex Layout (Build #0.40)
+* **HTML Dropdowns**: Replaced volatile cycle buttons for filter types with native `<select class="filter-type-select">` elements.
+* **CSS Styling**: Styled `.filter-type-select` with `0.5x` scale (`0.7vw`), plugin background (`var(--bg-main)`), label text color (`var(--fg-muted)`), and a custom dark-gray (`#666666`) SVG arrow.
+* **Flexbox Stretch**: Removed fixed `7vw` width from `.filter-type` wrappers so they shrink-wrap around the dropdowns, allowing the central `.morph-slider-container` (`flex: 1`) to stretch completely between the two dropdowns.
+* **Engine-Scoped Knob Offsets**: Applied `transform: translateY(14px)` strictly to `.engine-filter-panel .filter-params-row` to lower the 4 filter knobs by 14px without affecting other engine panels.
+
+#### 2. Bitwig VST3 Parameter Persistence & APVTS Integer Conversion (Build #0.41 - #0.43)
+* **APVTS Conversion**: Converted `Filter A` and `Filter B` parameters across all 7 modifier lanes in `PluginProcessor.cpp` to `juce::AudioParameterInt` (range `0` to `5`).
+* **Parameter ID Migration**: Renamed parameter IDs to `modX_filterA` and `modX_filterB` and updated references across `PluginProcessor.cpp` and `app.js` to sever links to stale VST3 DAW caches.
+
+#### 3. Root Cause Fix: Host Parameter Change Gesture Safety (Build #0.44)
+* **Discovery**: Identified why Bitwig failed to mark projects dirty or save parameter changes made via the Web UI: `sendParamToCpp` in `PluginEditor.h` was calling `rawVal->store(paramValue)` *before* `setValueNotifyingHost()`. Because internal parameter memory was mutated prematurely, JUCE's `setValueNotifyingHost()` detected a 0-delta (`getValue() == newValue`) and silently discarded VST3 `performEdit()` host calls.
+* **Fix**: Removed `rawVal->store()` from `PluginEditor.h`, allowing `setValueNotifyingHost()` to update APVTS memory and notify the DAW host simultaneously.
+* **Rule 9 Added**: Documented **Host Parameter Change Gesture Safety** in [.agents/AGENTS.md](file:///c:/Dropbox/DSP/JUCE_projects/Tesuto/.agents/AGENTS.md#L16).
+
+---
+
+### GitHub Build Reference (Session Update)
+* **Build #0.40**: Refined `.filter-type-select` styling (0.5x scale, dark gray arrow, window bg).
+* **Build #0.41**: Removed fixed width on `.filter-type` to allow morph slider to stretch full width; shifted filter knobs down by 14px.
+* **Build #0.42**: Renamed filter parameters to `modX_fTypeA` / `modX_fTypeB` for cache isolation.
+* **Build #0.43**: Converted filter parameters to `AudioParameterInt` with IDs `modX_filterA` / `modX_filterB`.
+* **Build #0.44**: Removed premature `rawVal->store()` in `PluginEditor.h` to enable full VST3 `performEdit()` host notifications in Bitwig.
+
+---
+
+### Git Backup References
+* **Tag `backup-2026-09-09_21-09-15`**: Full serialized backup containing Filter UI dropdowns, `AudioParameterInt` conversion, and C++ host gesture notification fixes.
+
+
