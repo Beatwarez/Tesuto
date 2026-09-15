@@ -541,6 +541,9 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             freqs[p] = 0.0f;
             targetAmps[p] = 0.0f;
         }
+        
+        pL_block[p] = panLeft[p];
+        pR_block[p] = panRight[p];
     }
 
     // --- 2. Dynamic Serial Router (Lanes 2-8) ---
@@ -649,7 +652,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
             float orbitSpeedHz = orbitVal * 30.0f;
             float blockDuration = (float)targetAmps[0] == 0.0f ? 0.0f : (1.0f / (float)currentSampleRate); // approx per sample
-            spaceOrbitPhase += (orbitSpeedHz * 6.2831853f) * 512.0f / (float)currentSampleRate; // accumulate per block
+            spaceOrbitPhase += (orbitSpeedHz * 6.2831853f) * (float)numSamples / (float)currentSampleRate; // accumulate per block
 
             while (spaceOrbitPhase > 6.2831853f) spaceOrbitPhase -= 6.2831853f;
             while (spaceOrbitPhase < -6.2831853f) spaceOrbitPhase += 6.2831853f;
@@ -696,8 +699,6 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         
         if (p < targetPartials && targetAmps[p] > 0.0f) {
             phaseDeltas[p] = freqs[p] / (float)currentSampleRate;
-            pL_block[p] = panLeft[p]; 
-            pR_block[p] = panRight[p];
         } else {
             phaseDeltas[p] = 0.0f;
             pL_block[p] = 0.0f;
