@@ -778,9 +778,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         // 2. Update phase for partial p
         if (p > 0) {
           phases[p] += phaseDeltas[p];
-          if (deSyncVal > 0.0f && masterWrapped) {
-            phases[p] = 0.0f; // Hard-sync reset!
-          } else if (phases[p] >= 1.0f) {
+          if (phases[p] >= 1.0f) {
             phases[p] -= 1.0f;
           }
         }
@@ -792,9 +790,11 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
           float distance = std::abs (freqs[p] - freqs[p_prev]);
           // Normalize the distance by the fundamental frequency to make it pitch-independent
           float normDistance = distance / currentFundamentalFreq;
-          float modIndex = (alterVal * alterVal * 1.5f * smoothedAmps[p_prev]) / (normDistance + 0.05f);
-          if (modIndex > 2.0f) modIndex = 2.0f;
+          float modIndex = (alterVal * alterVal * 10.0f * smoothedAmps[p_prev]) / (normDistance + 0.05f);
+          if (modIndex > 5.0f) modIndex = 5.0f;
           modPhase += modIndex * prevVal;
+          // Fix negative phase truncation by properly wrapping to [0, 1.0)
+          modPhase -= std::floor(modPhase);
         }
 
         // Sine table lookup with bitwise wrapping
