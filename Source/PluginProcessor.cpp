@@ -212,11 +212,11 @@ void KronosAudioProcessor::changeProgramName (int, const juce::String&)
 // ==========================================================================
 void KronosAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    oversampler.reset(new juce::dsp::Oversampling<float> (2, 1, juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple, true, false));
-    oversampler->initProcessing (static_cast<size_t> (samplesPerBlock));
+    // oversampler.reset(new juce::dsp::Oversampling<float> (2, 1, juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple, true, false));
+    // oversampler->initProcessing (static_cast<size_t> (samplesPerBlock));
     
-    double oversampledRate = sampleRate * oversampler->getOversamplingFactor();
-    synth.setCurrentPlaybackSampleRate (oversampledRate);
+    // double oversampledRate = sampleRate * oversampler->getOversamplingFactor();
+    synth.setCurrentPlaybackSampleRate (sampleRate);
     
     // Reset FDN reverb buffers on sample rate changes
     for (int i = 0; i < fdnSize; ++i) {
@@ -306,7 +306,10 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         // Removed MIDI CC handling per user request
     }
 
-    // Render Synth voices with 4x internal oversampling
+    // Render Synth voices
+    synth.renderNextBlock (buffer, midiMessages, 0, buffer.getNumSamples());
+    
+    /*
     juce::dsp::AudioBlock<float> audioBlock (buffer);
     juce::dsp::AudioBlock<float> oversampledBlock = oversampler->processSamplesUp (audioBlock);
     
@@ -327,6 +330,7 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     synth.renderNextBlock (oversampledBuffer, oversampledMidi, 0, oversampledBuffer.getNumSamples());
     
     oversampler->processSamplesDown (audioBlock);
+    */
 
     // Process 8-Channel Global FDN Reverb
     float size = 0.5f;
