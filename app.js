@@ -2147,8 +2147,9 @@ class KronosSynth {
                           + getSpectralShape(p, absVH_clamped, timbreIdx + 1) * timbreMix;
                           
             const ampClamped = Math.min(1.0, baseAmp);
+            const visualAmp = Math.pow(ampClamped, 0.4);
             
-            const lineH = h * 0.8 * ampClamped;
+            const lineH = h * 0.8 * visualAmp;
             const yOffset = h * 0.9 - lineH; // Align to bottom (0.9h)
             
             ctx.globalAlpha = 1.0;

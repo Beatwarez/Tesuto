@@ -801,14 +801,7 @@ select.slider-name option {
 }
 
 .engine-source-panel .filter-params-row {
-    transform: translateY(-28px);
-}
-
-.source-knob-col {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
+    transform: translateY(10px);
 }
 
 /* Mod Ring Outer SVG */
