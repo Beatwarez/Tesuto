@@ -550,6 +550,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     float localCloudVal = 0.0f;
     float deSyncVal = 0.0f;
     float alterVal = 0.0f;
+    float alterSpreadVal = 0.0f;
 
     for (int i = 0; i < 7; ++i) {
         int laneNumber = std::round(processor->routingOrder[i].load());
@@ -636,6 +637,25 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
                 float stretch = currentWarp * currentWarp * 3.5f * waveOutput;
                 freqs[p] += currentFundamentalFreq * stretch;
                 if (freqs[p] < 0.0f) freqs[p] = std::abs(freqs[p]);
+            }
+        } else if (engineType == 5) { // ALTER
+            float fm_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.0f;
+            float fm_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
+            alterVal = std::clamp(fm_param + macroVal * fm_mod, 0.0f, 1.0f);
+            
+            float spread_param = processor->mod_p[laneIdx][1] ? processor->mod_p[laneIdx][1]->load() : 0.0f;
+            float spread_mod   = processor->mod_pMod[laneIdx][1] ? processor->mod_pMod[laneIdx][1]->load() : 0.0f;
+            alterSpreadVal = std::clamp(spread_param + macroVal * spread_mod, 0.0f, 1.0f);
+
+            float desync_param = processor->mod_p[laneIdx][2] ? processor->mod_p[laneIdx][2]->load() : 0.0f;
+            float desync_mod   = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
+            deSyncVal = std::clamp(desync_param + macroVal * desync_mod, 0.0f, 1.0f);
+
+            float syncMultiplier = 1.0f + deSyncVal;
+            if (deSyncVal > 0.0f) {
+                for (int p = 1; p < targetPartials; ++p) {
+                    freqs[p] *= syncMultiplier;
+                }
             }
         } else if (engineType == 3) { // SPACE
             float width_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.0f;
@@ -731,6 +751,11 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         masterWrapped = true;
       }
 
+      int maxModulatingIndex = 0;
+      if (alterVal > 0.0f && numActivePartials > 1) {
+          maxModulatingIndex = 1 + (int)(alterSpreadVal * (numActivePartials - 2));
+      }
+
       for (int i = 0; i < numActivePartials; ++i) {
         int p = activePartials[i];
         
@@ -751,7 +776,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
         float modPhase = phases[p];
 
-        if (i > 0) {
+        if (i > 0 && i <= maxModulatingIndex) {
           int p_prev = activePartials[i - 1];
           float distance = std::abs (freqs[p] - freqs[p_prev]);
           // Normalize the distance by the fundamental frequency to make it pitch-independent

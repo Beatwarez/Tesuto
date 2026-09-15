@@ -39,7 +39,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             { name: 'sweep', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
             { name: 'cloud', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'param6', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 }, // (unused placeholder)
-            { name: 'desync', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'pitch', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 }
         ];
     }
@@ -990,7 +990,7 @@ class KronosSynth {
         this.activeLeftFocus = null;
         this.activeRightFocus = null;
         this.leftFocusParams = ['form', 'timbre', 'filter', 'space'];
-        this.rightFocusParams = ['alter', 'size', 'sweep', 'cloud', 'desync', 'pitch'];
+        this.rightFocusParams = ['alter', 'size', 'sweep', 'cloud', 'pitch'];
         
         this.activeKeys = new Set();
         this.notesDown = {};
@@ -1455,7 +1455,7 @@ class KronosSynth {
             if (this.knobs[baseParam]) this.knobs[baseParam].updateModArc();
         } else if (param.endsWith('_engine')) {
             const laneId = parseInt(param.replace('mod', '').replace('_engine', ''));
-            const engineIdMappingRev = { 0: 'empty', 1: 'source', 2: 'filter', 3: 'space', 4: 'pitch', 5: 'alter', 6: 'cloud', 7: 'desync', 8: 'form' };
+            const engineIdMappingRev = { 0: 'empty', 1: 'source', 2: 'filter', 3: 'space', 4: 'pitch', 5: 'alter', 6: 'cloud', 7: 8: 'form' };
             const engineType = engineIdMappingRev[Math.round(val)] || 'empty';
             this.laneEngines[laneId] = engineType;
             
@@ -2310,7 +2310,7 @@ class KronosSynth {
             else if (engine === 'space') visual4 = Math.max(visual4, macroVal);
             else if (engine === 'alter') visual5 = Math.max(visual5, macroVal);
             else if (engine === 'cloud') visual6 = Math.max(visual6, macroVal);
-            else if (engine === 'desync') visual7 = Math.max(visual7, macroVal);
+            
             else if (engine === 'pitch') {
                 if (Math.abs(macroVal - 0.5) > Math.abs(visual8 - 0.5)) {
                     visual8 = macroVal;
