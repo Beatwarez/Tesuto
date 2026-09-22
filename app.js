@@ -39,8 +39,13 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             { name: 'sweep', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
             { name: 'cloud', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'param6', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 }, // (unused placeholder)
-            { name: defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
-            { name: 'pitch', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 }
+            { name: 'desync', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'pitch', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
+            { name: 'attack', defaultValue: 0.003, minValue: 0.001, maxValue: 7.0 },
+            { name: 'decay', defaultValue: 0.50, minValue: 0.001, maxValue: 7.0 },
+            { name: 'sustain', defaultValue: 0.80, minValue: 0.0, maxValue: 1.0 },
+            { name: 'release', defaultValue: 0.50, minValue: 0.001, maxValue: 7.0 },
+            { name: 'swim', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 }
         ];
     }
 
@@ -75,6 +80,10 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 panRight: new Float32Array(MAX_PARTIALS),
                 smoothedAmps: new Float32Array(MAX_PARTIALS),
                 p_send_gain: new Float32Array(MAX_PARTIALS),
+                partialEnvLevels: new Float32Array(MAX_PARTIALS),
+                partialEnvStates: new Int32Array(MAX_PARTIALS),
+                partialAttackTimes: new Float32Array(MAX_PARTIALS),
+                partialReleaseTimes: new Float32Array(MAX_PARTIALS),
                 activePartials: []
             });
             for (let p = 0; p < MAX_PARTIALS; p++) {
@@ -97,6 +106,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 this.panic();
             }
         };
+        
+        this.envParams = { attack: 0.003, decay: 0.50, sustain: 0.8, release: 0.50, swim: 0.0 };
     }
 
     noteOn(note, velocity) {
@@ -127,21 +138,44 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             for (let p = 0; p < MAX_PARTIALS; p++) {
                 voice.phases[p] = 0.0;
                 voice.smoothedAmps[p] = 0.0;
+                voice.partialEnvLevels[p] = 0.0;
+                voice.partialEnvStates[p] = 1; // attack
+                
+                let attackT = this.envParams.attack;
+                let releaseT = this.envParams.release;
+                if (this.envParams.swim > 0) {
+                    attackT *= 1.0 - (Math.random() * 0.5 * this.envParams.swim);
+                    releaseT *= 1.0 - (Math.random() * 0.5 * this.envParams.swim);
+                }
+                voice.partialAttackTimes[p] = attackT;
+                voice.partialReleaseTimes[p] = releaseT;
             }
         } else {
             // Pitch glide if reusing active voice
             voice.freq = targetFreq;
+            for (let p = 0; p < MAX_PARTIALS; p++) {
+                voice.partialEnvStates[p] = 1; // attack
+                let attackT = this.envParams.attack;
+                let releaseT = this.envParams.release;
+                if (this.envParams.swim > 0) {
+                    attackT *= 1.0 - (Math.random() * 0.5 * this.envParams.swim);
+                    releaseT *= 1.0 - (Math.random() * 0.5 * this.envParams.swim);
+                }
+                voice.partialAttackTimes[p] = attackT;
+                voice.partialReleaseTimes[p] = releaseT;
+            }
         }
 
         voice.targetAmp = velocity / 127.0;
-        voice.envState = 'attack';
+        voice.envState = 'attack'; // just a flag to keep the voice awake
     }
 
     noteOff(note) {
         const voice = this.voices.find(v => v.active && v.note === note);
         if (voice) {
-            voice.targetAmp = 0.0;
-            voice.envState = 'release';
+            for (let p = 0; p < MAX_PARTIALS; p++) {
+                voice.partialEnvStates[p] = 4; // release
+            }
         }
     }
 
@@ -151,6 +185,10 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             this.voices[i].amp = 0.0;
             this.voices[i].targetAmp = 0.0;
             this.voices[i].envState = 'idle';
+            for (let p = 0; p < MAX_PARTIALS; p++) {
+                this.voices[i].partialEnvStates[p] = 0; // idle
+                this.voices[i].partialEnvLevels[p] = 0.0;
+            }
         }
     }
 
@@ -199,11 +237,13 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             const deSyncVal = parameters.desync ? parameters.desync[0] : 0.0;
             const pitchVal = parameters.pitch ? parameters.pitch[0] : 0.5;
 
-            // Correctly scale envelope step sizes for block-rate updates (128 samples per block)
-            // Drone envelopes: smooth attack (approx 0.8s), longer release (approx 1.5s)
             const blockTime = bufferLength / sampleRate;
-            const attackStep = blockTime / 0.8;
-            const releaseStep = blockTime / 1.5;
+
+            this.envParams.attack = parameters.attack ? parameters.attack[0] : 0.2;
+            this.envParams.decay = parameters.decay ? parameters.decay[0] : 0.3;
+            this.envParams.sustain = parameters.sustain ? parameters.sustain[0] : 0.8;
+            this.envParams.release = parameters.release ? parameters.release[0] : 1.0;
+            this.envParams.swim = parameters.swim ? parameters.swim[0] : 0.0;
         const calculateFilterMult = (freq, fc, rawReso, rawSlope, type) => {
             if (fc < 1.0) return 0.0;
             const x = freq / fc;
@@ -267,34 +307,53 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 // Smooth glide fundamental
                 voice.currentFreq += (voice.freq - voice.currentFreq) * 0.06;
 
-                // Update voice envelope at block rate (using block-scaled speeds)
-                let isEnvelopeActive = true;
-                if (voice.envState === 'attack') {
-                    voice.amp += attackStep;
-                    if (voice.amp >= voice.targetAmp) {
-                        voice.amp = voice.targetAmp;
-                        voice.envState = 'sustain';
+                // --- Block-Rate Per-Partial ADSR ---
+                let anyEnvelopeActive = false;
+                
+                for (let p = 0; p < MAX_PARTIALS; p++) {
+                    if (voice.partialEnvStates[p] === 0) {
+                        voice.partialEnvLevels[p] = 0.0;
+                        continue;
                     }
-                } else if (voice.envState === 'release') {
-                    voice.amp -= releaseStep;
-                    if (voice.amp <= 0.0) {
-                        voice.amp = 0.0;
-                        isEnvelopeActive = false;
+                    
+                    anyEnvelopeActive = true;
+                    
+                    if (voice.partialEnvStates[p] === 1) { // Attack
+                        let attackT = voice.partialAttackTimes[p];
+                        let step = (attackT > 0.001) ? (blockTime / attackT) : 1.0;
+                        voice.partialEnvLevels[p] += step;
+                        if (voice.partialEnvLevels[p] >= 1.0) {
+                            voice.partialEnvLevels[p] = 1.0;
+                            voice.partialEnvStates[p] = 2; // Decay
+                        }
+                    } 
+                    else if (voice.partialEnvStates[p] === 2) { // Decay
+                        let step = (this.envParams.decay > 0.001) ? (blockTime / this.envParams.decay) : 1.0;
+                        voice.partialEnvLevels[p] -= step;
+                        if (voice.partialEnvLevels[p] <= this.envParams.sustain) {
+                            voice.partialEnvLevels[p] = this.envParams.sustain;
+                            voice.partialEnvStates[p] = 3; // Sustain
+                        }
                     }
-                } else if (voice.envState === 'sustain') {
-                    voice.amp += (voice.targetAmp - voice.amp) * 0.01;
-                } else if (voice.envState === 'idle') {
-                    isEnvelopeActive = false;
+                    else if (voice.partialEnvStates[p] === 3) { // Sustain
+                        voice.partialEnvLevels[p] = this.envParams.sustain;
+                    }
+                    else if (voice.partialEnvStates[p] === 4) { // Release
+                        let releaseT = voice.partialReleaseTimes[p];
+                        let step = (releaseT > 0.001) ? (blockTime / releaseT) : 1.0;
+                        voice.partialEnvLevels[p] -= step;
+                        if (voice.partialEnvLevels[p] <= 0.0) {
+                            voice.partialEnvLevels[p] = 0.0;
+                            voice.partialEnvStates[p] = 0; // Idle
+                        }
+                    }
                 }
-
-                if (!isEnvelopeActive) {
+                
+                if (!anyEnvelopeActive) {
                     voice.active = false;
                     voice.envState = 'idle';
                     continue;
                 }
-
-                const currentAmp = voice.amp;
-                if (currentAmp <= 0.0001) continue;
 
                 // Update frequencies, targetAmps, phaseDeltas, pL_block, pR_block, and rebuild active list
                 const freqs = new Float32Array(MAX_PARTIALS);
@@ -375,7 +434,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                     // Space (Organic LFO drift)
                     const lfoDrift = Math.sin(this.time * 1.2 + voice.phaseDrifts[p]) * spaceVal * 0.3;
 
-                    targetAmps[p] = baseAmp * filterMult * (1.0 + lfoDrift);
+                    targetAmps[p] = baseAmp * filterMult * (1.0 + lfoDrift) * voice.partialEnvLevels[p];
 
                     // Precalculate phase delta and panning
                     phaseDeltas[p] = freqs[p] / sampleRate;
@@ -425,7 +484,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
 
                     for (let idx = 0; idx < voice.activePartials.length; idx++) {
                         const p = voice.activePartials[idx];
-                        const dry_target = targetAmps[p] * currentAmp;
+                        const dry_target = targetAmps[p];
                         voice.smoothedAmps[p] += (dry_target - voice.smoothedAmps[p]) * 0.15;
                         const a = voice.smoothedAmps[p];
 
@@ -1020,10 +1079,11 @@ class KronosSynth {
             size: 0.50,
             sweep: 0.50,
             cloud: 0.30,
-            attack: 0.20,
-            decay: 0.30,
+            attack: 0.003,
+            decay: 0.50,
             sustain: 0.80,
-            release: 1.00,
+            release: 0.50,
+            swim: 0.00,
             desync: 0.00,
             pitch: 0.50
         };

@@ -60,10 +60,11 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     }
     
     // Amp Envelope
-    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("attack", 1), "Attack", juce::NormalisableRange<float>(0.01f, 5.0f, 0.01f, 0.35f), 0.20f));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("decay", 1), "Decay", juce::NormalisableRange<float>(0.01f, 5.0f, 0.01f, 0.35f), 0.30f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("attack", 1), "Attack", juce::NormalisableRange<float>(0.001f, 7.0f, 0.001f, 0.35f), 0.003f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("decay", 1), "Decay", juce::NormalisableRange<float>(0.001f, 7.0f, 0.001f, 0.35f), 0.500f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("sustain", 1), "Sustain", 0.0f, 1.0f, 0.80f));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("release", 1), "Release", juce::NormalisableRange<float>(0.01f, 8.0f, 0.01f, 0.35f), 1.00f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("release", 1), "Release", juce::NormalisableRange<float>(0.001f, 7.0f, 0.001f, 0.35f), 0.500f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("swim", 1), "Swim", 0.0f, 1.0f, 0.0f));
     
     
     return layout;
@@ -129,6 +130,7 @@ KronosAudioProcessor::KronosAudioProcessor()
     decay = apvts.getRawParameterValue("decay");
     sustain = apvts.getRawParameterValue("sustain");
     release = apvts.getRawParameterValue("release");
+    swim = apvts.getRawParameterValue("swim");
     
     // Default routing order
     for (int i = 0; i < 7; ++i) routingOrder[i].store(i + 2);
@@ -274,8 +276,8 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     {
         if (auto* voice = dynamic_cast<KronosVoice*> (synth.getVoice (i)))
         {
-            if (attack && decay && sustain && release) {
-                voice->updateAdsr (attack->load(), decay->load(), sustain->load(), release->load());
+            if (attack && decay && sustain && release && swim) {
+                voice->updateAdsr (attack->load(), decay->load(), sustain->load(), release->load(), swim->load());
             }
             voice->setGlobalSendAccum(
                 sendBuffers.getWritePointer(0),
@@ -455,12 +457,6 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 // ==========================================================================
 
 void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int startSample, int numSamples) {
-    if (! adsr.isActive()) {
-      clearCurrentNote();
-      voiceActive = false;
-      return;
-    }
-
     currentSampleRate = getSampleRate();
     if (currentSampleRate <= 0.0)
       currentSampleRate = 44100.0;
@@ -743,6 +739,55 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         }
     }
 
+    // --- 2.5 Block-Rate Per-Partial ADSR ---
+    bool anyEnvelopeActive = false;
+    float blockDuration = (float)numSamples / currentSampleRate;
+    
+    for (int p = 0; p < 512; ++p) {
+        if (partialEnvStates[p] == 0) {
+            partialEnvLevels[p] = 0.0f;
+            continue;
+        }
+        
+        anyEnvelopeActive = true;
+        
+        if (partialEnvStates[p] == 1) { // Attack
+            float attackT = partialAttackTimes[p];
+            float step = (attackT > 0.001f) ? (blockDuration / attackT) : 1.0f;
+            partialEnvLevels[p] += step;
+            if (partialEnvLevels[p] >= 1.0f) {
+                partialEnvLevels[p] = 1.0f;
+                partialEnvStates[p] = 2; // Decay
+            }
+        } 
+        else if (partialEnvStates[p] == 2) { // Decay
+            float step = (envDecayTime > 0.001f) ? (blockDuration / envDecayTime) : 1.0f;
+            partialEnvLevels[p] -= step;
+            if (partialEnvLevels[p] <= envSustain) {
+                partialEnvLevels[p] = envSustain;
+                partialEnvStates[p] = 3; // Sustain
+            }
+        }
+        else if (partialEnvStates[p] == 3) { // Sustain
+            partialEnvLevels[p] = envSustain;
+        }
+        else if (partialEnvStates[p] == 4) { // Release
+            float releaseT = partialReleaseTimes[p];
+            float step = (releaseT > 0.001f) ? (blockDuration / releaseT) : 1.0f;
+            partialEnvLevels[p] -= step;
+            if (partialEnvLevels[p] <= 0.0f) {
+                partialEnvLevels[p] = 0.0f;
+                partialEnvStates[p] = 0; // Idle
+            }
+        }
+    }
+    
+    if (!anyEnvelopeActive) {
+        clearCurrentNote();
+        voiceActive = false;
+        return;
+    }
+
     // --- 3. Finalization (Panning & Phase Deltas) ---
     int activePartials[512];
     int numActivePartials = 0;
@@ -763,6 +808,9 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
         // Send logic
         p_send_gain[p] = 0.0f;
+        
+        // Apply per-partial ADSR!
+        targetAmps[p] *= partialEnvLevels[p];
 
         // Collect active partials
         if (targetAmps[p] >= 0.0001f || smoothedAmps[p] >= 0.0001f) {
@@ -789,13 +837,6 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     }
 
     for (int s = 0; s < numSamples; ++s) {
-      float envVal = adsr.getNextSample();
-      
-      // Zombie Voice Optimization: if envelope is finished, stop rendering this voice entirely!
-      if (envVal <= 0.0001f && !adsr.isActive()) {
-          break;
-      }
-      
       float sampleL = 0.0f;
       float sampleR = 0.0f;
       float prevVal = 0.0f;
@@ -814,7 +855,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         int p = activePartials[i];
         
         // Track the dry target amplitude envelope smoothly (15ms time-constant)
-        float dry_target = targetAmps[p] * envVal;
+        float dry_target = targetAmps[p];
         smoothedAmps[p] += (dry_target - smoothedAmps[p]) * 0.15f;
         float a = smoothedAmps[p];
 

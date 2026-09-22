@@ -21,7 +21,7 @@
                 <span class="tagline">drone synthesis laboratory</span>
             </div>
             <div class="header-right">
-                <span class="build-version">BUILD #0.60</span>
+                <span class="build-version">BUILD #0.61</span>
             </div>
         </header>
 
@@ -269,6 +269,43 @@
                             <span class="knob-name-a">PITCH</span>
                         </div>
                         <span class="knob-val" id="val-mod{{LANE}}_p4">0.00</span>
+                    </div>
+                </div>
+                <div class="filter-params-row adsr-params-row">
+                    <div class="knob-wrapper" data-param="attack">
+                        <div class="custom-knob filter-knob" id="knob-attack" data-min="0.001" data-max="7.0" data-default="0.003" data-logarithmic="true">
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names"><span class="knob-name-a">ATTACK</span></div>
+                        <span class="knob-val" id="val-attack">3ms</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="decay">
+                        <div class="custom-knob filter-knob" id="knob-decay" data-min="0.001" data-max="7.0" data-default="0.5" data-logarithmic="true">
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names"><span class="knob-name-a">DECAY</span></div>
+                        <span class="knob-val" id="val-decay">500ms</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="sustain">
+                        <div class="custom-knob filter-knob" id="knob-sustain" data-min="0" data-max="1" data-default="0.8">
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names"><span class="knob-name-a">SUSTAIN</span></div>
+                        <span class="knob-val" id="val-sustain">0.80</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="release">
+                        <div class="custom-knob filter-knob" id="knob-release" data-min="0.001" data-max="7.0" data-default="0.5" data-logarithmic="true">
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names"><span class="knob-name-a">RELEASE</span></div>
+                        <span class="knob-val" id="val-release">500ms</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="swim">
+                        <div class="custom-knob filter-knob" id="knob-swim" data-min="0" data-max="1" data-default="0">
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names"><span class="knob-name-a">SWIM</span></div>
+                        <span class="knob-val" id="val-swim">0.00</span>
                     </div>
                 </div>
             </div>

@@ -36,20 +36,36 @@ public:
       phases[p] = 0.0f;
       syncedPhases[p] = 0.0f;
       smoothedAmps[p] = 0.0f;
+      
+      partialEnvLevels[p] = 0.0f;
+      partialEnvStates[p] = 1; // Attack
+      
+      float attackT = envAttackTime;
+      float releaseT = envReleaseTime;
+      if (envSwim > 0.0f) {
+          float randA = juce::Random::getSystemRandom().nextFloat();
+          float randR = juce::Random::getSystemRandom().nextFloat();
+          attackT *= 1.0f - (randA * 0.5f * envSwim);
+          releaseT *= 1.0f - (randR * 0.5f * envSwim);
+      }
+      partialAttackTimes[p] = attackT;
+      partialReleaseTimes[p] = releaseT;
     }
     voiceActive = true;
     targetAmp = currentlyPlayingNote.noteOnVelocity.asUnsignedFloat();
     localTimbreMod = currentlyPlayingNote.timbre.asUnsignedFloat() * 0.4f;
-
-    adsr.setSampleRate (getSampleRate() > 0.0 ? getSampleRate() : 44100.0);
-    adsr.noteOn();
   }
 
   void noteStopped(bool allowTailOff) override {
     if (allowTailOff) {
-      adsr.noteOff();
+      for (int p = 0; p < 512; ++p) {
+          partialEnvStates[p] = 4; // Release
+      }
     } else {
-      adsr.reset();
+      for (int p = 0; p < 512; ++p) {
+          partialEnvStates[p] = 0; // Idle
+          partialEnvLevels[p] = 0.0f;
+      }
       clearCurrentNote();
       voiceActive = false;
     }
@@ -114,12 +130,12 @@ public:
       return 1.0f;
   }
 
-  void updateAdsr(float attack, float decay, float sustain, float release) {
-    adsrParams.attack = attack;
-    adsrParams.decay = decay;
-    adsrParams.sustain = sustain;
-    adsrParams.release = release;
-    adsr.setParameters(adsrParams);
+  void updateAdsr(float attack, float decay, float sustain, float release, float swim) {
+      envAttackTime = attack;
+      envDecayTime = decay;
+      envSustain = sustain;
+      envReleaseTime = release;
+      envSwim = swim;
   }
 
   void setGlobalSendAccum(float* s0, float* s1, float* s2, float* s3, float* s4, float* s5, float* s6, float* s7) {
@@ -131,8 +147,17 @@ public:
                        int numSamples) override;
 
 private:
-  juce::ADSR adsr;
-  juce::ADSR::Parameters adsrParams;
+  float partialEnvLevels[512] = {0.0f};
+  int partialEnvStates[512] = {0};
+  float partialAttackTimes[512] = {0.0f};
+  float partialReleaseTimes[512] = {0.0f};
+  
+  float envSustain = 0.0f;
+  float envAttackTime = 0.0f;
+  float envDecayTime = 0.0f;
+  float envReleaseTime = 0.0f;
+  float envSwim = 0.0f;
+  
   bool voiceActive = false;
 
   double currentSampleRate = 44100.0;
@@ -211,6 +236,7 @@ public:
   std::atomic<float>* decay = nullptr;
   std::atomic<float>* sustain = nullptr;
   std::atomic<float>* release = nullptr;
+  std::atomic<float>* swim = nullptr;
 
   std::atomic<int> routingOrder[7];
   
