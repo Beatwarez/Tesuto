@@ -45,7 +45,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             { name: 'decay', defaultValue: 0.50, minValue: 0.001, maxValue: 7.0 },
             { name: 'sustain', defaultValue: 0.80, minValue: 0.0, maxValue: 1.0 },
             { name: 'release', defaultValue: 0.50, minValue: 0.001, maxValue: 7.0 },
-            { name: 'swim', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 }
+            { name: 'drift', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 }
         ];
     }
 
@@ -107,7 +107,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             }
         };
         
-        this.envParams = { attack: 0.003, decay: 0.50, sustain: 0.8, release: 0.50, swim: 0.0 };
+        this.envParams = { attack: 0.003, decay: 0.50, sustain: 0.8, release: 0.50, drift: 0.0 };
     }
 
     noteOn(note, velocity) {
@@ -136,33 +136,23 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             voice.freq = targetFreq;
             voice.currentFreq = targetFreq;
             for (let p = 0; p < MAX_PARTIALS; p++) {
-                voice.phases[p] = 0.0;
+                let randomPhase = Math.random();
+                voice.phases[p] = randomPhase * this.envParams.drift;
+                voice.phaseDrifts[p] = randomPhase * 2.0 * Math.PI * this.envParams.drift;
                 voice.smoothedAmps[p] = 0.0;
                 voice.partialEnvLevels[p] = 0.0;
                 voice.partialEnvStates[p] = 1; // attack
                 
-                let attackT = this.envParams.attack;
-                let releaseT = this.envParams.release;
-                if (this.envParams.swim > 0) {
-                    attackT *= 1.0 - (Math.random() * 0.5 * this.envParams.swim);
-                    releaseT *= 1.0 - (Math.random() * 0.5 * this.envParams.swim);
-                }
-                voice.partialAttackTimes[p] = attackT;
-                voice.partialReleaseTimes[p] = releaseT;
+                voice.partialAttackTimes[p] = this.envParams.attack;
+                voice.partialReleaseTimes[p] = this.envParams.release;
             }
         } else {
             // Pitch glide if reusing active voice
             voice.freq = targetFreq;
             for (let p = 0; p < MAX_PARTIALS; p++) {
                 voice.partialEnvStates[p] = 1; // attack
-                let attackT = this.envParams.attack;
-                let releaseT = this.envParams.release;
-                if (this.envParams.swim > 0) {
-                    attackT *= 1.0 - (Math.random() * 0.5 * this.envParams.swim);
-                    releaseT *= 1.0 - (Math.random() * 0.5 * this.envParams.swim);
-                }
-                voice.partialAttackTimes[p] = attackT;
-                voice.partialReleaseTimes[p] = releaseT;
+                voice.partialAttackTimes[p] = this.envParams.attack;
+                voice.partialReleaseTimes[p] = this.envParams.release;
             }
         }
 
@@ -243,7 +233,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             this.envParams.decay = parameters.decay ? parameters.decay[0] : 0.3;
             this.envParams.sustain = parameters.sustain ? parameters.sustain[0] : 0.8;
             this.envParams.release = parameters.release ? parameters.release[0] : 1.0;
-            this.envParams.swim = parameters.swim ? parameters.swim[0] : 0.0;
+            this.envParams.drift = parameters.drift ? parameters.drift[0] : 0.0;
         const calculateFilterMult = (freq, fc, rawReso, rawSlope, type) => {
             if (fc < 1.0) return 0.0;
             const x = freq / fc;
@@ -488,23 +478,29 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                         voice.smoothedAmps[p] += (dry_target - voice.smoothedAmps[p]) * 0.15;
                         const a = voice.smoothedAmps[p];
 
-                        // Increment phase
-                        voice.phases[p] += phaseDeltas[p];
-                        if (voice.phases[p] >= 1.0) {
-                            voice.phases[p] -= 1.0;
-                        }
-
-                        // 2. Update phase for partial p
-                        if (p > 0) {
-                            voice.phases[p] += phaseDeltas[p];
-                            if (deSyncVal > 0.0 && masterWrapped) {
-                                voice.phases[p] = 0.0; // Hard-sync reset!
-                            } else if (voice.phases[p] >= 1.0) {
-                                voice.phases[p] -= 1.0;
-                            }
-                        }
-
-                        let modPhase = voice.phases[p];
+                          // Increment phase
+                          voice.phases[p] += phaseDeltas[p];
+                          if (voice.phases[p] >= 1.0) {
+                              voice.phases[p] -= 1.0;
+                          }
+  
+                          let currentPhase = voice.phases[p];
+                          
+                          // 2. Update phase for partial p (Hard Sync)
+                          if (p > 0 && deSyncVal > 0.0) {
+                              if (masterWrapped) {
+                                  // Clickless subsample precision sync
+                                  let overshoot = voice.phases[0];
+                                  voice.phases[p] = overshoot * (phaseDeltas[p] / phaseDeltas[0]);
+                                  if (voice.phases[p] >= 1.0) {
+                                      voice.phases[p] -= Math.floor(voice.phases[p]);
+                                  }
+                              }
+                              // We use the reset phase for synced, and the original phase for unsynced crossfade
+                              // Actually, to save memory in JS, we just blend the windowed reset wave
+                          }
+  
+                          let modPhase = voice.phases[p];
 
                         if (idx > 0) {
                             const p_prev = voice.activePartials[idx - 1];
@@ -515,12 +511,19 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                             modPhase += modIndex * prevVal;
                         }
 
-                        // Lookup sine table with phase wrapped to [0, 1)
-                        let normModPhase = modPhase % 1.0;
-                        if (normModPhase < 0) normModPhase += 1.0;
-                        const sineIdx = ((normModPhase * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
-                        const val = SINE_TABLE[sineIdx];
-                        prevVal = val;
+                          // Lookup sine table with phase wrapped to [0, 1)
+                          let normModPhase = modPhase % 1.0;
+                          if (normModPhase < 0) normModPhase += 1.0;
+                          const sineIdx = ((normModPhase * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
+                          let val = SINE_TABLE[sineIdx];
+                          
+                          if (p > 0 && deSyncVal > 0.0) {
+                              let windowPhase = voice.phases[0];
+                              let syncWindow = Math.min(1.0, Math.sin(windowPhase * Math.PI) * 4.0);
+                              // Smoothly crossfade into the windowed sync
+                              val = val * (1.0 - deSyncVal) + (val * syncWindow) * deSyncVal;
+                          }
+                          prevVal = val;
 
                         const dryVal = val * a;
 
@@ -1083,7 +1086,7 @@ class KronosSynth {
             decay: 0.50,
             sustain: 0.80,
             release: 0.50,
-            swim: 0.00,
+            drift: 0.00,
             desync: 0.00,
             pitch: 0.50
         };

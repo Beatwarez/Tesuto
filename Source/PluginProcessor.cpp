@@ -64,7 +64,7 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("decay", 1), "Decay", juce::NormalisableRange<float>(0.001f, 7.0f, 0.001f, 0.35f), 0.500f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("sustain", 1), "Sustain", 0.0f, 1.0f, 0.80f));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("release", 1), "Release", juce::NormalisableRange<float>(0.001f, 7.0f, 0.001f, 0.35f), 0.500f));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("swim", 1), "Swim", 0.0f, 1.0f, 0.0f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("drift", 1), "Drift", 0.0f, 1.0f, 0.0f));
     
     
     return layout;
@@ -130,7 +130,7 @@ KronosAudioProcessor::KronosAudioProcessor()
     decay = apvts.getRawParameterValue("decay");
     sustain = apvts.getRawParameterValue("sustain");
     release = apvts.getRawParameterValue("release");
-    swim = apvts.getRawParameterValue("swim");
+    drift = apvts.getRawParameterValue("drift");
     
     // Default routing order
     for (int i = 0; i < 7; ++i) routingOrder[i].store(i + 2);
@@ -276,8 +276,8 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     {
         if (auto* voice = dynamic_cast<KronosVoice*> (synth.getVoice (i)))
         {
-            if (attack && decay && sustain && release && swim) {
-                voice->updateAdsr (attack->load(), decay->load(), sustain->load(), release->load(), swim->load());
+            if (attack && decay && sustain && release && drift) {
+                voice->updateAdsr (attack->load(), decay->load(), sustain->load(), release->load(), drift->load());
             }
             voice->setGlobalSendAccum(
                 sendBuffers.getWritePointer(0),
@@ -860,19 +860,24 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         float a = smoothedAmps[p];
 
         // 2. Update phase for partial p
-        if (p > 0) {
-          phases[p] += phaseDeltas[p];
-          if (phases[p] >= 1.0f) {
-            phases[p] -= 1.0f;
+          if (p > 0) {
+            phases[p] += phaseDeltas[p];
+            if (phases[p] >= 1.0f) {
+              phases[p] -= 1.0f;
+            }
+            
+            syncedPhases[p] += phaseDeltas[p];
+            if (deSyncVal > 0.0f && masterWrapped) {
+              // Clickless subsample precision sync
+              float overshoot = phases[0];
+              syncedPhases[p] = overshoot * (phaseDeltas[p] / phaseDeltas[0]);
+              if (syncedPhases[p] >= 1.0f) {
+                  syncedPhases[p] -= std::floor(syncedPhases[p]);
+              }
+            } else if (syncedPhases[p] >= 1.0f) {
+              syncedPhases[p] -= 1.0f;
+            }
           }
-          
-          syncedPhases[p] += phaseDeltas[p];
-          if (deSyncVal > 0.0f && masterWrapped) {
-            syncedPhases[p] = 0.0f; // Hard-sync reset!
-          } else if (syncedPhases[p] >= 1.0f) {
-            syncedPhases[p] -= 1.0f;
-          }
-        }
 
         float modOffset = 0.0f;
         if (i > 0 && i <= maxModulatingIndex) {
@@ -889,13 +894,19 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
         float val = valUnsync;
 
-        // Bypass heavy sync calculations if mix is 0
-        if (syncMix > 0.0f) {
-            float modPhaseSync = (p > 0) ? syncedPhases[p] + modOffset : modPhaseUnsync;
-            int idxSync = static_cast<int>((modPhaseSync + 1024.0f) * 32768.0f) & 32767;
-            float valSync = sineTable[idxSync];
-            val = valUnsync * (1.0f - syncMix) + valSync * syncMix;
-        }
+          // Bypass heavy sync calculations if mix is 0
+          if (syncMix > 0.0f) {
+              float modPhaseSync = (p > 0) ? syncedPhases[p] + modOffset : modPhaseUnsync;
+              int idxSync = static_cast<int>((modPhaseSync + 1024.0f) * 32768.0f) & 32767;
+              float valSync = sineTable[idxSync];
+              
+              // Windowed sync (VOSIM) smoothing driven by the fundamental phase
+              float windowPhase = phases[0];
+              float syncWindow = std::min(1.0f, std::sin(windowPhase * 3.14159265f) * 4.0f);
+              valSync *= syncWindow;
+              
+              val = valUnsync * (1.0f - syncMix) + valSync * syncMix;
+          }
         prevVal = val;
 
         float dryVal = val * a;

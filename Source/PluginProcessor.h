@@ -17,8 +17,7 @@ public:
     for (int p = 0; p < 512; ++p) {
       phases[p] = 0.0f;
       syncedPhases[p] = 0.0f;
-      phaseDrifts[p] = juce::Random::getSystemRandom().nextFloat() *
-                       juce::MathConstants<float>::twoPi;
+      phaseDrifts[p] = 0.0f;
       float basePan = (p == 0) ? 0.5f : ((p % 2 == 0) ? 0.25f : 0.75f);
       panLeft[p] = std::sqrt(1.0f - basePan);
       panRight[p] = std::sqrt(basePan);
@@ -33,23 +32,18 @@ public:
     fundamentalFreq = targetFreq;
     currentFundamentalFreq = targetFreq;
     for (int p = 0; p < 512; ++p) {
-      phases[p] = 0.0f;
-      syncedPhases[p] = 0.0f;
+      float randomPhase = juce::Random::getSystemRandom().nextFloat();
+      phases[p] = randomPhase * envDrift;
+      syncedPhases[p] = phases[p];
+      phaseDrifts[p] = randomPhase * juce::MathConstants<float>::twoPi * envDrift;
+      
       smoothedAmps[p] = 0.0f;
       
       partialEnvLevels[p] = 0.0f;
       partialEnvStates[p] = 1; // Attack
       
-      float attackT = envAttackTime;
-      float releaseT = envReleaseTime;
-      if (envSwim > 0.0f) {
-          float randA = juce::Random::getSystemRandom().nextFloat();
-          float randR = juce::Random::getSystemRandom().nextFloat();
-          attackT *= 1.0f - (randA * 0.5f * envSwim);
-          releaseT *= 1.0f - (randR * 0.5f * envSwim);
-      }
-      partialAttackTimes[p] = attackT;
-      partialReleaseTimes[p] = releaseT;
+      partialAttackTimes[p] = envAttackTime;
+      partialReleaseTimes[p] = envReleaseTime;
     }
     voiceActive = true;
     targetAmp = currentlyPlayingNote.noteOnVelocity.asUnsignedFloat();
@@ -130,12 +124,12 @@ public:
       return 1.0f;
   }
 
-  void updateAdsr(float attack, float decay, float sustain, float release, float swim) {
+  void updateAdsr(float attack, float decay, float sustain, float release, float drift) {
       envAttackTime = attack;
       envDecayTime = decay;
       envSustain = sustain;
       envReleaseTime = release;
-      envSwim = swim;
+      envDrift = drift;
   }
 
   void setGlobalSendAccum(float* s0, float* s1, float* s2, float* s3, float* s4, float* s5, float* s6, float* s7) {
@@ -156,7 +150,7 @@ private:
   float envAttackTime = 0.0f;
   float envDecayTime = 0.0f;
   float envReleaseTime = 0.0f;
-  float envSwim = 0.0f;
+  float envDrift = 0.0f;
   
   bool voiceActive = false;
 
@@ -236,7 +230,7 @@ public:
   std::atomic<float>* decay = nullptr;
   std::atomic<float>* sustain = nullptr;
   std::atomic<float>* release = nullptr;
-  std::atomic<float>* swim = nullptr;
+  std::atomic<float>* drift = nullptr;
 
   std::atomic<int> routingOrder[7];
   
