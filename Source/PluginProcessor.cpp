@@ -919,10 +919,5 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
       voiceTime += 1.0 / currentSampleRate;
     }
-
-    if (! adsr.isActive()) {
-      clearCurrentNote();
-      voiceActive = false;
-    }
 }
 
