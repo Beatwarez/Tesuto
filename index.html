@@ -21,7 +21,7 @@
                 <span class="tagline">drone synthesis laboratory</span>
             </div>
             <div class="header-right">
-                <span class="build-version">BUILD #0.67</span>
+                <span class="build-version">BUILD #0.68</span>
             </div>
         </header>
 
@@ -544,6 +544,7 @@
         <!-- INFECT ENGINE TEMPLATE -->
         <template id="tmpl-engine-infect">
         <div class="dsp-panel engine-infect-panel">
+            <div class="filter-ui-canvas-container"></div>
             <div class="filter-params-row">
                 <div class="knob-wrapper" data-param="mod{{LANE}}_p1">
                     <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p1" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_p1_mod">
@@ -551,7 +552,7 @@
                         <div class="knob-dial"><div class="knob-marker"></div></div>
                     </div>
                     <div class="knob-names">
-                        <span class="knob-name-a">DRIVE</span>
+                        <span class="knob-name-a">INFECT</span>
                     </div>
                     <span class="knob-val" id="val-mod{{LANE}}_p1">0.00</span>
                 </div>
@@ -561,29 +562,29 @@
                         <div class="knob-dial"><div class="knob-marker"></div></div>
                     </div>
                     <div class="knob-names">
-                        <span class="knob-name-a">SYM</span>
+                        <span class="knob-name-a">AMOUNT</span>
                     </div>
                     <span class="knob-val" id="val-mod{{LANE}}_p2">0.00</span>
                 </div>
-                <div class="knob-wrapper" data-param="mod{{LANE}}_p3" style="opacity: 0.2; pointer-events: none;">
-                    <div class="custom-knob filter-knob" id="knob-mod{{LANE}}_p3">
-                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /></svg>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_p3">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p3" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_p3_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
                         <div class="knob-dial"><div class="knob-marker"></div></div>
                     </div>
                     <div class="knob-names">
-                        <span class="knob-name-a">-</span>
+                        <span class="knob-name-a">CLONE</span>
                     </div>
-                    <span class="knob-val" id="val-mod{{LANE}}_p3">-</span>
+                    <span class="knob-val" id="val-mod{{LANE}}_p3">0.00</span>
                 </div>
-                <div class="knob-wrapper" data-param="mod{{LANE}}_p4" style="opacity: 0.2; pointer-events: none;">
-                    <div class="custom-knob filter-knob" id="knob-mod{{LANE}}_p4">
-                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /></svg>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_p4">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p4" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_p4_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
                         <div class="knob-dial"><div class="knob-marker"></div></div>
                     </div>
                     <div class="knob-names">
-                        <span class="knob-name-a">-</span>
+                        <span class="knob-name-a">AMOUNT</span>
                     </div>
-                    <span class="knob-val" id="val-mod{{LANE}}_p4">-</span>
+                    <span class="knob-val" id="val-mod{{LANE}}_p4">0.00</span>
                 </div>
             </div>
         </div>
