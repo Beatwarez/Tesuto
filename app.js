@@ -36,7 +36,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             { name: 'space', defaultValue: 0.3, minValue: 0.0, maxValue: 1.0 },
             { name: 'alter', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'pinch', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
-            { name: 'ring', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'quant', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'size', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
             { name: 'sweep', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
             { name: 'infectAmount', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
@@ -217,7 +217,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             const spaceVal = parameters.space[0];
             const alterVal = parameters.alter ? parameters.alter[0] : 0.0;
               const pinchVal = parameters.pinch ? parameters.pinch[0] : 0.0;
-              const ringVal = parameters.ring ? parameters.ring[0] : 0.0;
+              const quantVal = parameters.quant ? parameters.quant[0] : 0.0;
             const sizeVal = parameters.size ? parameters.size[0] : 0.5;
             const sweepVal = parameters.sweep ? parameters.sweep[0] : 0.5;
             const infectAmount = parameters.infectAmount ? parameters.infectAmount[0] : 0.0;
@@ -614,7 +614,12 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                                                     if (pinchVal > 0.0) {
                               modPhase += Math.sin(modPhase * 2.0 * Math.PI) * pinchVal * 0.3;
                           }
-                          // Lookup sine table with phase wrapped to [0, 1)
+                                                      if (quantVal > 0.0) {
+                                let steps = 2.0 + (1.0 - quantVal) * 62.0;
+                                let quantizedPhase = Math.floor(modPhase * steps) / steps;
+                                modPhase = modPhase * (1.0 - quantVal) + quantizedPhase * quantVal;
+                            }
+                            // Lookup sine table with phase wrapped to [0, 1)
                           let normModPhase = modPhase % 1.0;
                           if (normModPhase < 0) normModPhase += 1.0;
                           const sineIdx = ((normModPhase * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);

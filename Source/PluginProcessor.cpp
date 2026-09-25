@@ -565,7 +565,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         float deSyncVal = 0.0f;
     float alterVal = 0.0f;
     float pinchVal = 0.0f;
-    float ringVal = 0.0f;
+    float quantVal = 0.0f;
 
     for (int i = 0; i < 7; ++i) {
         int laneNumber = std::round(processor->routingOrder[i].load());
@@ -666,9 +666,9 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             float desync_mod   = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
             deSyncVal = std::clamp(desync_param + macroVal * desync_mod, 0.0f, 1.0f);
 
-            float ring_param = processor->mod_p[laneIdx][3] ? processor->mod_p[laneIdx][3]->load() : 0.0f;
-            float ring_mod   = processor->mod_pMod[laneIdx][3] ? processor->mod_pMod[laneIdx][3]->load() : 0.0f;
-            ringVal = std::clamp(ring_param + macroVal * ring_mod, 0.0f, 1.0f);
+            float quant_param = processor->mod_p[laneIdx][3] ? processor->mod_p[laneIdx][3]->load() : 0.0f;
+            float quant_mod   = processor->mod_pMod[laneIdx][3] ? processor->mod_pMod[laneIdx][3]->load() : 0.0f;
+            quantVal = std::clamp(quant_param + macroVal * quant_mod, 0.0f, 1.0f);
 
             float curve = deSyncVal * deSyncVal * deSyncVal;
             float syncMultiplier = 1.0f + curve * 9.0f;
@@ -957,12 +957,6 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
       }
 
       // maxModulatingIndex is now pre-calculated before the loop!
-      
-      float currentRingSine = 0.0f;
-      if (ringVal > 0.0f) {
-          int ringIdx = static_cast<int>((phases[0] * 1.5f + 1024.0f) * 32768.0f) & 32767;
-          currentRingSine = sineTable[ringIdx];
-      }
 
       for (int i = 0; i < numActivePartials; ++i) {
         int p = activePartials[i];
@@ -1002,6 +996,11 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
         // Unsynced phase calculation (using fast bitwise wrapping instead of std::floor)
         float modPhaseUnsync = phases[p] + modOffset;
+        if (quantVal > 0.0f) {
+            float steps = 2.0f + (1.0f - quantVal) * 62.0f;
+            float quantizedPhase = std::floor(modPhaseUnsync * steps) / steps;
+            modPhaseUnsync = modPhaseUnsync * (1.0f - quantVal) + quantizedPhase * quantVal;
+        }
         if (pinchVal > 0.0f) {
             int pinchIdx = static_cast<int>((modPhaseUnsync + 1024.0f) * 32768.0f) & 32767;
             modPhaseUnsync += sineTable[pinchIdx] * pinchVal * 0.3f;
@@ -1015,6 +1014,11 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
           if (syncMix > 0.0f) {
               float modPhaseSync = (p > 0) ? syncedPhases[p] + modOffset : modPhaseUnsync;
               
+              if (quantVal > 0.0f) {
+                  float steps = 2.0f + (1.0f - quantVal) * 62.0f;
+                  float quantizedPhase = std::floor(modPhaseSync * steps) / steps;
+                  modPhaseSync = modPhaseSync * (1.0f - quantVal) + quantizedPhase * quantVal;
+              }
               if (pinchVal > 0.0f && p > 0) {
                   int pinchIdx = static_cast<int>((modPhaseSync + 1024.0f) * 32768.0f) & 32767;
                   modPhaseSync += sineTable[pinchIdx] * pinchVal * 0.3f;
@@ -1029,10 +1033,6 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
               valSync *= syncWindow;
               
               val = valUnsync * (1.0f - syncMix) + valSync * syncMix;
-          }
-          
-          if (ringVal > 0.0f) {
-              val = val * (1.0f - ringVal) + (val * currentRingSine) * ringVal;
           }
           
         prevVal = val;
