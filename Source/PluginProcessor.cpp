@@ -996,6 +996,9 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
         // Unsynced phase calculation (using fast bitwise wrapping instead of std::floor)
         float modPhaseUnsync = phases[p] + modOffset;
+        if (pinchVal > 0.0f) {
+            modPhaseUnsync += std::sin(modPhaseUnsync * 6.2831853f) * pinchVal * 0.3f;
+        }
         int idxUnsync = static_cast<int>((modPhaseUnsync + 1024.0f) * 32768.0f) & 32767;
         float valUnsync = sineTable[idxUnsync];
 
@@ -1014,6 +1017,13 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
               
               val = valUnsync * (1.0f - syncMix) + valSync * syncMix;
           }
+          
+          if (ringVal > 0.0f) {
+              float ringPhase = phases[0] * 1.5f;
+              float ringSine = std::sin(ringPhase * 6.2831853f);
+              val = val * (1.0f - ringVal) + (val * ringSine) * ringVal;
+          }
+          
         prevVal = val;
 
         float dryVal = val * a;
