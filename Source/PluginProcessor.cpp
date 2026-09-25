@@ -35,28 +35,60 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         juce::String mStr = juce::String(m);
         layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_engine", 1), "mod" + mStr + "_engine", 0.0f, 10.0f, 0.0f));
         layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_macro", 1), "mod" + mStr + "_macro", 0.0f, 1.0f, 0.0f));
-        juce::StringArray filterTypes = { "LP", "HP", "BP", "NOTCH", "COMB", "VOWEL" };
-        for (int p = 1; p <= 8; ++p) {
-            juce::String pStr = juce::String(p);
-            if (p == 6) {
-                layout.add(std::make_unique<juce::AudioParameterInt>(
-                    juce::ParameterID("mod" + mStr + "_filterA", 1), 
-                    "mod" + mStr + "_filterA", 
-                    0, 5, 0
-                ));
-                layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_filterA_mod", 1), "mod" + mStr + "_filterA_mod", -1.0f, 1.0f, 0.0f));
-            } else if (p == 7) {
-                layout.add(std::make_unique<juce::AudioParameterInt>(
-                    juce::ParameterID("mod" + mStr + "_filterB", 1), 
-                    "mod" + mStr + "_filterB", 
-                    0, 5, 0
-                ));
-                layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_filterB_mod", 1), "mod" + mStr + "_filterB_mod", -1.0f, 1.0f, 0.0f));
-            } else {
-                layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr, 1), "mod" + mStr + "_p" + pStr, -512.0f, 512.0f, 0.0f));
-                layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_p" + pStr + "_mod", 1), "mod" + mStr + "_p" + pStr + "_mod", -1.0f, 1.0f, 0.0f));
-            }
-        }
+        
+        // FILTER
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_filter_cutoff", 1), "mod" + mStr + "_filter_cutoff", 0.0f, 1.0f, 0.5f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_filter_cutoff_mod", 1), "mod" + mStr + "_filter_cutoff_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_filter_offset", 1), "mod" + mStr + "_filter_offset", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_filter_offset_mod", 1), "mod" + mStr + "_filter_offset_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_filter_reso", 1), "mod" + mStr + "_filter_reso", 0.0f, 1.0f, 0.2f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_filter_reso_mod", 1), "mod" + mStr + "_filter_reso_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_filter_slope", 1), "mod" + mStr + "_filter_slope", 0.0f, 1.0f, 0.5f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_filter_slope_mod", 1), "mod" + mStr + "_filter_slope_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_filter_morph", 1), "mod" + mStr + "_filter_morph", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_filter_morph_mod", 1), "mod" + mStr + "_filter_morph_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterInt>(juce::ParameterID("mod" + mStr + "_filter_typeA", 1), "mod" + mStr + "_filter_typeA", 0, 5, 0));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_filter_typeA_mod", 1), "mod" + mStr + "_filter_typeA_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterInt>(juce::ParameterID("mod" + mStr + "_filter_typeB", 1), "mod" + mStr + "_filter_typeB", 0, 5, 0));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_filter_typeB_mod", 1), "mod" + mStr + "_filter_typeB_mod", -1.0f, 1.0f, 0.0f));
+        
+        // SPACE
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_space_width", 1), "mod" + mStr + "_space_width", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_space_width_mod", 1), "mod" + mStr + "_space_width_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_space_orbit", 1), "mod" + mStr + "_space_orbit", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_space_orbit_mod", 1), "mod" + mStr + "_space_orbit_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_space_smear", 1), "mod" + mStr + "_space_smear", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_space_smear_mod", 1), "mod" + mStr + "_space_smear_mod", -1.0f, 1.0f, 0.0f));
+        
+        // ALTER
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_fm", 1), "mod" + mStr + "_alter_fm", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_fm_mod", 1), "mod" + mStr + "_alter_fm_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_pinch", 1), "mod" + mStr + "_alter_pinch", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_pinch_mod", 1), "mod" + mStr + "_alter_pinch_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_desync", 1), "mod" + mStr + "_alter_desync", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_desync_mod", 1), "mod" + mStr + "_alter_desync_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_quant", 1), "mod" + mStr + "_alter_quant", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_quant_mod", 1), "mod" + mStr + "_alter_quant_mod", -1.0f, 1.0f, 0.0f));
+        
+        // INFECT
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_infect_drive", 1), "mod" + mStr + "_infect_drive", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_infect_drive_mod", 1), "mod" + mStr + "_infect_drive_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_infect_sym", 1), "mod" + mStr + "_infect_sym", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_infect_sym_mod", 1), "mod" + mStr + "_infect_sym_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_infect_clone", 1), "mod" + mStr + "_infect_clone", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_infect_clone_mod", 1), "mod" + mStr + "_infect_clone_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_infect_cloneAmount", 1), "mod" + mStr + "_infect_cloneAmount", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_infect_cloneAmount_mod", 1), "mod" + mStr + "_infect_cloneAmount_mod", -1.0f, 1.0f, 0.0f));
+        
+        // FORM
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_form_warp", 1), "mod" + mStr + "_form_warp", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_form_warp_mod", 1), "mod" + mStr + "_form_warp_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_form_fold", 1), "mod" + mStr + "_form_fold", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_form_fold_mod", 1), "mod" + mStr + "_form_fold_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_form_tension", 1), "mod" + mStr + "_form_tension", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_form_tension_mod", 1), "mod" + mStr + "_form_tension_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_form_shape", 1), "mod" + mStr + "_form_shape", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_form_shape_mod", 1), "mod" + mStr + "_form_shape_mod", -1.0f, 1.0f, 0.0f));
     }
     
     // Amp Envelope
@@ -111,19 +143,55 @@ KronosAudioProcessor::KronosAudioProcessor()
         juce::String mStr = juce::String(m);
         mod_engine[m-2] = apvts.getRawParameterValue("mod" + mStr + "_engine");
         mod_macro[m-2] = apvts.getRawParameterValue("mod" + mStr + "_macro");
-        for (int p = 1; p <= 8; ++p) {
-            juce::String pStr = juce::String(p);
-            if (p == 6) {
-                mod_p[m-2][5] = apvts.getRawParameterValue("mod" + mStr + "_filterA");
-                mod_pMod[m-2][5] = apvts.getRawParameterValue("mod" + mStr + "_filterA_mod");
-                
-                mod_p[m-2][6] = apvts.getRawParameterValue("mod" + mStr + "_filterB");
-                mod_pMod[m-2][6] = apvts.getRawParameterValue("mod" + mStr + "_filterB_mod");
-            } else {
-                mod_p[m-2][p-1] = apvts.getRawParameterValue("mod" + mStr + "_p" + pStr);
-                mod_pMod[m-2][p-1] = apvts.getRawParameterValue("mod" + mStr + "_p" + pStr + "_mod");
-            }
-        }
+        
+        mod_engine_p[m-2][2][0] = apvts.getRawParameterValue("mod" + mStr + "_filter_cutoff");
+        mod_engine_pMod[m-2][2][0] = apvts.getRawParameterValue("mod" + mStr + "_filter_cutoff_mod");
+        mod_engine_p[m-2][2][1] = apvts.getRawParameterValue("mod" + mStr + "_filter_offset");
+        mod_engine_pMod[m-2][2][1] = apvts.getRawParameterValue("mod" + mStr + "_filter_offset_mod");
+        mod_engine_p[m-2][2][2] = apvts.getRawParameterValue("mod" + mStr + "_filter_reso");
+        mod_engine_pMod[m-2][2][2] = apvts.getRawParameterValue("mod" + mStr + "_filter_reso_mod");
+        mod_engine_p[m-2][2][3] = apvts.getRawParameterValue("mod" + mStr + "_filter_slope");
+        mod_engine_pMod[m-2][2][3] = apvts.getRawParameterValue("mod" + mStr + "_filter_slope_mod");
+        mod_engine_p[m-2][2][4] = apvts.getRawParameterValue("mod" + mStr + "_filter_morph");
+        mod_engine_pMod[m-2][2][4] = apvts.getRawParameterValue("mod" + mStr + "_filter_morph_mod");
+        mod_engine_p[m-2][2][5] = apvts.getRawParameterValue("mod" + mStr + "_filter_typeA");
+        mod_engine_pMod[m-2][2][5] = apvts.getRawParameterValue("mod" + mStr + "_filter_typeA_mod");
+        mod_engine_p[m-2][2][6] = apvts.getRawParameterValue("mod" + mStr + "_filter_typeB");
+        mod_engine_pMod[m-2][2][6] = apvts.getRawParameterValue("mod" + mStr + "_filter_typeB_mod");
+        
+        mod_engine_p[m-2][3][0] = apvts.getRawParameterValue("mod" + mStr + "_space_width");
+        mod_engine_pMod[m-2][3][0] = apvts.getRawParameterValue("mod" + mStr + "_space_width_mod");
+        mod_engine_p[m-2][3][1] = apvts.getRawParameterValue("mod" + mStr + "_space_orbit");
+        mod_engine_pMod[m-2][3][1] = apvts.getRawParameterValue("mod" + mStr + "_space_orbit_mod");
+        mod_engine_p[m-2][3][2] = apvts.getRawParameterValue("mod" + mStr + "_space_smear");
+        mod_engine_pMod[m-2][3][2] = apvts.getRawParameterValue("mod" + mStr + "_space_smear_mod");
+        
+        mod_engine_p[m-2][5][0] = apvts.getRawParameterValue("mod" + mStr + "_alter_fm");
+        mod_engine_pMod[m-2][5][0] = apvts.getRawParameterValue("mod" + mStr + "_alter_fm_mod");
+        mod_engine_p[m-2][5][1] = apvts.getRawParameterValue("mod" + mStr + "_alter_pinch");
+        mod_engine_pMod[m-2][5][1] = apvts.getRawParameterValue("mod" + mStr + "_alter_pinch_mod");
+        mod_engine_p[m-2][5][2] = apvts.getRawParameterValue("mod" + mStr + "_alter_desync");
+        mod_engine_pMod[m-2][5][2] = apvts.getRawParameterValue("mod" + mStr + "_alter_desync_mod");
+        mod_engine_p[m-2][5][3] = apvts.getRawParameterValue("mod" + mStr + "_alter_quant");
+        mod_engine_pMod[m-2][5][3] = apvts.getRawParameterValue("mod" + mStr + "_alter_quant_mod");
+        
+        mod_engine_p[m-2][7][0] = apvts.getRawParameterValue("mod" + mStr + "_infect_drive");
+        mod_engine_pMod[m-2][7][0] = apvts.getRawParameterValue("mod" + mStr + "_infect_drive_mod");
+        mod_engine_p[m-2][7][1] = apvts.getRawParameterValue("mod" + mStr + "_infect_sym");
+        mod_engine_pMod[m-2][7][1] = apvts.getRawParameterValue("mod" + mStr + "_infect_sym_mod");
+        mod_engine_p[m-2][7][2] = apvts.getRawParameterValue("mod" + mStr + "_infect_clone");
+        mod_engine_pMod[m-2][7][2] = apvts.getRawParameterValue("mod" + mStr + "_infect_clone_mod");
+        mod_engine_p[m-2][7][3] = apvts.getRawParameterValue("mod" + mStr + "_infect_cloneAmount");
+        mod_engine_pMod[m-2][7][3] = apvts.getRawParameterValue("mod" + mStr + "_infect_cloneAmount_mod");
+        
+        mod_engine_p[m-2][8][0] = apvts.getRawParameterValue("mod" + mStr + "_form_warp");
+        mod_engine_pMod[m-2][8][0] = apvts.getRawParameterValue("mod" + mStr + "_form_warp_mod");
+        mod_engine_p[m-2][8][1] = apvts.getRawParameterValue("mod" + mStr + "_form_fold");
+        mod_engine_pMod[m-2][8][1] = apvts.getRawParameterValue("mod" + mStr + "_form_fold_mod");
+        mod_engine_p[m-2][8][2] = apvts.getRawParameterValue("mod" + mStr + "_form_tension");
+        mod_engine_pMod[m-2][8][2] = apvts.getRawParameterValue("mod" + mStr + "_form_tension_mod");
+        mod_engine_p[m-2][8][3] = apvts.getRawParameterValue("mod" + mStr + "_form_shape");
+        mod_engine_pMod[m-2][8][3] = apvts.getRawParameterValue("mod" + mStr + "_form_shape_mod");
     }
     
     attack = apvts.getRawParameterValue("attack");
@@ -576,19 +644,19 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         float macroVal = processor->mod_macro[laneIdx] ? processor->mod_macro[laneIdx]->load() : 0.0f;
         
         if (engineType == 2) { // FILTER
-            float cutoff_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.5f;
-            float cutoff_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
-            float offset_param = processor->mod_p[laneIdx][1] ? processor->mod_p[laneIdx][1]->load() : 0.0f;
-            float offset_mod   = processor->mod_pMod[laneIdx][1] ? processor->mod_pMod[laneIdx][1]->load() : 0.0f;
-            float reso_param   = processor->mod_p[laneIdx][2] ? processor->mod_p[laneIdx][2]->load() : 0.2f;
-            float reso_mod     = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
-            float slope_param  = processor->mod_p[laneIdx][3] ? processor->mod_p[laneIdx][3]->load() : 0.5f;
-            float slope_mod    = processor->mod_pMod[laneIdx][3] ? processor->mod_pMod[laneIdx][3]->load() : 0.0f;
-            float morph_param  = processor->mod_p[laneIdx][4] ? processor->mod_p[laneIdx][4]->load() : 0.0f;
-            float morph_mod    = processor->mod_pMod[laneIdx][4] ? processor->mod_pMod[laneIdx][4]->load() : 0.0f;
+            float cutoff_param = processor->mod_engine_p[laneIdx][2][0] ? processor->mod_engine_p[laneIdx][2][0]->load() : 0.5f;
+            float cutoff_mod   = processor->mod_engine_pMod[laneIdx][2][0] ? processor->mod_engine_pMod[laneIdx][2][0]->load() : 0.0f;
+            float offset_param = processor->mod_engine_p[laneIdx][2][1] ? processor->mod_engine_p[laneIdx][2][1]->load() : 0.0f;
+            float offset_mod   = processor->mod_engine_pMod[laneIdx][2][1] ? processor->mod_engine_pMod[laneIdx][2][1]->load() : 0.0f;
+            float reso_param   = processor->mod_engine_p[laneIdx][2][2] ? processor->mod_engine_p[laneIdx][2][2]->load() : 0.2f;
+            float reso_mod     = processor->mod_engine_pMod[laneIdx][2][2] ? processor->mod_engine_pMod[laneIdx][2][2]->load() : 0.0f;
+            float slope_param  = processor->mod_engine_p[laneIdx][2][3] ? processor->mod_engine_p[laneIdx][2][3]->load() : 0.5f;
+            float slope_mod    = processor->mod_engine_pMod[laneIdx][2][3] ? processor->mod_engine_pMod[laneIdx][2][3]->load() : 0.0f;
+            float morph_param  = processor->mod_engine_p[laneIdx][2][4] ? processor->mod_engine_p[laneIdx][2][4]->load() : 0.0f;
+            float morph_mod    = processor->mod_engine_pMod[laneIdx][2][4] ? processor->mod_engine_pMod[laneIdx][2][4]->load() : 0.0f;
             
-            int typeA = processor->mod_p[laneIdx][5] ? std::round(processor->mod_p[laneIdx][5]->load()) : 0;
-            int typeB = processor->mod_p[laneIdx][6] ? std::round(processor->mod_p[laneIdx][6]->load()) : 0;
+            int typeA = processor->mod_engine_p[laneIdx][2][5] ? std::round(processor->mod_engine_p[laneIdx][2][5]->load()) : 0;
+            int typeB = processor->mod_engine_p[laneIdx][2][6] ? std::round(processor->mod_engine_p[laneIdx][2][6]->load()) : 0;
 
             float currentCutoff = std::clamp(cutoff_param + macroVal * cutoff_mod, 0.0f, 1.0f);
             float currentOffset = std::clamp(offset_param + macroVal * offset_mod, -1.0f, 1.0f);
@@ -609,20 +677,20 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
                 }
             }
         } else if (engineType == 8) { // FORM
-            float warp_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.0f;
-            float warp_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
+            float warp_param = processor->mod_engine_p[laneIdx][8][0] ? processor->mod_engine_p[laneIdx][8][0]->load() : 0.0f;
+            float warp_mod   = processor->mod_engine_pMod[laneIdx][8][0] ? processor->mod_engine_pMod[laneIdx][8][0]->load() : 0.0f;
             float currentWarp = std::clamp(warp_param + macroVal * warp_mod, 0.0f, 1.0f);
             
-            float fold_param = processor->mod_p[laneIdx][1] ? processor->mod_p[laneIdx][1]->load() : 0.0f;
-            float fold_mod   = processor->mod_pMod[laneIdx][1] ? processor->mod_pMod[laneIdx][1]->load() : 0.0f;
+            float fold_param = processor->mod_engine_p[laneIdx][8][1] ? processor->mod_engine_p[laneIdx][8][1]->load() : 0.0f;
+            float fold_mod   = processor->mod_engine_pMod[laneIdx][8][1] ? processor->mod_engine_pMod[laneIdx][8][1]->load() : 0.0f;
             float currentFold = std::clamp(fold_param + macroVal * fold_mod, -1.0f, 1.0f);
 
-            float tension_param = processor->mod_p[laneIdx][2] ? processor->mod_p[laneIdx][2]->load() : 0.0f;
-            float tension_mod   = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
+            float tension_param = processor->mod_engine_p[laneIdx][8][2] ? processor->mod_engine_p[laneIdx][8][2]->load() : 0.0f;
+            float tension_mod   = processor->mod_engine_pMod[laneIdx][8][2] ? processor->mod_engine_pMod[laneIdx][8][2]->load() : 0.0f;
             float currentTension = std::clamp(tension_param + macroVal * tension_mod, 0.0f, 1.0f);
 
-            float shape_param = processor->mod_p[laneIdx][3] ? processor->mod_p[laneIdx][3]->load() : 0.0f;
-            float shape_mod   = processor->mod_pMod[laneIdx][3] ? processor->mod_pMod[laneIdx][3]->load() : 0.0f;
+            float shape_param = processor->mod_engine_p[laneIdx][8][3] ? processor->mod_engine_p[laneIdx][8][3]->load() : 0.0f;
+            float shape_mod   = processor->mod_engine_pMod[laneIdx][8][3] ? processor->mod_engine_pMod[laneIdx][8][3]->load() : 0.0f;
             float currentShape = std::clamp(shape_param + macroVal * shape_mod, 0.0f, 1.0f);
 
             float phaseShift = currentFold * 6.2831853f;
@@ -654,20 +722,20 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
                 if (freqs[p] < 0.0f) freqs[p] = std::abs(freqs[p]);
             }
         } else if (engineType == 5) { // ALTER
-            float fm_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.0f;
-            float fm_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
+            float fm_param = processor->mod_engine_p[laneIdx][5][0] ? processor->mod_engine_p[laneIdx][5][0]->load() : 0.0f;
+            float fm_mod   = processor->mod_engine_pMod[laneIdx][5][0] ? processor->mod_engine_pMod[laneIdx][5][0]->load() : 0.0f;
             alterVal = std::clamp(fm_param + macroVal * fm_mod, 0.0f, 1.0f);
             
-            float pinch_param = processor->mod_p[laneIdx][1] ? processor->mod_p[laneIdx][1]->load() : 0.0f;
-            float pinch_mod   = processor->mod_pMod[laneIdx][1] ? processor->mod_pMod[laneIdx][1]->load() : 0.0f;
+            float pinch_param = processor->mod_engine_p[laneIdx][5][1] ? processor->mod_engine_p[laneIdx][5][1]->load() : 0.0f;
+            float pinch_mod   = processor->mod_engine_pMod[laneIdx][5][1] ? processor->mod_engine_pMod[laneIdx][5][1]->load() : 0.0f;
             pinchVal = std::clamp(pinch_param + macroVal * pinch_mod, 0.0f, 1.0f);
             
-            float desync_param = processor->mod_p[laneIdx][2] ? processor->mod_p[laneIdx][2]->load() : 0.0f;
-            float desync_mod   = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
+            float desync_param = processor->mod_engine_p[laneIdx][5][2] ? processor->mod_engine_p[laneIdx][5][2]->load() : 0.0f;
+            float desync_mod   = processor->mod_engine_pMod[laneIdx][5][2] ? processor->mod_engine_pMod[laneIdx][5][2]->load() : 0.0f;
             deSyncVal = std::clamp(desync_param + macroVal * desync_mod, 0.0f, 1.0f);
 
-            float quant_param = processor->mod_p[laneIdx][3] ? processor->mod_p[laneIdx][3]->load() : 0.0f;
-            float quant_mod   = processor->mod_pMod[laneIdx][3] ? processor->mod_pMod[laneIdx][3]->load() : 0.0f;
+            float quant_param = processor->mod_engine_p[laneIdx][5][3] ? processor->mod_engine_p[laneIdx][5][3]->load() : 0.0f;
+            float quant_mod   = processor->mod_engine_pMod[laneIdx][5][3] ? processor->mod_engine_pMod[laneIdx][5][3]->load() : 0.0f;
             quantVal = std::clamp(quant_param + macroVal * quant_mod, 0.0f, 1.0f);
 
             float curve = deSyncVal * deSyncVal * deSyncVal;
@@ -678,13 +746,13 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
                 }
             }
         } else if (engineType == 7) { // INFECT
-            float drive_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.0f;
-            float drive_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
+            float drive_param = processor->mod_engine_p[laneIdx][7][0] ? processor->mod_engine_p[laneIdx][7][0]->load() : 0.0f;
+            float drive_mod   = processor->mod_engine_pMod[laneIdx][7][0] ? processor->mod_engine_pMod[laneIdx][7][0]->load() : 0.0f;
             
             float infectVal = std::clamp(drive_param + macroVal * drive_mod, 0.0f, 1.0f);
             
-            float sym_param = processor->mod_p[laneIdx][1] ? processor->mod_p[laneIdx][1]->load() : 0.0f;
-            float sym_mod   = processor->mod_pMod[laneIdx][1] ? processor->mod_pMod[laneIdx][1]->load() : 0.0f;
+            float sym_param = processor->mod_engine_p[laneIdx][7][1] ? processor->mod_engine_p[laneIdx][7][1]->load() : 0.0f;
+            float sym_mod   = processor->mod_engine_pMod[laneIdx][7][1] ? processor->mod_engine_pMod[laneIdx][7][1]->load() : 0.0f;
             float amountVal = std::clamp(sym_param + macroVal * sym_mod, 0.0f, 1.0f);
 
             if (amountVal > 0.001f) {
@@ -745,12 +813,12 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
             
 
-            float clone_param = processor->mod_p[laneIdx][2] ? processor->mod_p[laneIdx][2]->load() : 0.0f;
-            float clone_mod   = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
+            float clone_param = processor->mod_engine_p[laneIdx][7][2] ? processor->mod_engine_p[laneIdx][7][2]->load() : 0.0f;
+            float clone_mod   = processor->mod_engine_pMod[laneIdx][7][2] ? processor->mod_engine_pMod[laneIdx][7][2]->load() : 0.0f;
             float cloneVal = std::clamp(clone_param + macroVal * clone_mod, 0.0f, 1.0f);
             
-            float cloneAmount_param = processor->mod_p[laneIdx][3] ? processor->mod_p[laneIdx][3]->load() : 0.0f;
-            float cloneAmount_mod   = processor->mod_pMod[laneIdx][3] ? processor->mod_pMod[laneIdx][3]->load() : 0.0f;
+            float cloneAmount_param = processor->mod_engine_p[laneIdx][7][3] ? processor->mod_engine_p[laneIdx][7][3]->load() : 0.0f;
+            float cloneAmount_mod   = processor->mod_engine_pMod[laneIdx][7][3] ? processor->mod_engine_pMod[laneIdx][7][3]->load() : 0.0f;
             float cloneAmountVal = std::clamp(cloneAmount_param + macroVal * cloneAmount_mod, 0.0f, 1.0f);
 
             if (cloneAmountVal > 0.001f) {
@@ -799,16 +867,16 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
         } else if (engineType == 3) { // SPACE
 
-            float width_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.0f;
-            float width_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
+            float width_param = processor->mod_engine_p[laneIdx][3][0] ? processor->mod_engine_p[laneIdx][3][0]->load() : 0.0f;
+            float width_mod   = processor->mod_engine_pMod[laneIdx][3][0] ? processor->mod_engine_pMod[laneIdx][3][0]->load() : 0.0f;
             float spaceVal = std::clamp(width_param + macroVal * width_mod, 0.0f, 1.0f);
             
-            float orbit_param = processor->mod_p[laneIdx][1] ? processor->mod_p[laneIdx][1]->load() : 0.0f;
-            float orbit_mod   = processor->mod_pMod[laneIdx][1] ? processor->mod_pMod[laneIdx][1]->load() : 0.0f;
+            float orbit_param = processor->mod_engine_p[laneIdx][3][1] ? processor->mod_engine_p[laneIdx][3][1]->load() : 0.0f;
+            float orbit_mod   = processor->mod_engine_pMod[laneIdx][3][1] ? processor->mod_engine_pMod[laneIdx][3][1]->load() : 0.0f;
             float orbitVal = std::clamp(orbit_param + macroVal * orbit_mod, -1.0f, 1.0f);
 
-            float smear_param = processor->mod_p[laneIdx][2] ? processor->mod_p[laneIdx][2]->load() : 0.0f;
-            float smear_mod   = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
+            float smear_param = processor->mod_engine_p[laneIdx][3][2] ? processor->mod_engine_p[laneIdx][3][2]->load() : 0.0f;
+            float smear_mod   = processor->mod_engine_pMod[laneIdx][3][2] ? processor->mod_engine_pMod[laneIdx][3][2]->load() : 0.0f;
             float smearVal = std::clamp(smear_param + macroVal * smear_mod, 0.0f, 1.0f);
 
             float orbitSpeedHz = orbitVal * 30.0f;
@@ -997,8 +1065,9 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         // Unsynced phase calculation (using fast bitwise wrapping instead of std::floor)
         float modPhaseUnsync = phases[p] + modOffset;
         if (quantVal > 0.0f) {
-            float steps = 2.0f + (1.0f - quantVal) * 62.0f;
-            float quantizedPhase = std::floor(modPhaseUnsync * steps) / steps;
+            float curve = quantVal * quantVal * quantVal;
+            float steps = 2.0f + (1.0f - curve) * 62.0f;
+            float quantizedPhase = (std::floor(modPhaseUnsync * steps) + 0.5f) / steps;
             modPhaseUnsync = modPhaseUnsync * (1.0f - quantVal) + quantizedPhase * quantVal;
         }
         if (pinchVal > 0.0f) {
@@ -1015,8 +1084,9 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
               float modPhaseSync = (p > 0) ? syncedPhases[p] + modOffset : modPhaseUnsync;
               
               if (quantVal > 0.0f) {
-                  float steps = 2.0f + (1.0f - quantVal) * 62.0f;
-                  float quantizedPhase = std::floor(modPhaseSync * steps) / steps;
+                  float curve = quantVal * quantVal * quantVal;
+                  float steps = 2.0f + (1.0f - curve) * 62.0f;
+                  float quantizedPhase = (std::floor(modPhaseSync * steps) + 0.5f) / steps;
                   modPhaseSync = modPhaseSync * (1.0f - quantVal) + quantizedPhase * quantVal;
               }
               if (pinchVal > 0.0f && p > 0) {

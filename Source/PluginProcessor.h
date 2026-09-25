@@ -219,8 +219,8 @@ public:
 
   std::atomic<float>* mod_engine[7] = { nullptr };
   std::atomic<float>* mod_macro[7] = { nullptr };
-  std::atomic<float>* mod_p[7][8] = { {nullptr} };
-  std::atomic<float>* mod_pMod[7][8] = { {nullptr} };
+  std::atomic<float>* mod_engine_p[7][11][8] = { { {nullptr} } };
+  std::atomic<float>* mod_engine_pMod[7][11][8] = { { {nullptr} } };
 
   std::atomic<float>* attack = nullptr;
   std::atomic<float>* decay = nullptr;

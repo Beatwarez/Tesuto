@@ -615,8 +615,9 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                               modPhase += Math.sin(modPhase * 2.0 * Math.PI) * pinchVal * 0.3;
                           }
                                                       if (quantVal > 0.0) {
-                                let steps = 2.0 + (1.0 - quantVal) * 62.0;
-                                let quantizedPhase = Math.floor(modPhase * steps) / steps;
+                                let curve = quantVal * quantVal * quantVal;
+                                let steps = 2.0 + (1.0 - curve) * 62.0;
+                                let quantizedPhase = (Math.floor(modPhase * steps) + 0.5) / steps;
                                 modPhase = modPhase * (1.0 - quantVal) + quantizedPhase * quantVal;
                             }
                             // Lookup sine table with phase wrapped to [0, 1)
