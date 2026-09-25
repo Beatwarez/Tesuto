@@ -35,6 +35,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             { name: 'filter', defaultValue: 0.75, minValue: 0.0, maxValue: 1.0 },
             { name: 'space', defaultValue: 0.3, minValue: 0.0, maxValue: 1.0 },
             { name: 'alter', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'pinch', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'ring', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'size', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
             { name: 'sweep', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
             { name: 'infectAmount', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
@@ -214,6 +216,8 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             const filterVal = parameters.filter[0];
             const spaceVal = parameters.space[0];
             const alterVal = parameters.alter ? parameters.alter[0] : 0.0;
+              const pinchVal = parameters.pinch ? parameters.pinch[0] : 0.0;
+              const ringVal = parameters.ring ? parameters.ring[0] : 0.0;
             const sizeVal = parameters.size ? parameters.size[0] : 0.5;
             const sweepVal = parameters.sweep ? parameters.sweep[0] : 0.5;
             const infectAmount = parameters.infectAmount ? parameters.infectAmount[0] : 0.0;
@@ -607,6 +611,9 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                             modPhase += modIndex * prevVal;
                         }
 
+                                                    if (pinchVal > 0.0) {
+                              modPhase += Math.sin(modPhase * 2.0 * Math.PI) * pinchVal * 0.3;
+                          }
                           // Lookup sine table with phase wrapped to [0, 1)
                           let normModPhase = modPhase % 1.0;
                           if (normModPhase < 0) normModPhase += 1.0;

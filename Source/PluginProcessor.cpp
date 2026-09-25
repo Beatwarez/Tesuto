@@ -564,6 +564,8 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     // --- 2. Dynamic Serial Router (Lanes 2-8) ---
         float deSyncVal = 0.0f;
     float alterVal = 0.0f;
+    float pinchVal = 0.0f;
+    float ringVal = 0.0f;
 
     for (int i = 0; i < 7; ++i) {
         int laneNumber = std::round(processor->routingOrder[i].load());
@@ -656,9 +658,17 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             float fm_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
             alterVal = std::clamp(fm_param + macroVal * fm_mod, 0.0f, 1.0f);
             
+            float pinch_param = processor->mod_p[laneIdx][1] ? processor->mod_p[laneIdx][1]->load() : 0.0f;
+            float pinch_mod   = processor->mod_pMod[laneIdx][1] ? processor->mod_pMod[laneIdx][1]->load() : 0.0f;
+            pinchVal = std::clamp(pinch_param + macroVal * pinch_mod, 0.0f, 1.0f);
+            
             float desync_param = processor->mod_p[laneIdx][2] ? processor->mod_p[laneIdx][2]->load() : 0.0f;
             float desync_mod   = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
             deSyncVal = std::clamp(desync_param + macroVal * desync_mod, 0.0f, 1.0f);
+
+            float ring_param = processor->mod_p[laneIdx][3] ? processor->mod_p[laneIdx][3]->load() : 0.0f;
+            float ring_mod   = processor->mod_pMod[laneIdx][3] ? processor->mod_pMod[laneIdx][3]->load() : 0.0f;
+            ringVal = std::clamp(ring_param + macroVal * ring_mod, 0.0f, 1.0f);
 
             float curve = deSyncVal * deSyncVal * deSyncVal;
             float syncMultiplier = 1.0f + curve * 9.0f;
