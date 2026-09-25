@@ -957,6 +957,12 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
       }
 
       // maxModulatingIndex is now pre-calculated before the loop!
+      
+      float currentRingSine = 0.0f;
+      if (ringVal > 0.0f) {
+          int ringIdx = static_cast<int>((phases[0] * 1.5f + 1024.0f) * 32768.0f) & 32767;
+          currentRingSine = sineTable[ringIdx];
+      }
 
       for (int i = 0; i < numActivePartials; ++i) {
         int p = activePartials[i];
@@ -997,7 +1003,8 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         // Unsynced phase calculation (using fast bitwise wrapping instead of std::floor)
         float modPhaseUnsync = phases[p] + modOffset;
         if (pinchVal > 0.0f) {
-            modPhaseUnsync += std::sin(modPhaseUnsync * 6.2831853f) * pinchVal * 0.3f;
+            int pinchIdx = static_cast<int>((modPhaseUnsync + 1024.0f) * 32768.0f) & 32767;
+            modPhaseUnsync += sineTable[pinchIdx] * pinchVal * 0.3f;
         }
         int idxUnsync = static_cast<int>((modPhaseUnsync + 1024.0f) * 32768.0f) & 32767;
         float valUnsync = sineTable[idxUnsync];
@@ -1009,7 +1016,8 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
               float modPhaseSync = (p > 0) ? syncedPhases[p] + modOffset : modPhaseUnsync;
               
               if (pinchVal > 0.0f && p > 0) {
-                  modPhaseSync += std::sin(modPhaseSync * 6.2831853f) * pinchVal * 0.3f;
+                  int pinchIdx = static_cast<int>((modPhaseSync + 1024.0f) * 32768.0f) & 32767;
+                  modPhaseSync += sineTable[pinchIdx] * pinchVal * 0.3f;
               }
               
               int idxSync = static_cast<int>((modPhaseSync + 1024.0f) * 32768.0f) & 32767;
@@ -1024,9 +1032,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
           }
           
           if (ringVal > 0.0f) {
-              float ringPhase = phases[0] * 1.5f;
-              float ringSine = std::sin(ringPhase * 6.2831853f);
-              val = val * (1.0f - ringVal) + (val * ringSine) * ringVal;
+              val = val * (1.0f - ringVal) + (val * currentRingSine) * ringVal;
           }
           
         prevVal = val;
