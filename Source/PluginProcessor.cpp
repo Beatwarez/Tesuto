@@ -1007,6 +1007,11 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
           // Bypass heavy sync calculations if mix is 0
           if (syncMix > 0.0f) {
               float modPhaseSync = (p > 0) ? syncedPhases[p] + modOffset : modPhaseUnsync;
+              
+              if (pinchVal > 0.0f && p > 0) {
+                  modPhaseSync += std::sin(modPhaseSync * 6.2831853f) * pinchVal * 0.3f;
+              }
+              
               int idxSync = static_cast<int>((modPhaseSync + 1024.0f) * 32768.0f) & 32767;
               float valSync = sineTable[idxSync];
               
