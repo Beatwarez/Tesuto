@@ -1,0 +1,102 @@
+#include "PluginProcessor.h"
+#include "PluginEditor.h"
+
+// ==========================================================================
+// Constructor
+// ==========================================================================
+KronosAudioProcessorEditor::KronosAudioProcessorEditor (KronosAudioProcessor& p)
+    : AudioProcessorEditor (&p), audioProcessor (p), webView (p)
+{
+    // Populate dynamic parameter IDs for JS syncing
+    for (auto* param : audioProcessor.getParameters()) {
+        if (auto* pID = dynamic_cast<juce::AudioProcessorParameterWithID*>(param)) {
+            webView.localParams[pID->paramID] = -999.0f;
+        }
+    }
+
+    startTimerHz (30);
+    // 1. Add WebView UI
+    addAndMakeVisible (webView);
+
+    // 2. Point the web view to the virtual origin managed by the C++ ResourceProvider
+    webView.goToURL (juce::WebBrowserComponent::getResourceProviderRoot());
+
+    // 3. Configure Editor sizing and resizability
+    setResizable (true, true);
+    getConstrainer()->setFixedAspectRatio (1190.0 / 580.0);
+    setResizeLimits (744, 362, 1984, 966);
+    setSize (1190, 580);
+}
+
+// ==========================================================================
+// Destructor
+// ==========================================================================
+KronosAudioProcessorEditor::~KronosAudioProcessorEditor()
+{
+}
+
+// ==========================================================================
+// Painting & Layout
+// ==========================================================================
+void KronosAudioProcessorEditor::paint (juce::Graphics& g)
+{
+    // Draw solid mid-gray background matching the CSS theme in case of slow loading
+    g.fillAll (juce::Colour::fromString ("#252528"));
+}
+
+void KronosAudioProcessorEditor::resized()
+{
+    webView.setBounds (getLocalBounds());
+}
+
+void KronosAudioProcessorEditor::timerCallback()
+{
+    // 1. Sync MIDI note states from C++ synthesiser to JS Visualizer
+    for (int i = 0; i < 128; ++i)
+    {
+        bool isMidiActive = audioProcessor.activeMidiNotes[i].load();
+        if (isMidiActive != webView.localActiveNotes[i])
+        {
+            webView.localActiveNotes[i] = isMidiActive;
+            if (isMidiActive)
+            {
+                webView.evaluateJavascript ("if (window.kronosSynth) window.kronosSynth.triggerNoteOn(" + juce::String (i) + ", 100);");
+            }
+            else
+            {
+                webView.evaluateJavascript ("if (window.kronosSynth) window.kronosSynth.triggerNoteOff(" + juce::String (i) + ");");
+            }
+        }
+    }
+
+    // 2. Sync DAW-automated/saved parameters from C++ APVTS back to JS UI Sliders
+    for (auto& pair : webView.localParams)
+    {
+        juce::String paramID = pair.first;
+        if (paramID == "routingOrder") continue; // String parameters are handled via explicit UI updates
+
+        if (auto* rawVal = audioProcessor.apvts.getRawParameterValue (paramID))
+        {
+            float val = rawVal->load();
+            if (std::abs (val - pair.second) > 0.001f)
+            {
+                pair.second = val;
+                webView.evaluateJavascript ("if (window.kronosSynth) window.kronosSynth.updateParamFromCpp('" + paramID + "', " + juce::String (val) + ");");
+            }
+        }
+    }
+}
+
+void KronosAudioProcessorEditor::triggerQueryAll()
+{
+    juce::MessageManager::callAsync([this]() {
+        for (auto& pair : webView.localParams)
+            pair.second = -999.0f;
+        for (int i = 0; i < 128; ++i)
+            webView.localActiveNotes[i] = false;
+            
+        webView.evaluateJavascript("if (window.kronosSynth) window.kronosSynth.updateRoutingFromCpp('" + audioProcessor.apvts.state.getProperty("routingOrder", "2,3,4,5,6,7,8").toString() + "');");
+        webView.evaluateJavascript("if (window.kronosSynth) window.kronosSynth.updateParamFromCpp('ui_active_left', " + audioProcessor.apvts.state.getProperty("ui_active_left", "0.0").toString() + ");");
+        webView.evaluateJavascript("if (window.kronosSynth) window.kronosSynth.updateParamFromCpp('ui_active_right', " + audioProcessor.apvts.state.getProperty("ui_active_right", "0.0").toString() + ");");
+    });
+}
