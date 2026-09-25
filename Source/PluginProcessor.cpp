@@ -279,16 +279,7 @@ void KronosAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             if (attack && decay && sustain && release && drift) {
                 voice->updateAdsr (attack->load(), decay->load(), sustain->load(), release->load(), drift->load());
             }
-            voice->setGlobalSendAccum(
-                sendBuffers.getWritePointer(0),
-                sendBuffers.getWritePointer(1),
-                sendBuffers.getWritePointer(2),
-                sendBuffers.getWritePointer(3),
-                sendBuffers.getWritePointer(4),
-                sendBuffers.getWritePointer(5),
-                sendBuffers.getWritePointer(6),
-                sendBuffers.getWritePointer(7)
-            );
+            
         }
     }
 
@@ -571,8 +562,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     }
 
     // --- 2. Dynamic Serial Router (Lanes 2-8) ---
-    float localCloudVal = 0.0f;
-    float deSyncVal = 0.0f;
+        float deSyncVal = 0.0f;
     float alterVal = 0.0f;
 
     for (int i = 0; i < 7; ++i) {
@@ -680,15 +670,125 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         } else if (engineType == 7) { // INFECT
             float drive_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.0f;
             float drive_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
-            float driveVal = std::clamp(drive_param + macroVal * drive_mod, 0.0f, 1.0f);
+            
+            float infectVal = std::clamp(drive_param + macroVal * drive_mod, 0.0f, 1.0f);
             
             float sym_param = processor->mod_p[laneIdx][1] ? processor->mod_p[laneIdx][1]->load() : 0.0f;
             float sym_mod   = processor->mod_pMod[laneIdx][1] ? processor->mod_pMod[laneIdx][1]->load() : 0.0f;
-            float symVal = std::clamp(sym_param + macroVal * sym_mod, 0.0f, 1.0f);
+            float amountVal = std::clamp(sym_param + macroVal * sym_mod, 0.0f, 1.0f);
 
-            // TODO: Implement INFECT logic here later
+            if (amountVal > 0.001f) {
+                float old_freqs[512];
+                for (int p = 0; p < 512; ++p) old_freqs[p] = freqs[p];
+                
+                float stateFloat = infectVal * 14.0f;
+                int stateIndex = (int)stateFloat;
+                float morph = stateFloat - (float)stateIndex;
+
+                auto getTargetFreq = [&](int state, int p) -> float {
+                    if (p >= targetPartials) return old_freqs[p];
+                    
+                    int target_p = p;
+                    switch(state) {
+                        case 0: target_p = (p % 2 == 1) ? p - 1 : p; break;
+                        case 1: target_p = p - (p % 3); break;
+                        case 2: return old_freqs[0] + (old_freqs[p] - old_freqs[0]) * 0.1f;
+                        case 3: {
+                            int oct = 0; while((1 << (oct+1)) - 1 <= p) oct++;
+                            target_p = (1 << oct) - 1; 
+                            break;
+                        }
+                        case 4: return old_freqs[p] + ((p % 2 == 1) ? old_freqs[0] * 0.5f : 0.0f);
+                        case 5: {
+                            int primes[] = {2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97};
+                            int h = p + 1;
+                            int best = 2; int min_diff = 9999;
+                            for (int pr : primes) { if (std::abs(h - pr) < min_diff) { min_diff = std::abs(h - pr); best = pr; } }
+                            target_p = best - 1; 
+                            break;
+                        }
+                        case 6: return (p < 15) ? old_freqs[0] : old_freqs[p] + old_freqs[0] * 32.0f;
+                        case 7: return old_freqs[p] + std::sin(p * 0.5f) * old_freqs[0] * 2.0f;
+                        case 8: return old_freqs[0] * (p + 1) * 1.61803398f;
+                        case 9: target_p = std::round(p / 16.0f) * 16.0f; break;
+                        case 10: target_p = 31 - std::abs(31 - p); break;
+                        case 11: target_p = 6; break;
+                        case 12: return old_freqs[0] + std::fmod(old_freqs[p] * 3.7f, old_freqs[0] * 16.0f);
+                        case 13: target_p = 511 - p; break;
+                        case 14: return old_freqs[p] + std::sin(p * 12.9898f) * old_freqs[p] * 0.5f;
+                    }
+                    if (target_p < 0) target_p = 0;
+                    if (target_p > 511) target_p = 511;
+                    return old_freqs[target_p];
+                };
+
+                for (int p = 0; p < targetPartials; ++p) {
+                    if (targetAmps[p] > 0.0f) {
+                        float freqA = getTargetFreq(stateIndex, p);
+                        float freqB = getTargetFreq(std::min(14, stateIndex + 1), p);
+                        float interpFreq = freqA * (1.0f - morph) + freqB * morph;
+                        freqs[p] = old_freqs[p] * (1.0f - amountVal) + interpFreq * amountVal;
+                        if (freqs[p] < 0.0f) freqs[p] = std::abs(freqs[p]);
+                    }
+                }
+            }
+
             
+
+            float clone_param = processor->mod_p[laneIdx][2] ? processor->mod_p[laneIdx][2]->load() : 0.0f;
+            float clone_mod   = processor->mod_pMod[laneIdx][2] ? processor->mod_pMod[laneIdx][2]->load() : 0.0f;
+            float cloneVal = std::clamp(clone_param + macroVal * clone_mod, 0.0f, 1.0f);
+            
+            float cloneAmount_param = processor->mod_p[laneIdx][3] ? processor->mod_p[laneIdx][3]->load() : 0.0f;
+            float cloneAmount_mod   = processor->mod_pMod[laneIdx][3] ? processor->mod_pMod[laneIdx][3]->load() : 0.0f;
+            float cloneAmountVal = std::clamp(cloneAmount_param + macroVal * cloneAmount_mod, 0.0f, 1.0f);
+
+            if (cloneAmountVal > 0.001f) {
+                float stateFloat = cloneVal * 14.0f;
+                int stateIndex = (int)stateFloat;
+                float morph = stateFloat - (float)stateIndex;
+
+                auto getCloneMask = [&](int state, int p) -> float {
+                    switch(state) {
+                        case 0: return (p % 2 == 0) ? 1.5f : 0.5f; // Odd/Even Alternation
+                        case 1: return (p % 3 == 0) ? 1.5f : 0.5f; // Triplets Focus
+                        case 2: return (((p+1) & p) == 0) ? 1.8f : 0.2f; // Octave Isolation (powers of 2)
+                        case 3: return 0.5f + 0.5f * std::sin((float)p * 0.1f); // Gentle Comb Filter
+                        case 4: return 0.5f + 0.5f * std::sin((float)p * 0.5f); // Aggressive Comb Filter
+                        case 5: return (float)(p % 16) / 15.0f; // Fractal Clones
+                        case 6: { // Prime Number Mask
+                            int primes[] = {2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97};
+                            for (int pr : primes) { if (p+1 == pr) return 1.5f; }
+                            return 0.2f;
+                        }
+                        case 7: return (float)(p % 10) / 9.0f; // Sawtooth Ripple
+                        case 8: return (p / 10) % 2 == 0 ? 0.2f : 1.5f; // Spectral Gapping
+                        case 9: return (p < 30) ? 0.4f : 1.5f; // High-Frequency Mirror
+                        case 10: return (p == 0 || p == 1) ? 0.1f : 1.2f; // Sub-Harmonic Ghosting
+                        case 11: return (p / 4) % 2 == 0 ? 1.5f : 0.2f; // Spectral Checkerboard
+                        case 12: { // Fibonacci Masking
+                            int fibs[] = {1,2,3,5,8,13,21,34,55,89,144,233,377};
+                            for (int f : fibs) { if (p+1 == f) return 1.8f; }
+                            return 0.1f;
+                        }
+                        case 13: return (float)((p * 7) % 13) / 13.0f; // Modulo Shredding
+                        case 14: return std::abs(std::sin((float)p * 42.1337f)) * 1.5f; // Amplitude Entropy
+                    }
+                    return 1.0f;
+                };
+
+                for (int p = 0; p < targetPartials; ++p) {
+                    if (targetAmps[p] > 0.0f) {
+                        float maskA = getCloneMask(stateIndex, p);
+                        float maskB = getCloneMask(std::min(14, stateIndex + 1), p);
+                        float mask = maskA * (1.0f - morph) + maskB * morph;
+                        targetAmps[p] *= (1.0f - cloneAmountVal) + (mask * cloneAmountVal);
+                    }
+                }
+            }
+
         } else if (engineType == 3) { // SPACE
+
             float width_param = processor->mod_p[laneIdx][0] ? processor->mod_p[laneIdx][0]->load() : 0.0f;
             float width_mod   = processor->mod_pMod[laneIdx][0] ? processor->mod_pMod[laneIdx][0]->load() : 0.0f;
             float spaceVal = std::clamp(width_param + macroVal * width_mod, 0.0f, 1.0f);
@@ -806,9 +906,6 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             pR_block[p] = 0.0f;
         }
 
-        // Send logic
-        p_send_gain[p] = 0.0f;
-        
         // Apply per-partial ADSR!
         targetAmps[p] *= partialEnvLevels[p];
 
@@ -912,17 +1009,8 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         float dryVal = val * a;
 
         // FDN send routing based on harmonic index p
-        int route = 7 - (p / 32);
-        if (route < 0) route = 0;
-        if (route > 7) route = 7;
-        if (globalSendAccum[route] != nullptr) {
-          globalSendAccum[route][startSample + s] += dryVal * p_send_gain[p];
-        }
-
-        // Blend dry signal output
-        float dryMix = 1.0f - localCloudVal * 0.3f;
-        sampleL += dryVal * dryMix * pL_block[p];
-        sampleR += dryVal * dryMix * pR_block[p];
+        sampleL += dryVal * pL_block[p];
+        sampleR += dryVal * pR_block[p];
       }
 
       outputBuffer.addSample(0, startSample + s, sampleL * scaleFactor);

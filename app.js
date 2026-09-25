@@ -37,7 +37,10 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             { name: 'alter', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'size', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
             { name: 'sweep', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
-            { name: 'cloud', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'infectAmount', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'cloneAmount', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'clone', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'infect', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'param6', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 }, // (unused placeholder)
             { name: 'desync', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'pitch', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
@@ -55,13 +58,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
         this.sampleRate = 44100;
         this.time = 0;
 
-        // FDN Reverb Initialization
-        this.fdnSize = 8;
-        this.fdnMask = 4095;
-        this.fdnBuffers = Array.from({ length: 8 }, () => new Float32Array(4096));
-        this.fdnIndices = new Int32Array(8);
-        this.fdnDelayLengths = new Int32Array([997, 1201, 1439, 1753, 2053, 2411, 2851, 3307]);
-        this.sendBuffers = Array.from({ length: 8 }, () => new Float32Array(128));
+        
         
         // Initialize 8 voices
         this.voices = [];
@@ -194,10 +191,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
 
             const sampleRate = globalThis.sampleRate || 44100;
 
-            // Clear FDN send buffers for this block
-            for (let i = 0; i < 8; i++) {
-                this.sendBuffers[i].fill(0.0);
-            }
+            
 
             // 1. Calculate active voices and global normalization scale
             let activeVoicesCount = 0;
@@ -205,7 +199,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 if (this.voices[v].active) activeVoicesCount++;
             }
             
-            // Clear output if no active voices, but still run FDN tail decay!
+            // Clear output if no active voices
             const scaleFactor = activeVoicesCount > 0 ? (0.14 / Math.sqrt(activeVoicesCount)) : 0.14;
 
             // Read parameter values for the current block
@@ -222,7 +216,10 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             const alterVal = parameters.alter ? parameters.alter[0] : 0.0;
             const sizeVal = parameters.size ? parameters.size[0] : 0.5;
             const sweepVal = parameters.sweep ? parameters.sweep[0] : 0.5;
-            const cloudVal = parameters.cloud ? parameters.cloud[0] : 0.0;
+            const infectAmount = parameters.infectAmount ? parameters.infectAmount[0] : 0.0;
+              const cloneAmountVal = parameters.cloneAmount ? parameters.cloneAmount[0] : 0.0;
+              const cloneVal = parameters.clone ? parameters.clone[0] : 0.0;
+            const infectVal = parameters.infect ? parameters.infect[0] : 0.0;
             const param6Val = parameters.param6 ? parameters.param6[0] : 0.5; // (unused placeholder)
             const deSyncVal = parameters.desync ? parameters.desync[0] : 0.0;
             const pitchVal = parameters.pitch ? parameters.pitch[0] : 0.5;
@@ -426,7 +423,109 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
 
                     targetAmps[p] = baseAmp * filterMult * (1.0 + lfoDrift) * voice.partialEnvLevels[p];
 
+                    
+                    // INFECT Logic
+                    if (infectAmount > 0.001) {
+                        const old_freqs = new Float32Array(freqs);
+                        let stateFloat = infectVal * 14.0;
+                        let stateIndex = Math.floor(stateFloat);
+                        let morph = stateFloat - stateIndex;
+
+                        const getTargetFreq = (state, p) => {
+                            let target_p = p;
+                            switch(state) {
+                                case 0: target_p = (p % 2 === 1) ? p - 1 : p; break;
+                                case 1: target_p = p - (p % 3); break;
+                                case 2: return old_freqs[0] + (old_freqs[p] - old_freqs[0]) * 0.1;
+                                case 3: {
+                                    let oct = 0; while((1 << (oct+1)) - 1 <= p) oct++;
+                                    target_p = (1 << oct) - 1; 
+                                    break;
+                                }
+                                case 4: return old_freqs[p] + ((p % 2 === 1) ? old_freqs[0] * 0.5 : 0.0);
+                                case 5: {
+                                    const primes = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97];
+                                    let h = p + 1;
+                                    let best = 2; let min_diff = 9999;
+                                    for (let i=0; i<primes.length; i++) {
+                                        if (Math.abs(h - primes[i]) < min_diff) { min_diff = Math.abs(h - primes[i]); best = primes[i]; }
+                                    }
+                                    target_p = best - 1; 
+                                    break;
+                                }
+                                case 6: return (p < 15) ? old_freqs[0] : old_freqs[p] + old_freqs[0] * 32.0;
+                                case 7: return old_freqs[p] + Math.sin(p * 0.5) * old_freqs[0] * 2.0;
+                                case 8: return old_freqs[0] * (p + 1) * 1.61803398;
+                                case 9: target_p = Math.round(p / 16.0) * 16; break;
+                                case 10: target_p = 31 - Math.abs(31 - p); break;
+                                case 11: target_p = 6; break;
+                                case 12: return old_freqs[0] + ((old_freqs[p] * 3.7) % (old_freqs[0] * 16.0));
+                                case 13: target_p = 511 - p; break;
+                                case 14: return old_freqs[p] + Math.sin(p * 12.9898) * old_freqs[p] * 0.5;
+                            }
+                            if (target_p < 0) target_p = 0;
+                            if (target_p > 511) target_p = 511;
+                            return old_freqs[target_p];
+                        };
+
+                        for (let p = 0; p < MAX_PARTIALS; ++p) {
+                            if (targetAmps[p] > 0.0) {
+                                let freqA = getTargetFreq(stateIndex, p);
+                                let freqB = getTargetFreq(Math.min(14, stateIndex + 1), p);
+                                let interpFreq = freqA * (1.0 - morph) + freqB * morph;
+                                freqs[p] = old_freqs[p] * (1.0 - infectAmount) + interpFreq * infectAmount;
+                                if (freqs[p] < 0.0) freqs[p] = Math.abs(freqs[p]);
+                            }
+                        }
+                    }
+
+                    
+                    // CLONE Logic (Amplitude Masking)
+                    if (cloneAmountVal > 0.001) {
+                        let stateFloat = cloneVal * 14.0;
+                        let stateIndex = Math.floor(stateFloat);
+                        let morph = stateFloat - stateIndex;
+
+                        const getCloneMask = (state, p) => {
+                            switch(state) {
+                                case 0: return (p % 2 === 0) ? 1.5 : 0.5; // Odd/Even Alternation
+                                case 1: return (p % 3 === 0) ? 1.5 : 0.5; // Triplets Focus
+                                case 2: return ((p+1) & p) === 0 ? 1.8 : 0.2; // Octave Isolation (powers of 2)
+                                case 3: return 0.5 + 0.5 * Math.sin(p * 0.1); // Gentle Comb Filter
+                                case 4: return 0.5 + 0.5 * Math.sin(p * 0.5); // Aggressive Comb Filter
+                                case 5: return (p % 16) / 15.0; // Fractal Clones
+                                case 6: { // Prime Number Mask
+                                    const primes = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97];
+                                    return primes.includes(p+1) ? 1.5 : 0.2;
+                                }
+                                case 7: return (p % 10) / 9.0; // Sawtooth Ripple
+                                case 8: return Math.floor(p / 10) % 2 === 0 ? 0.2 : 1.5; // Spectral Gapping
+                                case 9: return (p < 30) ? 0.4 : 1.5; // High-Frequency Mirror
+                                case 10: return (p === 0 || p === 1) ? 0.1 : 1.2; // Sub-Harmonic Ghosting
+                                case 11: return Math.floor(p / 4) % 2 === 0 ? 1.5 : 0.2; // Spectral Checkerboard
+                                case 12: { // Fibonacci Masking
+                                    const fibs = [1,2,3,5,8,13,21,34,55,89,144,233,377];
+                                    return fibs.includes(p+1) ? 1.8 : 0.1;
+                                }
+                                case 13: return ((p * 7) % 13) / 13.0; // Modulo Shredding
+                                case 14: return Math.abs(Math.sin(p * 42.1337)) * 1.5; // Amplitude Entropy
+                            }
+                            return 1.0;
+                        };
+
+                        for (let p = 0; p < MAX_PARTIALS; ++p) {
+                            if (targetAmps[p] > 0.0) {
+                                let maskA = getCloneMask(stateIndex, p);
+                                let maskB = getCloneMask(Math.min(14, stateIndex + 1), p);
+                                let mask = maskA * (1.0 - morph) + maskB * morph;
+                                targetAmps[p] *= (1.0 - cloneAmountVal) + (mask * cloneAmountVal);
+                            }
+                        }
+                    }
+
                     // Precalculate phase delta and panning
+
+
                     phaseDeltas[p] = freqs[p] / sampleRate;
 
                     if (p === 0) {
@@ -452,10 +551,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
 
                 for (let idx = 0; idx < voice.activePartials.length; idx++) {
                     const p = voice.activePartials[idx];
-                    // Send amount based on sweep Gaussian
-                    const distance = p - centerHarmonic;
-                    const sendAmp = Math.exp(-(distance * distance) / (2.0 * sendWidth * sendWidth));
-                    voice.p_send_gain[p] = cloudVal * sendAmp * 0.2;
+                    
                 }
 
                 // Sample loop
@@ -527,16 +623,10 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
 
                         const dryVal = val * a;
 
-                        // FDN send routing based on harmonic index p
-                        let route = 7 - Math.floor(p / 32);
-                        if (route < 0) route = 0;
-                        if (route > 7) route = 7;
-                        this.sendBuffers[route][i] += dryVal * voice.p_send_gain[p];
+                        
 
-                        // Blend dry signals
-                        const dryMix = 1.0 - cloudVal * 0.3;
-                        sumL += dryVal * dryMix * pL_block[p];
-                        sumR += dryVal * dryMix * pR_block[p];
+                        sumL += dryVal * pL_block[p];
+                        sumR += dryVal * pR_block[p];
                     }
 
                     leftChannel[i] += sumL * scaleFactor;
@@ -546,46 +636,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                 }
             }
 
-            // 2. Process Global FDN Reverb sample-by-sample
-            const decayTimeSeconds = 0.1 + sizeVal * sizeVal * 5.9;
-            const decayAlpha = -6.91 / (decayTimeSeconds * sampleRate);
-            const fdnGains = new Float32Array(8);
-            for (let i = 0; i < 8; i++) {
-                fdnGains[i] = Math.max(0.0, Math.min(0.98, Math.exp(decayAlpha * this.fdnDelayLengths[i])));
-            }
-
-            for (let i = 0; i < bufferLength; i++) {
-                const outputs = new Float32Array(8);
-                // Read FDN delay outputs
-                for (let c = 0; c < 8; c++) {
-                    const readIdx = (this.fdnIndices[c] - this.fdnDelayLengths[c]) & this.fdnMask;
-                    outputs[c] = this.fdnBuffers[c][readIdx];
-                }
-
-                // Householder mixing matrix multiplication (lossless unitary diffusion)
-                let sum = 0.0;
-                for (let c = 0; c < 8; c++) sum += outputs[c];
-                const mixTerm = 0.25 * sum;
-
-                const inputs = new Float32Array(8);
-                for (let c = 0; c < 8; c++) {
-                    inputs[c] = outputs[c] - mixTerm;
-                }
-
-                // Write feedback + inputs to delay lines
-                for (let c = 0; c < 8; c++) {
-                    const sendIn = this.sendBuffers[c][i];
-                    this.fdnBuffers[c][this.fdnIndices[c]] = sendIn + inputs[c] * fdnGains[c];
-                    this.fdnIndices[c] = (this.fdnIndices[c] + 1) & this.fdnMask;
-                }
-
-                // Mix FDN outputs to master stereo channels
-                const wetL = (outputs[0] + outputs[2] + outputs[4] + outputs[6]) * 0.35;
-                const wetR = (outputs[1] + outputs[3] + outputs[5] + outputs[7]) * 0.35;
-
-                leftChannel[i] += wetL;
-                rightChannel[i] += wetR;
-            }
+            
 
             // Output limiting (saturation) to prevent digital clipping
             for (let i = 0; i < bufferLength; i++) {
@@ -1052,7 +1103,7 @@ class KronosSynth {
         this.activeLeftFocus = null;
         this.activeRightFocus = null;
         this.leftFocusParams = ['form', 'timbre', 'filter', 'space'];
-        this.rightFocusParams = ['alter', 'size', 'sweep', 'cloud', 'pitch'];
+        this.rightFocusParams = ['alter', 'size', 'sweep', 'infect', 'pitch'];
         
         this.activeKeys = new Set();
         this.notesDown = {};
@@ -1081,7 +1132,8 @@ class KronosSynth {
             alter: 0.00,
             size: 0.50,
             sweep: 0.50,
-            cloud: 0.30,
+            infect: 0.0,
+            infectAmount: 0.0,
             attack: 0.003,
             decay: 0.50,
             sustain: 0.80,
@@ -1518,7 +1570,7 @@ class KronosSynth {
             if (this.knobs[baseParam]) this.knobs[baseParam].updateModArc();
         } else if (param.endsWith('_engine')) {
             const laneId = parseInt(param.replace('mod', '').replace('_engine', ''));
-            const engineIdMappingRev = { 0: 'empty', 1: 'source', 2: 'filter', 3: 'space', 4: 'pitch', 5: 'alter', 6: 'cloud', 7: 'infect', 8: 'form' };
+            const engineIdMappingRev = { 0: 'empty', 1: 'source', 2: 'filter', 3: 'space', 4: 'pitch', 5: 'alter', 6: 'infect', 7: 'infect', 8: 'form' };
             const engineType = engineIdMappingRev[Math.round(val)] || 'empty';
             this.laneEngines[laneId] = engineType;
             
@@ -1598,7 +1650,7 @@ class KronosSynth {
                 selector.addEventListener('change', (e) => {
                     const newEngine = e.target.value;
                     this.laneEngines[laneId] = newEngine;
-                    const engineIdMapping = { 'empty': 0, 'source': 1, 'filter': 2, 'space': 3, 'pitch': 4, 'alter': 5, 'cloud': 6, 'infect': 7, 'form': 8 };
+                    const engineIdMapping = { 'empty': 0, 'source': 1, 'filter': 2, 'space': 3, 'pitch': 4, 'alter': 5, 'infect': 7, 'form': 8 };
                     this.sendParamToCpp(`mod${laneId}_engine`, engineIdMapping[newEngine] || 0);
                     
                     // Default parameters for the new engine to prevent bleed
@@ -2360,7 +2412,7 @@ class KronosSynth {
         let visual3 = 0.0; // Filter
         let visual4 = 0.0; // Space
         let visual5 = 0.0; // Alter
-        let visual6 = 0.0; // Cloud
+        let visual6 = 0.0; // Infect
         let visual7 = 0.0; // Desync
         let visual8 = 0.5; // Pitch
 
@@ -2372,8 +2424,8 @@ class KronosSynth {
             else if (engine === 'filter') visual3 = Math.max(visual3, macroVal);
             else if (engine === 'space') visual4 = Math.max(visual4, macroVal);
             else if (engine === 'alter') visual5 = Math.max(visual5, macroVal);
-            else if (engine === 'cloud') visual6 = Math.max(visual6, macroVal);
-            else if (engine === 'infect') visual7 = Math.max(visual7, macroVal);
+            else if (engine === 'infect') visual6 = Math.max(visual6, macroVal);
+            else if (engine === 'desync') visual7 = Math.max(visual7, macroVal);
             else if (engine === 'pitch') {
                 if (Math.abs(macroVal - 0.5) > Math.abs(visual8 - 0.5)) {
                     visual8 = macroVal;
@@ -2444,28 +2496,7 @@ class KronosSynth {
             this.ctx.fill();
         });
 
-        // 1.5 Draw CLOUD background smokey light pulsation (Concept 2 - Revised)
-        const intensity = visual6 * this.visualReverbEnv;
-        if (intensity > 0.001) {
-            const sweepHue = (visual1 * 360) % 360;
-            
-            // Calculate organic slow pulse based on time and space drift speed
-            const pulse = 1.0 + Math.sin(Date.now() * 0.003 + Math.sin(Date.now() * 0.0008) * 2) * 0.12 * (1.0 + visual4 * 1.5);
-            const radius = maxRadius * 0.95 * pulse * intensity;
-            
-            // Create a radial gradient for the "smokey light glow"
-            const grad = this.ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
-            
-            // Soft pastel aura color morphing dynamically
-            grad.addColorStop(0.0, `hsla(${sweepHue}, 65%, 45%, ${intensity * 0.22})`);
-            grad.addColorStop(0.4, `hsla(${(sweepHue + 30) % 360}, 55%, 35%, ${intensity * 0.09})`);
-            grad.addColorStop(1.0, `rgba(37, 37, 40, 0.0)`); // Blends into the visualizer dark background
-            
-            this.ctx.fillStyle = grad;
-            this.ctx.beginPath();
-            this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
+        
 
         // 2. Draw geometric grid background
         const gridCount = 6;
@@ -2476,8 +2507,16 @@ class KronosSynth {
             this.ctx.beginPath();
             for (let angle = 0; angle <= Math.PI * 2; angle += 0.05) {
                 const warp = Math.sin(angle * 5 + Date.now() * 0.0008) * visual1 * 14 * (i / gridCount);
-                const x = centerX + (rad + warp) * Math.cos(angle);
-                const y = centerY + (rad + warp) * Math.sin(angle);
+                
+                // INFECT (visual6) Spiky Grid Jitter
+                let spike = 0.0;
+                if (visual6 > 0.001) {
+                    const hash = Math.sin(angle * 123.456 + i * 87.65 + Date.now() * 0.005);
+                    spike = hash * 40.0 * visual6 * (i / gridCount);
+                }
+                
+                const x = centerX + (rad + warp + spike) * Math.cos(angle);
+                const y = centerY + (rad + warp + spike) * Math.sin(angle);
                 if (angle === 0) this.ctx.moveTo(x, y);
                 else this.ctx.lineTo(x, y);
             }
@@ -2589,6 +2628,15 @@ class KronosSynth {
                 this.ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${light - 10}%, ${amp * lineOpacity})`;
                 this.ctx.beginPath();
                 this.ctx.moveTo(prevX, prevY);
+                
+                if (visual6 > 0.001) {
+                    // INFECT (visual6) Spiky Web Jitter
+                    const hash = Math.sin(i * 1234.5 + Date.now() * 0.005);
+                    const midX = (prevX + x) * 0.5 + Math.cos(hash * Math.PI) * 50.0 * visual6;
+                    const midY = (prevY + y) * 0.5 + Math.sin(hash * Math.PI) * 50.0 * visual6;
+                    this.ctx.lineTo(midX, midY);
+                }
+                
                 this.ctx.lineTo(x, y);
                 this.ctx.stroke();
             }
