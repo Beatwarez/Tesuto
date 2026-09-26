@@ -1,0 +1,2694 @@
+// KRONOS - Experimental Additive Drone Synthesizer JS Engine & UI Controller
+
+// ==========================================================================
+// 1. AudioWorkletProcessor Code (Serialized to string to run CORS-free local)
+// ==========================================================================
+const workletCode = `
+const MAX_VOICES = 8;
+const MAX_PARTIALS = 256;
+const SINE_TABLE_SIZE = 16384;
+
+// Precalculate Sine Lookup Table for optimized DSP execution
+const SINE_TABLE = new Float32Array(SINE_TABLE_SIZE);
+for (let i = 0; i < SINE_TABLE_SIZE; i++) {
+    SINE_TABLE[i] = Math.sin((i / SINE_TABLE_SIZE) * Math.PI * 2);
+}
+
+class DroneSynthProcessor extends AudioWorkletProcessor {
+    static get parameterDescriptors() {
+        return [
+            { name: 'form', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'timbre', defaultValue: 0.25, minValue: 0.0, maxValue: 1.0 },
+            { name: 'filterTypeA', defaultValue: 0.0, minValue: 0.0, maxValue: 9.0 },
+            { name: 'filterTypeB', defaultValue: 0.0, minValue: 0.0, maxValue: 9.0 },
+                        { name: 'filterMorph', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'filterMorphMod', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
+            { name: 'filterOffset', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
+            { name: 'filterCutoff', defaultValue: 0.75, minValue: 0.0, maxValue: 1.0 },
+            { name: 'filterCutoffMod', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
+            { name: 'filterOffsetMod', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
+            { name: 'filterResoMod', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
+            { name: 'filterSlopeMod', defaultValue: 0.0, minValue: -1.0, maxValue: 1.0 },
+
+            { name: 'filterReso', defaultValue: 0.2, minValue: 0.0, maxValue: 1.0 },
+            { name: 'filterSlope', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
+            { name: 'filter', defaultValue: 0.75, minValue: 0.0, maxValue: 1.0 },
+            { name: 'space', defaultValue: 0.3, minValue: 0.0, maxValue: 1.0 },
+            { name: 'alter', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'pinch', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'fold', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'size', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
+            { name: 'sweep', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
+            { name: 'infectAmount', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'cloneAmount', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'clone', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'infect', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'param6', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 }, // (unused placeholder)
+            { name: 'desync', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'pitch', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
+            { name: 'attack', defaultValue: 0.003, minValue: 0.001, maxValue: 7.0 },
+            { name: 'decay', defaultValue: 0.50, minValue: 0.001, maxValue: 7.0 },
+            { name: 'sustain', defaultValue: 0.80, minValue: 0.0, maxValue: 1.0 },
+            { name: 'release', defaultValue: 0.50, minValue: 0.001, maxValue: 7.0 },
+            { name: 'drift', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 }
+        ];
+    }
+
+
+    constructor() {
+        super();
+        this.sampleRate = 44100;
+        this.time = 0;
+
+        
+        
+        // Initialize 8 voices
+        this.voices = [];
+        for (let i = 0; i < MAX_VOICES; i++) {
+            this.voices.push({
+                active: false,
+                note: -1,
+                freq: 0.0,
+                currentFreq: 0.0, // smoothed
+                amp: 0.0,         // current envelope amp
+                targetAmp: 0.0,   // target envelope amp
+                envState: 'idle', // 'idle', 'attack', 'sustain', 'release'
+                phases: new Float32Array(MAX_PARTIALS),
+                phaseDrifts: new Float32Array(MAX_PARTIALS),
+                panLeft: new Float32Array(MAX_PARTIALS),
+                panRight: new Float32Array(MAX_PARTIALS),
+                smoothedAmps: new Float32Array(MAX_PARTIALS),
+                p_send_gain: new Float32Array(MAX_PARTIALS),
+                partialEnvLevels: new Float32Array(MAX_PARTIALS),
+                partialEnvStates: new Int32Array(MAX_PARTIALS),
+                partialAttackTimes: new Float32Array(MAX_PARTIALS),
+                partialReleaseTimes: new Float32Array(MAX_PARTIALS),
+                activePartials: []
+            });
+            for (let p = 0; p < MAX_PARTIALS; p++) {
+                this.voices[i].phases[p] = 0.0;
+                this.voices[i].phaseDrifts[p] = Math.random() * Math.PI * 2;
+                const basePan = p === 0 ? 0.5 : (p % 2 === 0 ? 0.25 : 0.75);
+                this.voices[i].panLeft[p] = Math.sqrt(1 - basePan);
+                this.voices[i].panRight[p] = Math.sqrt(basePan);
+            }
+        }
+
+        // Receive MIDI events from main thread
+        this.port.onmessage = (event) => {
+            const msg = event.data;
+            if (msg.type === 'note-on') {
+                this.noteOn(msg.note, msg.velocity);
+            } else if (msg.type === 'note-off') {
+                this.noteOff(msg.note);
+            } else if (msg.type === 'panic') {
+                this.panic();
+            }
+        };
+        
+        this.envParams = { attack: 0.003, decay: 0.50, sustain: 0.8, release: 0.50, drift: 0.0 };
+    }
+
+    noteOn(note, velocity) {
+        let voice = this.voices.find(v => v.active && v.note === note);
+        if (!voice) {
+            voice = this.voices.find(v => !v.active);
+        }
+        if (!voice) {
+            // Voice steal: pick voice with lowest current envelope amplitude
+            let lowestAmp = 999.0;
+            let lowestIdx = 0;
+            for (let i = 0; i < MAX_VOICES; i++) {
+                if (this.voices[i].amp < lowestAmp) {
+                    lowestAmp = this.voices[i].amp;
+                    lowestIdx = i;
+                }
+            }
+            voice = this.voices[lowestIdx];
+        }
+
+        voice.active = true;
+        voice.note = note;
+        const targetFreq = 440.0 * Math.pow(2, (note - 69) / 12);
+        
+        if (voice.envState === 'idle') {
+            voice.freq = targetFreq;
+            voice.currentFreq = targetFreq;
+            for (let p = 0; p < MAX_PARTIALS; p++) {
+                let randomPhase = Math.random();
+                voice.phases[p] = randomPhase * this.envParams.drift;
+                voice.phaseDrifts[p] = randomPhase * 2.0 * Math.PI * this.envParams.drift;
+                voice.smoothedAmps[p] = 0.0;
+                voice.partialEnvLevels[p] = 0.0;
+                voice.partialEnvStates[p] = 1; // attack
+                
+                voice.partialAttackTimes[p] = this.envParams.attack;
+                voice.partialReleaseTimes[p] = this.envParams.release;
+            }
+        } else {
+            // Pitch glide if reusing active voice
+            voice.freq = targetFreq;
+            for (let p = 0; p < MAX_PARTIALS; p++) {
+                voice.partialEnvStates[p] = 1; // attack
+                voice.partialAttackTimes[p] = this.envParams.attack;
+                voice.partialReleaseTimes[p] = this.envParams.release;
+            }
+        }
+
+        voice.targetAmp = velocity / 127.0;
+        voice.envState = 'attack'; // just a flag to keep the voice awake
+    }
+
+    noteOff(note) {
+        const voice = this.voices.find(v => v.active && v.note === note);
+        if (voice) {
+            for (let p = 0; p < MAX_PARTIALS; p++) {
+                voice.partialEnvStates[p] = 4; // release
+            }
+        }
+    }
+
+    panic() {
+        for (let i = 0; i < MAX_VOICES; i++) {
+            this.voices[i].active = false;
+            this.voices[i].amp = 0.0;
+            this.voices[i].targetAmp = 0.0;
+            this.voices[i].envState = 'idle';
+            for (let p = 0; p < MAX_PARTIALS; p++) {
+                this.voices[i].partialEnvStates[p] = 0; // idle
+                this.voices[i].partialEnvLevels[p] = 0.0;
+            }
+        }
+    }
+
+    process(inputs, outputs, parameters) {
+        // Wrap entire DSP process in try-catch to print inner errors to main thread console
+        try {
+            const output = outputs[0];
+            if (!output) return true;
+            
+            const leftChannel = output[0];
+            const rightChannel = output[1] || output[0]; // fallback to mono if only 1 channel
+            const bufferLength = leftChannel.length;
+
+            const sampleRate = globalThis.sampleRate || 44100;
+
+            
+
+            // 1. Calculate active voices and global normalization scale
+            let activeVoicesCount = 0;
+            for (let v = 0; v < MAX_VOICES; v++) {
+                if (this.voices[v].active) activeVoicesCount++;
+            }
+            
+            // Clear output if no active voices
+            const scaleFactor = activeVoicesCount > 0 ? (0.14 / Math.sqrt(activeVoicesCount)) : 0.14;
+
+            // Read parameter values for the current block
+            const formVal = parameters.form[0];
+            const timbreVal = parameters.timbre[0];
+            const filterTypeAVal = parameters.filterTypeA ? parameters.filterTypeA[0] : 0.0;
+            const filterTypeBVal = parameters.filterTypeB ? parameters.filterTypeB[0] : 0.0;
+                        const filterMorphVal = Math.max(0.0, Math.min(1.0, (parameters.filterMorph ? parameters.filterMorph[0] : 0.0) + filterSliderVal * (parameters.filterMorphMod ? parameters.filterMorphMod[0] : 0.0)));
+            const filterOffsetVal = parameters.filterOffset ? parameters.filterOffset[0] : 0.0;
+            const filterResoVal = parameters.filterReso ? parameters.filterReso[0] : 0.2;
+            const filterSlopeVal = parameters.filterSlope ? parameters.filterSlope[0] : 0.5;
+            const filterVal = parameters.filter[0];
+            const spaceVal = parameters.space[0];
+            const alterVal = parameters.alter ? parameters.alter[0] : 0.0;
+              const pinchVal = parameters.pinch ? parameters.pinch[0] : 0.0;
+              const foldVal = parameters.fold ? parameters.fold[0] : 0.0;
+            const sizeVal = parameters.size ? parameters.size[0] : 0.5;
+            const sweepVal = parameters.sweep ? parameters.sweep[0] : 0.5;
+            const infectAmount = parameters.infectAmount ? parameters.infectAmount[0] : 0.0;
+              const cloneAmountVal = parameters.cloneAmount ? parameters.cloneAmount[0] : 0.0;
+              const cloneVal = parameters.clone ? parameters.clone[0] : 0.0;
+            const infectVal = parameters.infect ? parameters.infect[0] : 0.0;
+            const param6Val = parameters.param6 ? parameters.param6[0] : 0.5; // (unused placeholder)
+            const deSyncVal = parameters.desync ? parameters.desync[0] : 0.0;
+            const pitchVal = parameters.pitch ? parameters.pitch[0] : 0.5;
+
+            const blockTime = bufferLength / sampleRate;
+
+            this.envParams.attack = parameters.attack ? parameters.attack[0] : 0.2;
+            this.envParams.decay = parameters.decay ? parameters.decay[0] : 0.3;
+            this.envParams.sustain = parameters.sustain ? parameters.sustain[0] : 0.8;
+            this.envParams.release = parameters.release ? parameters.release[0] : 1.0;
+            this.envParams.drift = parameters.drift ? parameters.drift[0] : 0.0;
+        const calculateFilterMult = (freq, fc, rawReso, rawSlope, type) => {
+            if (fc < 1.0) return 0.0;
+            const x = freq / fc;
+            const x2 = x * x;
+            
+            if (type <= 3) {
+                const q = 0.707 * Math.exp(rawReso * 3.0);
+                const n = 1.0 + rawSlope * 3.0;
+                const D = (1.0 - x2) * (1.0 - x2) + (x2 / (q * q));
+                let denom = Math.pow(D, n * 0.5);
+                if (denom < 0.000001) denom = 0.000001;
+                if (type === 0) return 1.0 / denom;
+                if (type === 1) return Math.pow(x2, n) / denom;
+                if (type === 2) return Math.pow(x, n) / denom;
+                if (type === 3) return Math.pow(Math.abs(1.0 - x2), n) / denom;
+            }
+
+            if (type === 4) {
+                const phase = rawSlope * 6.283185307;
+                const comb = 0.5 - 0.5 * Math.cos(freq * 6.283185307 / fc + phase);
+                return 1.0 - rawReso * comb;
+            }
+            if (type === 5) {
+                const v = rawSlope;
+                let p1 = 700.0 * (1.0 - v) * (1.0 - v) + 300.0 * 2.0 * v * (1.0 - v) + 270.0 * v * v;
+                let p2 = 1100.0 * (1.0 - v) * (1.0 - v) + 870.0 * 2.0 * v * (1.0 - v) + 2300.0 * v * v;
+                let p3 = 2400.0 * (1.0 - v) * (1.0 - v) + 2200.0 * 2.0 * v * (1.0 - v) + 3000.0 * v * v;
+                const shift = fc / 1000.0;
+                p1 *= shift; p2 *= shift; p3 *= shift;
+                const width = 0.1 + (1.0 - rawReso) * 0.4;
+                const g = (center) => {
+                    const diff = (freq - center) / (center * width);
+                    return Math.exp(-diff * diff);
+                };
+                const mult = g(p1) + 0.5 * g(p2) + 0.2 * g(p3);
+                return 0.1 + mult * 2.0;
+            }
+
+            return 1.0;
+        };
+
+            // Map filter exponentially (50Hz to 12000Hz)
+            const cutoffA_norm = Math.min(1.0, Math.max(0.0, filterVal - filterOffsetVal * 0.165));
+            const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.165));
+            const fcA = 50.0 * Math.pow(2, cutoffA_norm * 8.0);
+            const fcB = 50.0 * Math.pow(2, cutoffB_norm * 8.0);
+            // const Q = ...
+            // const N = ...
+
+            // Initialize output channels to zero
+            for (let i = 0; i < bufferLength; i++) {
+                leftChannel[i] = 0;
+                rightChannel[i] = 0;
+            }
+
+            // Loop active voices
+            for (let v = 0; v < MAX_VOICES; v++) {
+                const voice = this.voices[v];
+                if (!voice.active) continue;
+
+                // Smooth glide fundamental
+                voice.currentFreq += (voice.freq - voice.currentFreq) * 0.06;
+
+                // --- Block-Rate Per-Partial ADSR ---
+                let anyEnvelopeActive = false;
+                
+                for (let p = 0; p < MAX_PARTIALS; p++) {
+                    if (voice.partialEnvStates[p] === 0) {
+                        voice.partialEnvLevels[p] = 0.0;
+                        continue;
+                    }
+                    
+                    anyEnvelopeActive = true;
+                    
+                    if (voice.partialEnvStates[p] === 1) { // Attack
+                        let attackT = voice.partialAttackTimes[p];
+                        let step = (attackT > 0.001) ? (blockTime / attackT) : 1.0;
+                        voice.partialEnvLevels[p] += step;
+                        if (voice.partialEnvLevels[p] >= 1.0) {
+                            voice.partialEnvLevels[p] = 1.0;
+                            voice.partialEnvStates[p] = 2; // Decay
+                        }
+                    } 
+                    else if (voice.partialEnvStates[p] === 2) { // Decay
+                        let step = (this.envParams.decay > 0.001) ? (blockTime / this.envParams.decay) : 1.0;
+                        voice.partialEnvLevels[p] -= step;
+                        if (voice.partialEnvLevels[p] <= this.envParams.sustain) {
+                            voice.partialEnvLevels[p] = this.envParams.sustain;
+                            voice.partialEnvStates[p] = 3; // Sustain
+                        }
+                    }
+                    else if (voice.partialEnvStates[p] === 3) { // Sustain
+                        voice.partialEnvLevels[p] = this.envParams.sustain;
+                    }
+                    else if (voice.partialEnvStates[p] === 4) { // Release
+                        let releaseT = voice.partialReleaseTimes[p];
+                        let step = (releaseT > 0.001) ? (blockTime / releaseT) : 1.0;
+                        voice.partialEnvLevels[p] -= step;
+                        if (voice.partialEnvLevels[p] <= 0.0) {
+                            voice.partialEnvLevels[p] = 0.0;
+                            voice.partialEnvStates[p] = 0; // Idle
+                        }
+                    }
+                }
+                
+                if (!anyEnvelopeActive) {
+                    voice.active = false;
+                    voice.envState = 'idle';
+                    continue;
+                }
+
+                // Update frequencies, targetAmps, phaseDeltas, pL_block, pR_block, and rebuild active list
+                const freqs = new Float32Array(MAX_PARTIALS);
+                const targetAmps = new Float32Array(MAX_PARTIALS);
+                const phaseDeltas = new Float32Array(MAX_PARTIALS);
+                const pL_block = new Float32Array(MAX_PARTIALS);
+                const pR_block = new Float32Array(MAX_PARTIALS);
+
+                // Pitch Transposition Logic
+                const pitchMultiplier = Math.pow(2.0, (pitchVal - 0.5) * 2.0);
+                const pitchedFundamental = voice.currentFreq * pitchMultiplier;
+
+                voice.activePartials = [];
+                for (let p = 0; p < MAX_PARTIALS; p++) {
+                    const harmonicIndex = p + 1;
+
+                    // Formant / Inharmonic Warp
+                    const stretch = formVal * formVal * 3.5 * Math.sin(harmonicIndex * 1.57 + p * 0.1);
+                    freqs[p] = pitchedFundamental * (harmonicIndex + stretch);
+
+                    const syncMultiplier = 1.0 + deSyncVal * 1.0;
+                    if (p > 0) {
+                        freqs[p] *= syncMultiplier;
+                    }
+
+                    // Timbre Morphing (10 distinct shapes with baseline floor)
+                    const getSpectralShape = (p, harmonicIndex, shapeIndex) => {
+                        let rawVal = 0.0;
+                        switch (shapeIndex) {
+                            case 0: // 1. Warm Triangle/Saw
+                                rawVal = 1.0 / Math.pow(harmonicIndex, 1.3); break;
+                            case 1: // 2. Hollow Square (Odd harmonics only)
+                                rawVal = (p % 2 === 0) ? (1.0 / harmonicIndex) : (0.08 / harmonicIndex); break;
+                            case 2: // 3. Comb Filter / Phased
+                                rawVal = (Math.sin(p * 0.22) * 0.4 + 0.6) / Math.sqrt(harmonicIndex); break;
+                            case 3: // 4. High Fizz (High-pass)
+                                rawVal = (0.1 + 0.9 * (p / 256.0)) * (1.0 / Math.sqrt(harmonicIndex)); break;
+                            case 4: // 5. Formant Vocal "Ooh" (Double peaks near H3 & H8)
+                                rawVal = Math.exp(-Math.pow(harmonicIndex - 3, 2) / 2)
+                                     + 0.5 * Math.exp(-Math.pow(harmonicIndex - 8, 2) / 8)
+                                     + 0.05 / harmonicIndex; break;
+                            case 5: // 6. Formant Vocal "Aah" (Double peaks near H6 & H14)
+                                rawVal = Math.exp(-Math.pow(harmonicIndex - 6, 2) / 4)
+                                     + 0.4 * Math.exp(-Math.pow(harmonicIndex - 14, 2) / 16)
+                                     + 0.05 / harmonicIndex; break;
+                            case 6: // 7. Octave Double (Even harmonics dominant)
+                                rawVal = (p % 2 === 1) ? (1.0 / Math.pow(harmonicIndex, 1.2)) : (0.15 / harmonicIndex); break;
+                            case 7: // 8. Metallic / Inharmonic (Golden ratio spacing)
+                                rawVal = (Math.sin(p * 1.618) * 0.4 + 0.6) / Math.pow(harmonicIndex, 0.7); break;
+                            case 8: // 9. Resonance Spike (Resonant peak at H12)
+                                rawVal = (p === 0) ? 1.0 : (0.08 + 0.92 * Math.exp(-Math.pow(harmonicIndex - 12, 2) / 2)); break;
+                            case 9: // 10. Grit (Deterministic noise-like hash)
+                                rawVal = (Math.sin(p * 123.456) * 0.3 + 0.7) / harmonicIndex; break;
+                            default:
+                                rawVal = 0.0; break;
+                        }
+                        
+                        const baseline = 0.05 / Math.sqrt(harmonicIndex);
+                        return rawVal * 0.90 + baseline;
+                    };
+
+                    const scaledTimbre = timbreVal * 9.0;
+                    let timbreIdx = Math.floor(scaledTimbre);
+                    let timbreMix = scaledTimbre - timbreIdx;
+                    if (timbreIdx >= 9) {
+                        timbreIdx = 8;
+                        timbreMix = 1.0;
+                    }
+
+                    const baseAmp = getSpectralShape(p, harmonicIndex, timbreIdx) * (1 - timbreMix)
+                                  + getSpectralShape(p, harmonicIndex, timbreIdx + 1) * timbreMix;
+
+                    // filter Filter
+                    const multA = calculateFilterMult(freqs[p], fcA, Q, N, Math.round(filterTypeAVal));
+                    const multB = calculateFilterMult(freqs[p], fcB, Q, N, Math.round(filterTypeBVal));
+                    const filterMult = multA * (1.0 - filterMorphVal) + multB * filterMorphVal;
+
+                    // Space (Organic LFO drift)
+                    const lfoDrift = Math.sin(this.time * 1.2 + voice.phaseDrifts[p]) * spaceVal * 0.3;
+
+                    targetAmps[p] = baseAmp * filterMult * (1.0 + lfoDrift) * voice.partialEnvLevels[p];
+
+                    
+                    // INFECT Logic
+                    if (infectAmount > 0.001) {
+                        const old_freqs = new Float32Array(freqs);
+                        let stateFloat = infectVal * 14.0;
+                        let stateIndex = Math.floor(stateFloat);
+                        let morph = stateFloat - stateIndex;
+
+                        const getTargetFreq = (state, p) => {
+                            let target_p = p;
+                            switch(state) {
+                                case 0: target_p = (p % 2 === 1) ? p - 1 : p; break;
+                                case 1: target_p = p - (p % 3); break;
+                                case 2: return old_freqs[0] + (old_freqs[p] - old_freqs[0]) * 0.1;
+                                case 3: {
+                                    let oct = 0; while((1 << (oct+1)) - 1 <= p) oct++;
+                                    target_p = (1 << oct) - 1; 
+                                    break;
+                                }
+                                case 4: return old_freqs[p] + ((p % 2 === 1) ? old_freqs[0] * 0.5 : 0.0);
+                                case 5: {
+                                    const primes = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97];
+                                    let h = p + 1;
+                                    let best = 2; let min_diff = 9999;
+                                    for (let i=0; i<primes.length; i++) {
+                                        if (Math.abs(h - primes[i]) < min_diff) { min_diff = Math.abs(h - primes[i]); best = primes[i]; }
+                                    }
+                                    target_p = best - 1; 
+                                    break;
+                                }
+                                case 6: return (p < 15) ? old_freqs[0] : old_freqs[p] + old_freqs[0] * 32.0;
+                                case 7: return old_freqs[p] + Math.sin(p * 0.5) * old_freqs[0] * 2.0;
+                                case 8: return old_freqs[0] * (p + 1) * 1.61803398;
+                                case 9: target_p = Math.round(p / 16.0) * 16; break;
+                                case 10: target_p = 31 - Math.abs(31 - p); break;
+                                case 11: target_p = 6; break;
+                                case 12: return old_freqs[0] + ((old_freqs[p] * 3.7) % (old_freqs[0] * 16.0));
+                                case 13: target_p = 511 - p; break;
+                                case 14: return old_freqs[p] + Math.sin(p * 12.9898) * old_freqs[p] * 0.5;
+                            }
+                            if (target_p < 0) target_p = 0;
+                            if (target_p > 511) target_p = 511;
+                            return old_freqs[target_p];
+                        };
+
+                        for (let p = 0; p < MAX_PARTIALS; ++p) {
+                            if (targetAmps[p] > 0.0) {
+                                let freqA = getTargetFreq(stateIndex, p);
+                                let freqB = getTargetFreq(Math.min(14, stateIndex + 1), p);
+                                let interpFreq = freqA * (1.0 - morph) + freqB * morph;
+                                freqs[p] = old_freqs[p] * (1.0 - infectAmount) + interpFreq * infectAmount;
+                                if (freqs[p] < 0.0) freqs[p] = Math.abs(freqs[p]);
+                            }
+                        }
+                    }
+
+                    
+                    // CLONE Logic (Amplitude Masking)
+                    if (cloneAmountVal > 0.001) {
+                        let stateFloat = cloneVal * 14.0;
+                        let stateIndex = Math.floor(stateFloat);
+                        let morph = stateFloat - stateIndex;
+
+                        const getCloneMask = (state, p) => {
+                            switch(state) {
+                                case 0: return (p % 2 === 0) ? 1.5 : 0.5; // Odd/Even Alternation
+                                case 1: return (p % 3 === 0) ? 1.5 : 0.5; // Triplets Focus
+                                case 2: return ((p+1) & p) === 0 ? 1.8 : 0.2; // Octave Isolation (powers of 2)
+                                case 3: return 0.5 + 0.5 * Math.sin(p * 0.1); // Gentle Comb Filter
+                                case 4: return 0.5 + 0.5 * Math.sin(p * 0.5); // Aggressive Comb Filter
+                                case 5: return (p % 16) / 15.0; // Fractal Clones
+                                case 6: { // Prime Number Mask
+                                    const primes = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97];
+                                    return primes.includes(p+1) ? 1.5 : 0.2;
+                                }
+                                case 7: return (p % 10) / 9.0; // Sawtooth Ripple
+                                case 8: return Math.floor(p / 10) % 2 === 0 ? 0.2 : 1.5; // Spectral Gapping
+                                case 9: return (p < 30) ? 0.4 : 1.5; // High-Frequency Mirror
+                                case 10: return (p === 0 || p === 1) ? 0.1 : 1.2; // Sub-Harmonic Ghosting
+                                case 11: return Math.floor(p / 4) % 2 === 0 ? 1.5 : 0.2; // Spectral Checkerboard
+                                case 12: { // Fibonacci Masking
+                                    const fibs = [1,2,3,5,8,13,21,34,55,89,144,233,377];
+                                    return fibs.includes(p+1) ? 1.8 : 0.1;
+                                }
+                                case 13: return ((p * 7) % 13) / 13.0; // Modulo Shredding
+                                case 14: return Math.abs(Math.sin(p * 42.1337)) * 1.5; // Amplitude Entropy
+                            }
+                            return 1.0;
+                        };
+
+                        for (let p = 0; p < MAX_PARTIALS; ++p) {
+                            if (targetAmps[p] > 0.0) {
+                                let maskA = getCloneMask(stateIndex, p);
+                                let maskB = getCloneMask(Math.min(14, stateIndex + 1), p);
+                                let mask = maskA * (1.0 - morph) + maskB * morph;
+                                targetAmps[p] *= (1.0 - cloneAmountVal) + (mask * cloneAmountVal);
+                            }
+                        }
+                    }
+
+                    // Precalculate phase delta and panning
+
+
+                    phaseDeltas[p] = freqs[p] / sampleRate;
+
+                    if (p === 0) {
+                        pL_block[p] = voice.panLeft[p] * (1 - spaceVal) + 0.707 * spaceVal;
+                        pR_block[p] = voice.panRight[p] * (1 - spaceVal) + 0.707 * spaceVal;
+                    } else if (p % 2 === 0) {
+                        pL_block[p] = voice.panLeft[p] * (1 - spaceVal) + 1.0 * spaceVal;
+                        pR_block[p] = voice.panRight[p] * (1 - spaceVal) + 0.0 * spaceVal;
+                    } else {
+                        pL_block[p] = voice.panLeft[p] * (1 - spaceVal) + 0.0 * spaceVal;
+                        pR_block[p] = voice.panRight[p] * (1 - spaceVal) + 1.0 * spaceVal;
+                    }
+
+                    // Collect active partials
+                    if (targetAmps[p] >= 0.0001 || voice.smoothedAmps[p] >= 0.0001) {
+                        voice.activePartials.push(p);
+                    }
+                }
+
+                // Decay time and algorithmic routing precomputations
+                const centerHarmonic = sweepVal * 255.0;
+                const sendWidth = 35.0;
+
+                for (let idx = 0; idx < voice.activePartials.length; idx++) {
+                    const p = voice.activePartials[idx];
+                    
+                }
+
+                // Sample loop
+                for (let i = 0; i < bufferLength; i++) {
+                    let sumL = 0.0;
+                    let sumR = 0.0;
+                    let prevVal = 0.0;
+
+                    // 1. Update master phase first
+                    let masterWrapped = false;
+                    voice.phases[0] += phaseDeltas[0];
+                    if (voice.phases[0] >= 1.0) {
+                        voice.phases[0] -= 1.0;
+                        masterWrapped = true;
+                    }
+                    
+                    let invPhaseDelta0 = 1.0 / phaseDeltas[0];
+                    let windowPhase = voice.phases[0];
+                    let syncWindow = 1.0;
+                    if (deSyncVal > 0.0) {
+                        let winNorm = windowPhase * 0.5;
+                        let winIdx = ((winNorm * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
+                        syncWindow = Math.min(1.0, SINE_TABLE[winIdx] * 4.0);
+                    }
+
+                    for (let idx = 0; idx < voice.activePartials.length; idx++) {
+                        const p = voice.activePartials[idx];
+                        const dry_target = targetAmps[p];
+                        voice.smoothedAmps[p] += (dry_target - voice.smoothedAmps[p]) * 0.15;
+                        const a = voice.smoothedAmps[p];
+
+                          // Increment phase
+                          voice.phases[p] += phaseDeltas[p];
+                          if (voice.phases[p] >= 1.0) {
+                              voice.phases[p] -= 1.0;
+                          }
+  
+                          let currentPhase = voice.phases[p];
+                          
+                          // 2. Update phase for partial p (Hard Sync)
+                          if (p > 0 && deSyncVal > 0.0) {
+                              if (masterWrapped) {
+                                  // Clickless subsample precision sync
+                                  let overshoot = voice.phases[0];
+                                  voice.phases[p] = overshoot * phaseDeltas[p] * invPhaseDelta0;
+                                  while (voice.phases[p] >= 1.0) {
+                                      voice.phases[p] -= 1.0;
+                                  }
+                              }
+                              // We use the reset phase for synced, and the original phase for unsynced crossfade
+                              // Actually, to save memory in JS, we just blend the windowed reset wave
+                          }
+  
+                          let modPhase = voice.phases[p];
+
+                        if (idx > 0) {
+                            const p_prev = voice.activePartials[idx - 1];
+                            const distance = Math.abs(freqs[p] - freqs[p_prev]);
+                            const normDistance = distance / pitchedFundamental;
+                            let modIndex = (alterVal * alterVal * 1.5 * voice.smoothedAmps[p_prev]) / (normDistance + 0.05);
+                            if (modIndex > 2.0) modIndex = 2.0;
+                            modPhase += modIndex * prevVal;
+                        }
+
+                                                    if (pinchVal > 0.0) {
+                              modPhase += Math.sin(modPhase * 2.0 * Math.PI) * pinchVal * 0.3;
+                          }
+                            // Lookup sine table with phase wrapped to [0, 1)
+                          let normModPhase = modPhase % 1.0;
+                          if (normModPhase < 0) normModPhase += 1.0;
+                          const sineIdx = ((normModPhase * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
+                          let val = SINE_TABLE[sineIdx];
+                          
+                          if (foldVal > 0.0) {
+                              let drive = 1.0 + foldVal * 7.0;
+                              let foldPhase = val * drive * 0.25;
+                              let foldNorm = foldPhase % 1.0;
+                              if (foldNorm < 0) foldNorm += 1.0;
+                              let fIdx = ((foldNorm * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
+                              let folded = SINE_TABLE[fIdx];
+                              val = val * (1.0 - foldVal) + folded * foldVal;
+                          }
+                          
+                          if (p > 0 && deSyncVal > 0.0) {
+                              // syncWindow is hoisted
+                              // Smoothly crossfade into the windowed sync
+                              val = val * (1.0 - deSyncVal) + (val * syncWindow) * deSyncVal;
+                          }
+                          prevVal = val;
+
+                        const dryVal = val * a;
+
+                        
+
+                        sumL += dryVal * pL_block[p];
+                        sumR += dryVal * pR_block[p];
+                    }
+
+                    leftChannel[i] += sumL * scaleFactor;
+                    rightChannel[i] += sumR * scaleFactor;
+
+                    this.time += 1.0 / sampleRate;
+                }
+            }
+
+            
+
+            // Output limiting (saturation) to prevent digital clipping
+            for (let i = 0; i < bufferLength; i++) {
+                leftChannel[i] = Math.tanh(leftChannel[i]);
+                rightChannel[i] = Math.tanh(rightChannel[i]);
+            }
+
+            return true;
+        } catch (err) {
+            // Send DSP crash message back to main thread
+            this.port.postMessage({
+                type: 'dsp-error',
+                message: err.message,
+                stack: err.stack
+            });
+            return false;
+        }
+    }
+}
+
+registerProcessor('drone-synth-processor', DroneSynthProcessor);
+`;
+
+// ==========================================================================
+// 2. Custom Slider Pointer Event Manager Class
+// ==========================================================================
+class CustomSlider {
+    constructor(id, min, max, defaultValue, step, onChange, isHorizontal = false) {
+        this.element = document.getElementById(id);
+        if (!this.element) { console.error('MISSING ELEMENT SLIDER:', id); }
+        this.track = this.element.querySelector('.slider-track');
+        this.fill = this.element.querySelector('.slider-fill');
+        this.thumb = this.element.querySelector('.slider-thumb');
+        
+        this.min = min;
+        this.max = max;
+        this.value = defaultValue;
+        this.defaultValue = defaultValue;
+        this.step = step;
+        this.onChange = onChange;
+        this.isHorizontal = isHorizontal;
+        this.isDragging = false;
+
+        this.updateUI();
+
+        // Pointer listeners for universal mouse/touch support
+        this.element.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+        window.addEventListener('pointermove', (e) => this.onPointerMove(e));
+        window.addEventListener('pointerup', () => this.onPointerUp());
+
+        // Reset to default on double-click
+        this.element.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            this.setValue(this.defaultValue);
+        });
+        
+        this.modParam = this.element.getAttribute('data-mod-param');
+        if (this.modParam) {
+            // Find container, mod-line-bg, mod-line-fill
+            const container = this.element.parentElement;
+            this.modBg = container.querySelector('.mod-line-bg') || this.element.querySelector('.mod-line-bg');
+            this.modFill = container.querySelector('.mod-line-fill') || this.element.querySelector('.mod-line-fill');
+            
+            if (container.classList.contains('mod-line-container')) {
+                this.modBg = container;
+                this.modFill = container.querySelector('.mod-line-fill');
+            } else if (container.querySelector('.mod-line-container')) {
+                const mc = container.querySelector('.mod-line-container');
+                this.modBg = mc;
+                this.modFill = mc.querySelector('.mod-line-fill');
+            }
+            
+            if (this.modBg) {
+                this.modBg.addEventListener('pointerdown', (e) => {
+                    e.stopPropagation();
+                    this.isModDragging = true;
+                    this.startModX = e.clientX;
+                    this.startModVal = window.kronosSynth.values[this.modParam] || 0.0;
+                });
+                
+                window.addEventListener('pointermove', (e) => {
+                    if (!this.isModDragging) return;
+                    const deltaX = e.clientX - this.startModX;
+                    let newVal = this.startModVal + (deltaX / 100.0);
+                    newVal = Math.max(-1.0, Math.min(1.0, newVal));
+                    window.kronosSynth.values[this.modParam] = newVal;
+                    if (window.kronosSynth.onSliderChange) window.kronosSynth.onSliderChange(this.modParam, newVal);
+                    this.updateModLine();
+                });
+                
+                window.addEventListener('pointerup', (e) => {
+                    this.isModDragging = false;
+                });
+                
+                this.modBg.addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                    window.kronosSynth.values[this.modParam] = 0.0;
+                    if (window.kronosSynth.onSliderChange) window.kronosSynth.onSliderChange(this.modParam, 0.0);
+                    this.updateModLine();
+                });
+            }
+        }
+
+    }
+
+    setValue(val) {
+        // Clamp and step
+        let clamped = Math.max(this.min, Math.min(this.max, val));
+        if (this.step) {
+            clamped = Math.round(clamped / this.step) * this.step;
+        }
+        this.value = clamped;
+        this.updateUI();
+        if (this.onChange) this.onChange(this.value);
+    }
+
+        updateModArc() {
+        if (!this.modParam || !this.modArc || !this.app) return;
+        const val = this.app.values[this.modParam];
+        // val is -1 to 1
+        const radius = 46;
+        const center = 50;
+        // Arc from bottom-left (135 deg = 2.356 rad) clockwise.
+        // Wait, standard UI is 0 is top. Our knob is -135 to 135 (0 is top).
+        // SVGs 0 angle is 3 o'clock. 
+        // Top is -90 deg. Bottom left is 135 deg.
+        // For bipolar mod ring: 0 modulation = top center ( -90 deg ).
+        // Pos mod = clockwise. Neg mod = counter-clockwise.
+        
+        const startAngle = -Math.PI / 2; // -90 deg (12 o'clock)
+        const range = Math.PI * 1.5; // 270 degrees total
+        const angle = startAngle + val * (range / 2);
+        
+        const startX = center + radius * Math.cos(startAngle);
+        const startY = center + radius * Math.sin(startAngle);
+        const endX = center + radius * Math.cos(angle);
+        const endY = center + radius * Math.sin(angle);
+        
+        const largeArcFlag = 0; // Arc is never > 180 degrees because max is 135 degrees
+        const sweepFlag = val > 0 ? 1 : 0;
+        
+        if (Math.abs(val) < 0.01) {
+            this.modArc.setAttribute('d', ''); // Hide if 0
+        } else {
+            const d = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${endX} ${endY}`;
+            this.modArc.setAttribute('d', d);
+        }
+        
+        this.modArc.style.stroke = 'var(--accent)';
+    }
+
+    
+    
+    updateModLine() {
+        const app = window.kronosSynth;
+        if (!this.modParam || !this.modFill || !app) return;
+        const val = app.values[this.modParam];
+        // val is -1 to 1
+        // Center is 50%. Width is up to 50%.
+        if (val < 0) {
+            this.modFill.style.left = (50 + val * 50) + '%';
+            this.modFill.style.width = (Math.abs(val) * 50) + '%';
+        } else {
+            this.modFill.style.left = '50%';
+            this.modFill.style.width = (val * 50) + '%';
+        }
+    }
+
+
+    updateUI() {
+        const percentage = (this.value - this.min) / (this.max - this.min);
+        if (this.isHorizontal) {
+            this.fill.style.width = `${percentage * 100}%`;
+            this.thumb.style.left = `${percentage * 100}%`;
+        } else {
+            this.fill.style.height = `${percentage * 100}%`;
+            const halfThumbHeight = (this.thumb.offsetHeight || 14) / 2;
+            this.thumb.style.bottom = `calc(${percentage * 100}% - ${halfThumbHeight}px)`;
+        }
+    }
+
+    onPointerDown(e) {
+        this.isDragging = true;
+        this.element.setPointerCapture(e.pointerId);
+        this.handlePointer(e);
+    }
+
+    onPointerMove(e) {
+        if (!this.isDragging) return;
+        this.handlePointer(e);
+    }
+
+    onPointerUp() {
+        this.isDragging = false;
+    }
+
+    handlePointer(e) {
+        const rect = this.track.getBoundingClientRect();
+        let percentage = 0;
+        if (this.isHorizontal) {
+            const relativeX = e.clientX - rect.left;
+            percentage = Math.max(0, Math.min(1, relativeX / rect.width));
+        } else {
+            const relativeY = rect.bottom - e.clientY;
+            percentage = Math.max(0, Math.min(1, relativeY / rect.height));
+        }
+        
+        const val = this.min + percentage * (this.max - this.min);
+        this.setValue(val);
+    }
+
+    // Get absolute center coordinate of slider thumb relative to canvas
+    getThumbCanvasPos(canvas) {
+        const thumbRect = this.thumb.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
+        return {
+            x: thumbRect.left + thumbRect.width / 2 - canvasRect.left,
+            y: thumbRect.top + thumbRect.height / 2 - canvasRect.top
+        };
+    }
+}
+
+// ==========================================================================
+// 2b. Custom Knob Pointer Event Manager Class
+// ==========================================================================
+class CustomKnob {
+    constructor(id, min, max, defaultValue, isSeconds, isLogarithmic, onChange) {
+        this.element = document.getElementById(id);
+        if (!this.element) { console.error('MISSING ELEMENT SLIDER:', id); }
+        this.dial = this.element.querySelector('.knob-dial');
+        
+        this.min = min;
+        this.max = max;
+        this.value = defaultValue;
+        this.defaultValue = defaultValue;
+        this.isSeconds = isSeconds;
+        this.isLogarithmic = isLogarithmic;
+        this.onChange = onChange;
+        this.isDragging = false;
+        
+        this.startY = 0;
+        this.startValue = defaultValue;
+         // Access to main app state
+        this.modParam = this.element.getAttribute('data-mod-param');
+        if (this.modParam) {
+            this.modBg = this.element.querySelector('.mod-ring-bg');
+            this.modArc = this.element.querySelector('.mod-ring-arc');
+            if (this.modBg) {
+                this.modBg.addEventListener('pointerdown', (e) => {
+                    e.stopPropagation();
+                    this.isModDragging = true;
+                    this.startModY = e.clientY;
+                    this.startModVal = window.kronosSynth.values[this.modParam] || 0.0;
+                });
+                
+                window.addEventListener('pointermove', (e) => {
+                    if (!this.isModDragging) return;
+                    const deltaY = this.startModY - e.clientY;
+                    let newVal = this.startModVal + (deltaY / 100.0);
+                    newVal = Math.max(-1.0, Math.min(1.0, newVal));
+                    window.kronosSynth.values[this.modParam] = newVal;
+                    if (window.kronosSynth.onSliderChange) window.kronosSynth.onSliderChange(this.modParam, newVal);
+                    this.updateModArc();
+                });
+                
+                window.addEventListener('pointerup', (e) => {
+                    this.isModDragging = false;
+                });
+                
+                this.modBg.addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                    window.kronosSynth.values[this.modParam] = 0.0;
+                    if (window.kronosSynth.onSliderChange) window.kronosSynth.onSliderChange(this.modParam, 0.0);
+                    this.updateModArc();
+                });
+            }
+        }
+
+
+        this.updateUI();
+
+        // Pointer listeners for universal mouse/touch support
+        this.element.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+        window.addEventListener('pointermove', (e) => this.onPointerMove(e));
+        window.addEventListener('pointerup', () => this.onPointerUp());
+
+        // Reset to default on double-click
+        this.element.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            this.setValue(this.defaultValue);
+        });
+        
+        this.modParam = this.element.getAttribute('data-mod-param');
+        if (this.modParam) {
+            // Find container, mod-line-bg, mod-line-fill
+            const container = this.element.parentElement;
+            this.modBg = container.querySelector('.mod-line-bg') || this.element.querySelector('.mod-line-bg');
+            this.modFill = container.querySelector('.mod-line-fill') || this.element.querySelector('.mod-line-fill');
+            
+            if (container.classList.contains('mod-line-container')) {
+                this.modBg = container;
+                this.modFill = container.querySelector('.mod-line-fill');
+            } else if (container.querySelector('.mod-line-container')) {
+                const mc = container.querySelector('.mod-line-container');
+                this.modBg = mc;
+                this.modFill = mc.querySelector('.mod-line-fill');
+            }
+            
+            if (this.modBg) {
+                this.modBg.addEventListener('pointerdown', (e) => {
+                    e.stopPropagation();
+                    this.isModDragging = true;
+                    this.startModY = e.clientY;
+                    this.startModVal = window.kronosSynth.values[this.modParam] || 0.0;
+                });
+                
+                window.addEventListener('pointermove', (e) => {
+                    if (!this.isModDragging) return;
+                    const deltaY = this.startModY - e.clientY;
+                    let newVal = this.startModVal + (deltaY / 100.0);
+                    newVal = Math.max(-1.0, Math.min(1.0, newVal));
+                    window.kronosSynth.values[this.modParam] = newVal;
+                    if (window.kronosSynth.onSliderChange) window.kronosSynth.onSliderChange(this.modParam, newVal);
+                    this.updateModLine();
+                });
+                
+                window.addEventListener('pointerup', (e) => {
+                    this.isModDragging = false;
+                });
+                
+                this.modBg.addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                    window.kronosSynth.values[this.modParam] = 0.0;
+                    if (window.kronosSynth.onSliderChange) window.kronosSynth.onSliderChange(this.modParam, 0.0);
+                    this.updateModLine();
+                });
+            }
+        }
+
+    }
+
+    setValue(val) {
+        const clamped = Math.max(this.min, Math.min(this.max, val));
+        this.value = clamped;
+        this.updateUI();
+        if (this.onChange) this.onChange(this.value);
+    }
+
+        updateModArc() {
+        if (!this.modParam || !this.modArc || !this.app) return;
+        const val = this.app.values[this.modParam];
+        // val is -1 to 1
+        const radius = 46;
+        const center = 50;
+        // Arc from bottom-left (135 deg = 2.356 rad) clockwise.
+        // Wait, standard UI is 0 is top. Our knob is -135 to 135 (0 is top).
+        // SVGs 0 angle is 3 o'clock. 
+        // Top is -90 deg. Bottom left is 135 deg.
+        // For bipolar mod ring: 0 modulation = top center ( -90 deg ).
+        // Pos mod = clockwise. Neg mod = counter-clockwise.
+        
+        const startAngle = -Math.PI / 2; // -90 deg (12 o'clock)
+        const range = Math.PI * 1.5; // 270 degrees total
+        const angle = startAngle + val * (range / 2);
+        
+        const startX = center + radius * Math.cos(startAngle);
+        const startY = center + radius * Math.sin(startAngle);
+        const endX = center + radius * Math.cos(angle);
+        const endY = center + radius * Math.sin(angle);
+        
+        const largeArcFlag = 0; // Arc is never > 180 degrees because max is 135 degrees
+        const sweepFlag = val > 0 ? 1 : 0;
+        
+        if (Math.abs(val) < 0.01) {
+            this.modArc.setAttribute('d', ''); // Hide if 0
+        } else {
+            const d = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${endX} ${endY}`;
+            this.modArc.setAttribute('d', d);
+        }
+        
+        this.modArc.style.stroke = 'var(--accent)';
+    }
+
+    
+    
+    updateModLine() {
+        const app = window.kronosSynth;
+        if (!this.modParam || !this.modFill || !app) return;
+        const val = app.values[this.modParam];
+        // val is -1 to 1
+        // Center is 50%. Width is up to 50%.
+        if (val < 0) {
+            this.modFill.style.left = (50 + val * 50) + '%';
+            this.modFill.style.width = (Math.abs(val) * 50) + '%';
+        } else {
+            this.modFill.style.left = '50%';
+            this.modFill.style.width = (val * 50) + '%';
+        }
+    }
+
+
+    updateUI() {
+        let pct = 0;
+        if (this.isLogarithmic) {
+            pct = Math.log(this.value / this.min) / Math.log(this.max / this.min);
+        } else {
+            const range = this.max - this.min;
+            pct = (this.value - this.min) / (range > 0 ? range : 1);
+        }
+        const degrees = -135 + pct * 270; // 270 degree sweep
+        this.dial.style.transform = `rotate(${degrees}deg)`;
+    }
+
+    onPointerDown(e) {
+        this.isDragging = true;
+        this.startY = e.clientY;
+        this.startValue = this.value;
+        this.element.setPointerCapture(e.pointerId);
+    }
+
+    onPointerMove(e) {
+        if (!this.isDragging) return;
+        const deltaY = this.startY - e.clientY; // drag up increases
+        const pxRange = 120.0; // 120px for full sweep
+        
+        let startPct = 0;
+        if (this.isLogarithmic) {
+            startPct = Math.log(this.startValue / this.min) / Math.log(this.max / this.min);
+        } else {
+            startPct = (this.startValue - this.min) / (this.max - this.min);
+        }
+        
+        const deltaPct = deltaY / pxRange;
+        const newPct = Math.max(0.0, Math.min(1.0, startPct + deltaPct));
+        
+        let newVal = 0;
+        if (this.isLogarithmic) {
+            newVal = this.min * Math.pow(this.max / this.min, newPct);
+        } else {
+            newVal = this.min + newPct * (this.max - this.min);
+        }
+        
+        this.setValue(newVal);
+    }
+
+    onPointerUp() {
+        this.isDragging = false;
+    }
+}
+
+// ==========================================================================
+// 3. Main Synthesizer Application Manager
+// ==========================================================================
+class KronosSynth {
+    constructor() {
+        this.audioContext = null;
+        this.synthNode = null;
+
+        // UI elements
+        this.canvas = document.getElementById('canvas-visualizer');
+        this.ctx = this.canvas.getContext('2d');
+
+        // State variables
+        this.activeLeftFocus = null;
+        this.activeRightFocus = null;
+        this.leftFocusParams = ['form', 'timbre', 'filter', 'space'];
+        this.rightFocusParams = ['alter', 'size', 'sweep', 'infect', 'pitch'];
+        
+        this.activeKeys = new Set();
+        this.notesDown = {};
+        this.visualEnvelope = 0.0;
+        this.visualReverbEnv = 0.0;
+
+        // 12 Param Values (including new right-hand sliders and ADSR knobs)
+        this.values = {
+            form: 0.00,
+            timbre: 0.25,
+            filterTypeA: 0.0,
+            filterTypeB: 0.0,
+                        filterMorph: 0.0,
+            filterMorphMod: 0.0,
+            filterOffset: 0.0,
+            filterCutoff: 0.75,
+            filterCutoffMod: 0.0,
+            filterOffsetMod: 0.0,
+            filterResoMod: 0.0,
+            filterSlopeMod: 0.0,
+
+            filterReso: 0.2,
+            filterSlope: 0.5,
+            filter: 0.75,
+            space: 0.30,
+            alter: 0.00,
+            size: 0.50,
+            sweep: 0.50,
+            infect: 0.0,
+            infectAmount: 0.0,
+            attack: 0.003,
+            decay: 0.50,
+            sustain: 0.80,
+            release: 0.50,
+            drift: 0.00,
+            desync: 0.00,
+            pitch: 0.50
+        };
+
+        // Initialize Generic Modular Sliders (Left and Right symmetric panels)
+        this.sliders = {};
+        for (let i = 1; i <= 8; i++) {
+            const param = `mod${i}_macro`;
+            this.values[param] = 0.0;
+            this.sliders[param] = new CustomSlider(`slider-${param}`, 0, 1, this.values[param], 0.001, (v) => {
+                this.onSliderChange(param, v);
+                // Visuals are now handled dynamically in draw() based on laneEngines
+            });
+        }
+
+        this.filterTypes = ['LP', 'HP', 'BP', 'NOTCH', 'COMB', 'VOWEL'];
+        // Build UI overlays and canvas sizing
+        this.resizeCanvas();
+        window.addEventListener('resize', () => this.resizeCanvas());
+        this.buildPianoKeyboard();
+        this.setupKeyboardListeners();
+
+        // Animation Particles
+        this.particles = [];
+        this.initParticles();
+        
+        // Setup state and event listeners first
+        this.setupLaneListeners();
+        this.setupLaneMovers();
+        
+        // Start rendering loops
+        this.animate();
+
+        // Initialize Audio engine setup immediately
+        this.initAudio();
+
+        // Request initial parameter states from C++ on load
+        this.sendParamToCpp("queryall", 0);
+    }
+    
+    setupLaneMovers() {
+        const leftContainer = document.getElementById('lanes-left');
+        const rightContainer = document.getElementById('lanes-right');
+
+        // Add click listeners to all buttons
+        document.querySelectorAll('.lane-mover').forEach(mover => {
+            const leftBtn = mover.querySelector('.move-left');
+            const rightBtn = mover.querySelector('.move-right');
+            const lane = mover.closest('.mod-lane');
+
+            if (leftBtn) {
+                leftBtn.addEventListener('click', () => {
+                    if (leftBtn.classList.contains('disabled')) return;
+                    
+                    // Re-gather the sequence of swappable lanes right now
+                    const swappableLanes = [...leftContainer.querySelectorAll('.mod-lane:not([data-lane="1"])'), 
+                                            ...rightContainer.querySelectorAll('.mod-lane:not([data-lane="1"])')];
+                    
+                    const index = swappableLanes.indexOf(lane);
+                    if (index > 0) {
+                        const prevLane = swappableLanes[index - 1];
+                        // Swap DOM nodes
+                        const prevParent = prevLane.parentNode;
+                        const laneParent = lane.parentNode;
+                        const prevNextSibling = prevLane.nextSibling;
+                        const laneNextSibling = lane.nextSibling;
+                        
+                        // Edge case: if they are next to each other
+                        if (prevNextSibling === lane) {
+                            laneParent.insertBefore(lane, prevLane);
+                        } else {
+                            laneParent.insertBefore(prevLane, laneNextSibling);
+                            prevParent.insertBefore(lane, prevNextSibling);
+                        }
+                        
+                        this.enforceLaneLayout();
+                    }
+                });
+            }
+
+            if (rightBtn) {
+                rightBtn.addEventListener('click', () => {
+                    if (rightBtn.classList.contains('disabled')) return;
+                    
+                    const swappableLanes = [...leftContainer.querySelectorAll('.mod-lane:not([data-lane="1"])'), 
+                                            ...rightContainer.querySelectorAll('.mod-lane:not([data-lane="1"])')];
+                                            
+                    const index = swappableLanes.indexOf(lane);
+                    if (index < swappableLanes.length - 1) {
+                        const nextLane = swappableLanes[index + 1];
+                        // Swap DOM nodes
+                        const nextParent = nextLane.parentNode;
+                        const laneParent = lane.parentNode;
+                        const laneNextSibling = lane.nextSibling;
+                        const nextNextSibling = nextLane.nextSibling;
+                        
+                        // Edge case: if they are next to each other
+                        if (laneNextSibling === nextLane) {
+                            nextParent.insertBefore(nextLane, lane);
+                        } else {
+                            nextParent.insertBefore(lane, nextNextSibling);
+                            laneParent.insertBefore(nextLane, laneNextSibling);
+                        }
+                        
+                        this.enforceLaneLayout();
+                    }
+                });
+            }
+        });
+        
+        this.updateLaneMoverButtons();
+
+        // Signal to C++ that JS is ready to receive full parameter state
+        setTimeout(() => {
+            this.sendParamToCpp("js_ready", 1.0);
+        }, 50);
+    }
+
+    enforceLaneLayout() {
+        const leftContainer = document.getElementById('lanes-left');
+        const rightContainer = document.getElementById('lanes-right');
+        
+        const dynamicLanesLeft = Array.from(leftContainer.querySelectorAll('.mod-lane:not([data-lane="1"])'));
+        const dynamicLanesRight = Array.from(rightContainer.querySelectorAll('.mod-lane:not([data-lane="1"])'));
+        const unifiedSequence = [...dynamicLanesLeft, ...dynamicLanesRight];
+        
+        const lane1 = document.querySelector('.mod-lane[data-lane="1"]');
+        
+        // Append sequentially
+        if (lane1) leftContainer.appendChild(lane1);
+        
+        for (let i = 0; i < 3; i++) {
+            if (unifiedSequence[i]) leftContainer.appendChild(unifiedSequence[i]);
+        }
+        for (let i = 3; i < 7; i++) {
+            if (unifiedSequence[i]) rightContainer.appendChild(unifiedSequence[i]);
+        }
+        
+        this.updateLaneMoverButtons();
+        this.updateRoutingOrder();
+        
+        // Ensure active UI lanes haven't been physically moved to the wrong container
+        const activeLeftLane = this.activeLeftFocus ? document.querySelector(`.mod-lane[data-lane="${this.activeLeftFocus}"]`) : null;
+        if (activeLeftLane && activeLeftLane.closest('#lanes-right')) {
+            this.activeLeftFocus = null;
+            this.sendParamToCpp('ui_active_left', 0);
+            this.renderSidePanels();
+            this.updateToggleUI();
+        }
+        
+        const activeRightLane = this.activeRightFocus ? document.querySelector(`.mod-lane[data-lane="${this.activeRightFocus}"]`) : null;
+        if (activeRightLane && activeRightLane.closest('#lanes-left')) {
+            this.activeRightFocus = null;
+            this.sendParamToCpp('ui_active_right', 0);
+            this.renderSidePanels();
+            this.updateToggleUI();
+        }
+    }
+    
+    updateLaneMoverButtons() {
+        const leftContainer = document.getElementById('lanes-left');
+        const rightContainer = document.getElementById('lanes-right');
+        const swappableLanes = [...leftContainer.querySelectorAll('.mod-lane:not([data-lane="1"])'), 
+                                ...rightContainer.querySelectorAll('.mod-lane:not([data-lane="1"])')];
+                                
+        swappableLanes.forEach((lane, index) => {
+            const leftBtn = lane.querySelector('.move-left');
+            const rightBtn = lane.querySelector('.move-right');
+            
+            if (leftBtn) {
+                if (index === 0) leftBtn.classList.add('disabled');
+                else leftBtn.classList.remove('disabled');
+            }
+            
+            if (rightBtn) {
+                if (index === swappableLanes.length - 1) rightBtn.classList.add('disabled');
+                else rightBtn.classList.remove('disabled');
+            }
+        });
+    }
+
+    updateRoutingOrder() {
+        const leftLanes = Array.from(document.getElementById('lanes-left').querySelectorAll('.mod-lane'));
+        const rightLanes = Array.from(document.getElementById('lanes-right').querySelectorAll('.mod-lane'));
+        const allLanes = [...leftLanes, ...rightLanes];
+        
+        // Extract lane indices (e.g., "mod2" -> 2)
+        // Note: Lane 1 (Source) cannot be dragged, so routingOrder should only include lanes 2-8.
+        const order = allLanes
+            .map(lane => parseInt(lane.getAttribute('data-lane')))
+            .filter(laneNum => laneNum !== 1);
+            
+        const routingStr = order.join(',');
+        console.log("New Routing Order:", routingStr);
+        this.sendParamToCpp("routingOrder", routingStr);
+    }
+    
+    updateRoutingFromCpp(routingStr) {
+        if (!routingStr) return;
+        const order = routingStr.split(',').map(n => parseInt(n));
+        const leftContainer = document.getElementById('lanes-left');
+        const rightContainer = document.getElementById('lanes-right');
+        
+        const lanesMap = {};
+        document.querySelectorAll('.mod-lane').forEach(lane => {
+            lanesMap[parseInt(lane.getAttribute('data-lane'))] = lane;
+        });
+        
+        const sequence = order.map(i => lanesMap[i]);
+        
+        if (lanesMap[1]) leftContainer.appendChild(lanesMap[1]);
+        
+        for (let i = 0; i < 3; i++) {
+            if (sequence[i]) leftContainer.appendChild(sequence[i]);
+        }
+        for (let i = 3; i < 7; i++) {
+            if (sequence[i]) rightContainer.appendChild(sequence[i]);
+        }
+        
+        this.updateLaneMoverButtons();
+    }
+
+    async initAudio() {
+        try {
+            // Bypass Web Audio when running as a native plugin
+            const isNative = (window.chrome && window.chrome.webview) || (window.webkit && window.webkit.messageHandlers);
+            if (isNative) {
+                console.log("KRONOS running inside native host, Web Audio bypassed.");
+                return;
+            }
+
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            this.audioContext = new AudioContext({ sampleRate: 44100 });
+
+            // Create inline AudioWorkletBlob
+            const blob = new Blob([workletCode], { type: 'application/javascript' });
+            const workletUrl = URL.createObjectURL(blob);
+
+            await this.audioContext.audioWorklet.addModule(workletUrl);
+
+            this.synthNode = new AudioWorkletNode(this.audioContext, 'drone-synth-processor', {
+                numberOfInputs: 0,
+                numberOfOutputs: 1,
+                outputChannelCount: [2]
+            });
+
+            // Listen for internal worklet console errors
+            this.synthNode.port.onmessage = (event) => {
+                if (event.data.type === 'dsp-error') {
+                    console.error("DSP CRASHED IN WORKLET:", event.data.message, event.data.stack);
+                }
+            };
+
+            // Set initial params
+            this.updateNodeParameters();
+
+        // Init mod arcs
+        Object.keys(this.knobs).forEach(k => {
+            if (this.knobs[k].modParam) {
+                this.knobs[k].app = this;
+                this.knobs[k].updateModArc();
+            }
+        });
+
+
+            // Connect
+            this.synthNode.connect(this.audioContext.destination);
+
+            // Hide overlay if present
+            if (this.overlay) {
+                this.overlay.classList.add('hidden');
+            }
+
+            // Start MIDI
+            this.initMIDI();
+
+            console.log("KRONOS AudioWorklet running smoothly.");
+        } catch (err) {
+            console.error("Failed to start Web Audio Engine:", err);
+            alert("Web Audio Worklets are not supported on this browser version.");
+        }
+    }
+
+    sendParamToCpp(param, val) {
+        if (window.__JUCE__ && window.__JUCE__.backend) {
+            // Replicate JUCE 8's exact getNativeFunction invoke pattern by providing a resultId
+            const resultId = Math.floor(Math.random() * 1000000);
+            window.__JUCE__.backend.emitEvent("__juce__invoke", {
+                name: "sendParamToCpp",
+                params: [param, val],
+                resultId: resultId
+            });
+        } else {
+            console.log(`sendParamToCpp fallback: ${param} = ${val}`);
+        }
+    }
+
+    onSliderChange(param, val) {
+        this.values[param] = val;
+        if (param === 'filterMorph') {
+            this.updateFilterLabelColors();
+        }
+
+        const displayEl = document.getElementById(`val-${param}`);
+        if (displayEl) {
+            if (param === 'pitch') {
+                const pitchVal = (val - 0.5) * 24.0;
+                displayEl.textContent = (pitchVal > 0 ? '+' : '') + pitchVal.toFixed(2);
+            } else {
+                displayEl.textContent = val.toFixed(2);
+            }
+        }
+
+        if (this.synthNode) {
+            const audioParam = this.synthNode.parameters.get(param);
+            if (audioParam) {
+                audioParam.setTargetAtTime(val, this.audioContext.currentTime, 0.02);
+            }
+        }
+
+        this.sendParamToCpp(param, val);
+    }
+
+    onKnobChange(param, val) {
+        this.values[param] = val;
+        
+        let displayVal = val.toFixed(2);
+        const knobEl = document.getElementById(`knob-${param}`);
+        if (knobEl && knobEl.hasAttribute('data-step')) {
+            const step = parseFloat(knobEl.getAttribute('data-step'));
+            if (Number.isInteger(step)) {
+                displayVal = Math.round(val).toString();
+            }
+        }
+        
+        if (param === 'attack' || param === 'decay' || param === 'release') {
+            displayVal += 's';
+        } else if (param === 'mod1_filter_slope') {
+            displayVal = (val > 0 ? '+' : '') + displayVal + ' st';
+        }
+        
+        const displayEl = document.getElementById(`val-${param}`);
+        if (displayEl) {
+            displayEl.textContent = displayVal;
+        }
+
+        if (this.synthNode) {
+            const audioParam = this.synthNode.parameters.get(param);
+            if (audioParam) {
+                audioParam.setTargetAtTime(val, this.audioContext.currentTime, 0.02);
+            }
+        }
+
+        this.sendParamToCpp(param, val);
+        
+        if (param.startsWith('mod1_')) {
+            this.drawSourceCanvas();
+        }
+    }
+
+    updateParamFromCpp(param, val) {
+        // ALWAYS update the canonical state first!
+        // This ensures the value is saved even if the UI element is not currently mounted.
+        this.values[param] = val;
+
+        if (param === 'ui_active_left') {
+            const laneId = Math.round(val);
+            this.activeLeftFocus = laneId === 0 ? null : laneId;
+            this.updateToggleUI();
+            this.renderSidePanels();
+            return;
+        }
+        if (param === 'ui_active_right') {
+            const laneId = Math.round(val);
+            this.activeRightFocus = laneId === 0 ? null : laneId;
+            this.updateToggleUI();
+            this.renderSidePanels();
+            return;
+        }
+        
+        if (this.sliders[param] && !this.sliders[param].isDragging) {
+            const valDisplay = document.getElementById(`val-${param}`);
+            if (valDisplay) {
+                if (param === 'pitch') {
+                    const pitchVal = (val - 0.5) * 24.0;
+                    valDisplay.textContent = (pitchVal > 0 ? '+' : '') + pitchVal.toFixed(2);
+                } else {
+                    const knobEl = document.getElementById(`knob-${param}`);
+                    if (knobEl && knobEl.hasAttribute('data-step')) {
+                        const step = parseFloat(knobEl.getAttribute('data-step'));
+                        if (Number.isInteger(step)) {
+                            valDisplay.textContent = Math.round(val).toString();
+                        } else {
+                            valDisplay.textContent = val.toFixed(2);
+                        }
+                    } else {
+                        valDisplay.textContent = val.toFixed(2);
+                    }
+                }
+            }
+            this.sliders[param].value = val;
+            this.sliders[param].updateUI();
+        } else if (this.knobs[param] && !this.knobs[param].isDragging) {
+            let displayVal = val.toFixed(2);
+            if (param === 'attack' || param === 'decay' || param === 'release') {
+                displayVal += 's';
+            } else if (param === 'mod1_filter_slope') {
+                displayVal = (val > 0 ? '+' : '') + displayVal + ' st';
+            }
+            const valDisplay = document.getElementById(`val-${param}`);
+            if (valDisplay) {
+                valDisplay.textContent = displayVal;
+            }
+            this.knobs[param].value = val;
+            this.knobs[param].updateUI();
+        } else if (param.endsWith('_filter_typeA') || param.endsWith('_filter_typeB')) {
+            this.values[param] = val;
+            const laneId = param.replace('mod', '').split('_')[0];
+            const isFilterA = param.endsWith('_filter_typeA');
+            const selectorId = isFilterA ? `#filter-type-a-${laneId}` : `#filter-type-b-${laneId}`;
+            const selectEl = document.querySelector(`${selectorId} .filter-type-select`);
+            if (selectEl) {
+                selectEl.value = Math.round(val);
+            }
+        } else if (param === 'filterMorphMod') {
+            if (this.sliders.filterMorph) this.sliders.filterMorph.updateModLine();
+        } else if (param.endsWith('_mod')) {
+            const baseParam = param.replace('_mod', '');
+            if (this.knobs[baseParam]) this.knobs[baseParam].updateModArc();
+        } else if (param.endsWith('_engine')) {
+            const laneId = parseInt(param.replace('mod', '').replace('_engine', ''));
+            const engineIdMappingRev = { 0: 'empty', 1: 'source', 2: 'filter', 3: 'space', 4: 'pitch', 5: 'alter', 6: 'infect', 7: 'infect', 8: 'form' };
+            const engineType = engineIdMappingRev[Math.round(val)] || 'empty';
+            this.laneEngines[laneId] = engineType;
+            
+            const lane = document.querySelector(`.mod-lane[data-lane="${laneId}"]`);
+            if (lane) {
+                const selector = lane.querySelector('.engine-selector');
+                if (selector) selector.value = engineType;
+            }
+            
+            if (this.activeLeftFocus === laneId || this.activeRightFocus === laneId) {
+                this.renderSidePanels();
+            }
+        }
+
+        // Sync changes to the AudioWorklet node if active
+        if (this.synthNode) {
+            const audioParam = this.synthNode.parameters.get(param);
+            if (audioParam) {
+                audioParam.setValueAtTime(val, this.audioContext.currentTime);
+            }
+        }
+        
+        if (param.startsWith('mod1_')) {
+            this.drawSourceCanvas();
+        }
+    }
+
+    updateNodeParameters() {
+        if (!this.synthNode) return;
+        Object.keys(this.values).forEach(key => {
+            const param = this.synthNode.parameters.get(key);
+            if (param) {
+                param.setValueAtTime(this.values[key], this.audioContext.currentTime);
+            }
+        });
+    }
+
+    triggerNoteOn(note, velocity = 100) {
+        this.activeKeys.add(note);
+        this.updatePianoUI();
+
+        if (this.synthNode) {
+            this.synthNode.port.postMessage({
+                type: 'note-on',
+                note: note,
+                velocity: velocity
+            });
+        }
+        
+        // Notify C++ plugin of screen-played note
+        this.sendParamToCpp("noteon", note);
+    }
+
+    triggerNoteOff(note) {
+        this.activeKeys.delete(note);
+        this.updatePianoUI();
+
+        if (this.synthNode) {
+            this.synthNode.port.postMessage({
+                type: 'note-off',
+                note: note
+            });
+        }
+        
+        // Notify C++ plugin of screen-released note
+        this.sendParamToCpp("noteoff", note);
+    }
+
+    setupLaneListeners() {
+        this.laneEngines = { 1: 'source', 2: 'empty', 3: 'empty', 4: 'empty', 5: 'empty', 6: 'empty', 7: 'empty', 8: 'empty' };
+        
+        // Engine Selectors
+        document.querySelectorAll('.mod-lane').forEach(lane => {
+            const laneId = parseInt(lane.getAttribute('data-lane'));
+            const selector = lane.querySelector('.engine-selector');
+            if (selector) {
+                selector.addEventListener('change', (e) => {
+                    const newEngine = e.target.value;
+                    this.laneEngines[laneId] = newEngine;
+                    const engineIdMapping = { 'empty': 0, 'source': 1, 'filter': 2, 'space': 3, 'pitch': 4, 'alter': 5, 'infect': 7, 'form': 8 };
+                    this.sendParamToCpp(`mod${laneId}_engine`, engineIdMapping[newEngine] || 0);
+                    
+                    // Default parameters for the new engine to prevent bleed
+                    const tmpl = document.getElementById(`tmpl-engine-${newEngine}`);
+                    if (tmpl) {
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = tmpl.innerHTML.replace(/{{LANE}}/g, laneId);
+                        
+                        tempDiv.querySelectorAll('.custom-knob, .custom-slider.horizontal').forEach(el => {
+                            const paramId = el.parentElement.getAttribute('data-param');
+                            if (!paramId) return;
+                            
+                            const isBipolar = el.hasAttribute('data-bipolar');
+                            const dataDefault = el.getAttribute('data-default');
+                            const defaultVal = dataDefault !== null ? parseFloat(dataDefault) : (isBipolar ? 0.0 : 0.5);
+                            
+                            this.values[paramId] = defaultVal;
+                            this.sendParamToCpp(paramId, defaultVal);
+                            
+                            // Reset mod param
+                            const modParam = paramId + '_mod';
+                            this.values[modParam] = 0.0;
+                            this.sendParamToCpp(modParam, 0.0);
+                        });
+                    }
+                    
+                    if (this.activeLeftFocus === laneId || this.activeRightFocus === laneId) {
+                        this.renderSidePanels();
+                    }
+                });
+            }
+            
+            // Edit Toggles
+            const toggle = lane.querySelector('.dsp-edit-toggle');
+            if (toggle) {
+                toggle.addEventListener('click', () => {
+                    const isLeft = lane.closest('#lanes-left') !== null;
+                    if (isLeft) {
+                        this.activeLeftFocus = (this.activeLeftFocus === laneId) ? null : laneId;
+                        this.sendParamToCpp('ui_active_left', this.activeLeftFocus || 0);
+                    } else {
+                        this.activeRightFocus = (this.activeRightFocus === laneId) ? null : laneId;
+                        this.sendParamToCpp('ui_active_right', this.activeRightFocus || 0);
+                    }
+                    this.updateToggleUI();
+                    this.renderSidePanels();
+                });
+            }
+        });
+    }
+
+    updateToggleUI() {
+        document.querySelectorAll('.mod-lane').forEach(lane => {
+            const laneId = parseInt(lane.getAttribute('data-lane'));
+            const toggle = lane.querySelector('.dsp-edit-toggle');
+            if (toggle) {
+                if (laneId === this.activeLeftFocus || laneId === this.activeRightFocus) {
+                    toggle.classList.add('active');
+                } else {
+                    toggle.classList.remove('active');
+                }
+            }
+        });
+    }
+
+    renderSidePanels() {
+        const leftArea = document.getElementById('dsp-area-left');
+        const rightArea = document.getElementById('dsp-area-right');
+        
+        // Clean up previous knobs/sliders dynamically tracked
+        this.knobs = {};
+        
+        leftArea.innerHTML = '';
+        rightArea.innerHTML = '';
+        
+        if (this.activeLeftFocus) {
+            this.injectEngineUI(leftArea, this.activeLeftFocus);
+        }
+        
+        if (this.activeRightFocus) {
+            this.injectEngineUI(rightArea, this.activeRightFocus);
+        }
+        
+        // Init mod arcs for newly injected knobs
+        Object.keys(this.knobs).forEach(k => {
+            if (this.knobs[k].modParam) {
+                this.knobs[k].app = this;
+                this.knobs[k].updateModArc();
+            }
+        });
+    }
+
+    injectEngineUI(container, laneId) {
+        const engineType = this.laneEngines[laneId];
+        const tmpl = document.getElementById(`tmpl-engine-${engineType}`);
+        
+        if (!tmpl) {
+            // No template for this engine yet, or empty
+            return;
+        }
+        
+        let htmlStr = tmpl.innerHTML;
+        // Replace {{LANE}} with the actual laneId
+        htmlStr = htmlStr.replace(/{{LANE}}/g, laneId);
+        container.innerHTML = htmlStr;
+        
+        // Initialize dynamic knobs inside this container
+        container.querySelectorAll('.custom-knob').forEach(knobEl => {
+            const paramId = knobEl.parentElement.getAttribute('data-param');
+            if (!paramId) return;
+            const isBipolar = knobEl.hasAttribute('data-bipolar');
+            const dataMin = knobEl.getAttribute('data-min');
+            const dataMax = knobEl.getAttribute('data-max');
+            const dataDefault = knobEl.getAttribute('data-default');
+            
+            const min = dataMin !== null ? parseFloat(dataMin) : (isBipolar ? -1.0 : 0.0);
+            const max = dataMax !== null ? parseFloat(dataMax) : 1.0;
+            const defaultVal = dataDefault !== null ? parseFloat(dataDefault) : (isBipolar ? 0.0 : 0.5);
+            
+            // Ensure value exists in state
+            if (this.values[paramId] === undefined) {
+                this.values[paramId] = defaultVal;
+            }
+            
+            this.knobs[paramId] = new CustomKnob(
+                `knob-${paramId}`, min, max, defaultVal, isBipolar, false,
+                (v) => this.onKnobChange(paramId, v)
+            );
+            this.knobs[paramId].value = this.values[paramId];
+            this.knobs[paramId].updateUI();
+            
+            // Explicitly update label text upon creation so it isn't left at 0.00
+            const valDisplay = document.getElementById(`val-${paramId}`);
+            if (valDisplay) {
+                if (paramId === 'pitch') {
+                    const pitchVal = (this.values[paramId] - 0.5) * 24.0;
+                    valDisplay.textContent = (pitchVal > 0 ? '+' : '') + pitchVal.toFixed(2);
+                } else if (knobEl.hasAttribute('data-step') && Number.isInteger(parseFloat(knobEl.getAttribute('data-step')))) {
+                    valDisplay.textContent = Math.round(this.values[paramId]).toString();
+                } else {
+                    let text = this.values[paramId].toFixed(2);
+                    if (paramId.includes('attack') || paramId.includes('decay') || paramId.includes('release')) {
+                        text += 's';
+                    }
+                    valDisplay.textContent = text;
+                }
+            }
+        });
+        
+        // Initialize dynamic sliders (like filter morph)
+        container.querySelectorAll('.custom-slider.horizontal').forEach(sliderEl => {
+            const paramId = sliderEl.parentElement.getAttribute('data-param');
+            if (!paramId) return;
+            if (this.values[paramId] === undefined) this.values[paramId] = 0.0;
+            
+            this.sliders[paramId] = new CustomSlider(
+                `slider-${paramId}`, 0, 1, this.values[paramId], 0.001,
+                (v) => this.onSliderChange(paramId, v), true
+            );
+            this.sliders[paramId].updateModLine();
+            
+            // Explicitly update label text
+            const valDisplay = document.getElementById(`val-${paramId}`);
+            if (valDisplay) {
+                valDisplay.textContent = this.values[paramId].toFixed(2);
+            }
+        });
+        
+        // specific filter logic initialization
+        if (engineType === 'filter') {
+            this.setupDynamicFilterSelectors(container, laneId);
+            this.initFilterCanvas();
+        } else if (engineType === 'form') {
+            // Optional: initFormCanvas() can be added here later
+        } else if (engineType === 'source') {
+            this.initSourceCanvas();
+        }
+    }
+
+    setupDynamicFilterSelectors(container, laneId) {
+        const paramIdA = `mod${laneId}_filter_typeA`;
+        const paramIdB = `mod${laneId}_filter_typeB`;
+        
+        if (this.values[paramIdA] === undefined) this.values[paramIdA] = 0;
+        if (this.values[paramIdB] === undefined) this.values[paramIdB] = 0;
+        
+        const selectA = container.querySelector(`#filter-type-a-${laneId} .filter-type-select`);
+        const selectB = container.querySelector(`#filter-type-b-${laneId} .filter-type-select`);
+        
+        if (selectA) {
+            selectA.innerHTML = '';
+            this.filterTypes.forEach((type, index) => {
+                selectA.appendChild(new Option(type, index));
+            });
+            selectA.value = Math.round(this.values[paramIdA]);
+            
+            selectA.addEventListener('change', (e) => {
+                const val = parseInt(e.target.value, 10);
+                this.values[paramIdA] = val;
+                this.onSliderChange(paramIdA, val);
+            });
+        }
+        
+        if (selectB) {
+            selectB.innerHTML = '';
+            this.filterTypes.forEach((type, index) => {
+                selectB.appendChild(new Option(type, index));
+            });
+            selectB.value = Math.round(this.values[paramIdB]);
+            
+            selectB.addEventListener('change', (e) => {
+                const val = parseInt(e.target.value, 10);
+                this.values[paramIdB] = val;
+                this.onSliderChange(paramIdB, val);
+            });
+        }
+    }
+
+    // ==========================================================================
+    // 4. Keyboard Generator & Input Mapper
+    // ==========================================================================
+    buildPianoKeyboard() {
+        const keyboard = document.getElementById('piano-keyboard');
+        if (!keyboard) return;
+        keyboard.innerHTML = '';
+        
+        // Notes C3 to C5 (MIDI 48 to 72)
+        const keysInfo = [
+            { note: 48, isBlack: false },
+            { note: 49, isBlack: true },
+            { note: 50, isBlack: false },
+            { note: 51, isBlack: true },
+            { note: 52, isBlack: false },
+            { note: 53, isBlack: false },
+            { note: 54, isBlack: true },
+            { note: 55, isBlack: false },
+            { note: 56, isBlack: true },
+            { note: 57, isBlack: false },
+            { note: 58, isBlack: true },
+            { note: 59, isBlack: false },
+            { note: 60, isBlack: false },
+            { note: 61, isBlack: true },
+            { note: 62, isBlack: false },
+            { note: 63, isBlack: true },
+            { note: 64, isBlack: false },
+            { note: 65, isBlack: false },
+            { note: 66, isBlack: true },
+            { note: 67, isBlack: false },
+            { note: 68, isBlack: true },
+            { note: 69, isBlack: false },
+            { note: 70, isBlack: true },
+            { note: 71, isBlack: false },
+            { note: 72, isBlack: false }
+        ];
+
+        keysInfo.forEach(info => {
+            const keyEl = document.createElement('div');
+            keyEl.className = `key ${info.isBlack ? 'black' : 'white'}`;
+            keyEl.dataset.note = info.note;
+
+            keyEl.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                this.triggerNoteOn(info.note);
+            });
+            keyEl.addEventListener('mouseenter', (e) => {
+                if (e.buttons === 1) this.triggerNoteOn(info.note);
+            });
+            keyEl.addEventListener('mouseleave', () => this.triggerNoteOff(info.note));
+            keyEl.addEventListener('mouseup', () => this.triggerNoteOff(info.note));
+
+            keyEl.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                this.triggerNoteOn(info.note);
+            }, { passive: false });
+            keyEl.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                this.triggerNoteOff(info.note);
+            }, { passive: false });
+
+            keyboard.appendChild(keyEl);
+        });
+    }
+
+    updatePianoUI() {
+        const keys = document.querySelectorAll('.piano-keyboard .key');
+        keys.forEach(key => {
+            const note = parseInt(key.dataset.note);
+            if (this.activeKeys.has(note)) {
+                key.classList.add('active');
+            } else {
+                key.classList.remove('active');
+            }
+        });
+    }
+
+    setupKeyboardListeners() {
+        const keyboardMap = {
+            'KeyA': 48, 'KeyW': 49, 'KeyS': 50, 'KeyE': 51, 'KeyD': 52,
+            'KeyF': 53, 'KeyT': 54, 'KeyG': 55, 'KeyY': 56, 'KeyH': 57,
+            'KeyU': 58, 'KeyJ': 59, 'KeyK': 60
+        };
+
+        window.addEventListener('keydown', (e) => {
+            if (e.repeat || !this.audioContext) return;
+            const note = keyboardMap[e.code];
+            if (note !== undefined && !this.notesDown[e.code]) {
+                this.notesDown[e.code] = true;
+                this.triggerNoteOn(note);
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            const note = keyboardMap[e.code];
+            if (note !== undefined) {
+                this.notesDown[e.code] = false;
+                this.triggerNoteOff(note);
+            }
+        });
+    }
+
+    // ==========================================================================
+    // 5. MIDI Connection Handler
+    // ==========================================================================
+    initMIDI() {
+        if (navigator.requestMIDIAccess) {
+            navigator.requestMIDIAccess()
+                .then(midi => this.onMIDISuccess(midi), () => this.onMIDIFailure());
+        } else {
+            if (this.midiStatusText) {
+                this.midiStatusText.textContent = "MIDI UNSUPPORTED";
+            }
+        }
+    }
+
+    onMIDISuccess(midiAccess) {
+        const inputs = midiAccess.inputs.values();
+        let hasDevices = false;
+        for (let input of inputs) {
+            input.onmidimessage = (msg) => this.onMIDIMessage(msg);
+            hasDevices = true;
+        }
+
+        // Avoid infinite state change loop
+        if (!midiAccess.hasStateChangeListener) {
+            midiAccess.onstatechange = (e) => {
+                if (e.port.type === 'input') this.initMIDI();
+            };
+            midiAccess.hasStateChangeListener = true;
+        }
+
+        if (hasDevices) {
+            if (this.midiStatusIndicator) this.midiStatusIndicator.classList.add('active');
+            if (this.midiStatusText) this.midiStatusText.textContent = "MIDI READY";
+        } else {
+            if (this.midiStatusIndicator) this.midiStatusIndicator.classList.remove('active');
+            if (this.midiStatusText) this.midiStatusText.textContent = "NO MIDI DEVICES";
+        }
+    }
+
+    onMIDIFailure() {
+        if (this.midiStatusText) this.midiStatusText.textContent = "MIDI BLOCKED";
+        if (this.midiStatusIndicator) this.midiStatusIndicator.classList.remove('active');
+    }
+
+    onMIDIMessage(msg) {
+        const data = msg.data;
+        const status = data[0] & 0xf0;
+        const note = data[1];
+        const velocity = data[2];
+
+        if (status === 144 && velocity > 0) {
+            this.triggerNoteOn(note, velocity);
+        } else if (status === 128 || (status === 144 && velocity === 0)) {
+            this.triggerNoteOff(note);
+        }
+    }
+
+    // ==========================================================================
+    // 6. Canvas Responsive Resizer
+    // ==========================================================================
+    
+    updateFilterLabelColors() {
+        const morph = this.values.filterMorph !== undefined ? this.values.filterMorph : 0.5;
+        
+        // Target colors
+        // Active: #e0e0e6 (224, 224, 230)
+        // Inactive: #8c8c94 (140, 140, 148)
+        
+        // Label A fading: 
+        // morph = 0.0 -> Active (1.0)
+        // morph = 0.5 -> Active (1.0)
+        // morph = 1.0 -> Inactive (0.0)
+        let aFactor = 1.0;
+        if (morph > 0.5) {
+            aFactor = 1.0 - (morph - 0.5) * 2.0;
+        }
+        
+        // Label B fading:
+        // morph = 0.0 -> Inactive (0.0)
+        // morph = 0.5 -> Active (1.0)
+        // morph = 1.0 -> Active (1.0)
+        let bFactor = 1.0;
+        if (morph < 0.5) {
+            bFactor = morph * 2.0;
+        }
+        
+        const rA = Math.round(140 + aFactor * (224 - 140));
+        const gA = Math.round(140 + aFactor * (224 - 140));
+        const bA = Math.round(148 + aFactor * (230 - 148));
+        const colorA = `rgb(${rA}, ${gA}, ${bA})`;
+        
+        const rB = Math.round(140 + bFactor * (224 - 140));
+        const gB = Math.round(140 + bFactor * (224 - 140));
+        const bB = Math.round(148 + bFactor * (230 - 148));
+        const colorB = `rgb(${rB}, ${gB}, ${bB})`;
+        
+        const params = ['filterCutoff', 'filterOffset', 'filterReso', 'filterSlope'];
+        for (let i = 0; i < 4; i++) {
+            const labelA = document.getElementById(`label-${params[i]}-a`);
+            const labelB = document.getElementById(`label-${params[i]}-b`);
+            if (labelA) labelA.style.color = colorA;
+            if (labelB) labelB.style.color = colorB;
+        }
+    }
+
+    updateFilterLabels() {
+        const typeALabel = document.querySelector('#filter-type-a .type-label');
+        const typeBLabel = document.querySelector('#filter-type-b .type-label');
+        if (typeALabel) typeALabel.textContent = this.filterTypes[Math.round(this.values.filterTypeA || 0)];
+        if (typeBLabel) typeBLabel.textContent = this.filterTypes[Math.round(this.values.filterTypeB || 0)];
+        
+        const labels = {
+            0: ['CUTOFF', 'OFFSET', 'RESO', 'SLOPE'],
+            1: ['CENTER', 'OFFSET', 'RESO', 'SLOPE'],
+            2: ['CUTOFF', 'OFFSET', 'RESO', 'SLOPE'],
+            3: ['CENTER', 'OFFSET', 'RESO', 'SLOPE'],
+            4: ['CUTOFF', 'OFFSET', 'PEAK', 'LEAK'],
+            5: ['THRESH', 'OFFSET', 'HARSH', 'ODD/EVN'],
+            6: ['SPACE', 'OFFSET', 'DEPTH', 'PHASE'],
+            7: ['FORMANT', 'OFFSET', 'SHARP', 'VOWEL'],
+            8: ['CUTOFF', 'OFFSET', 'SURVIVE', 'DAMAGE'],
+            9: ['PIVOT', 'OFFSET', 'PEAK', 'ANGLE']
+        };
+        const aType = Math.round(this.values.filterTypeA || 0);
+        const bType = Math.round(this.values.filterTypeB || 0);
+        
+        const params = ['filterCutoff', 'filterOffset', 'filterReso', 'filterSlope'];
+        
+        for (let i = 0; i < 4; i++) {
+            const labelA = document.getElementById(`label-${params[i]}-a`);
+            const labelB = document.getElementById(`label-${params[i]}-b`);
+            if (labelA) labelA.textContent = labels[aType][i];
+            if (labelB) labelB.textContent = labels[bType][i];
+        }
+    }
+
+
+    resizeCanvas() {
+        const parent = this.canvas.parentElement;
+        const rect = parent ? parent.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight };
+        this.canvas.width = rect.width * window.devicePixelRatio;
+        this.canvas.height = rect.height * window.devicePixelRatio;
+        this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        this.initFilterCanvas();
+    }
+
+    initParticles() {
+        this.particles = [];
+        for (let i = 0; i < 256; i++) {
+            this.particles.push({
+                index: i,
+                phase: Math.random() * Math.PI * 2,
+                speed: 0.008 + (i / 256) * 0.024,
+                rotSpeed: 0.002 + Math.random() * 0.005,
+                history: [] // stores previous coordinates for crisp trail render
+            });
+        }
+    }
+
+    animate() {
+        requestAnimationFrame(() => this.animate());
+        this.draw();
+        this.drawFilterCanvas();
+        this.drawSourceCanvas();
+    }
+    
+    initFilterCanvas() {
+        const canvas = document.getElementById('filter-ui-canvas');
+        if (!canvas) return;
+        const parent = canvas.parentElement;
+        const rect = parent.getBoundingClientRect();
+        canvas.width = rect.width * window.devicePixelRatio;
+        canvas.height = rect.height * window.devicePixelRatio;
+        this.filterCtx = canvas.getContext('2d');
+        this.filterCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    
+    initSourceCanvas() {
+        const canvas = document.getElementById('source-ui-canvas');
+        if (!canvas) return;
+        const parent = canvas.parentElement;
+        const rect = parent.getBoundingClientRect();
+        canvas.width = rect.width * window.devicePixelRatio;
+        canvas.height = rect.height * window.devicePixelRatio;
+        this.sourceCtx = canvas.getContext('2d');
+        this.sourceCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    
+    drawSourceCanvas() {
+        const canvas = document.getElementById('source-ui-canvas');
+        if (!canvas || !this.sourceCtx) return;
+        if (!document.body.contains(canvas)) return;
+
+        const ctx = this.sourceCtx;
+        const rect = canvas.getBoundingClientRect();
+        const w = rect.width;
+        const h = rect.height;
+        
+        ctx.clearRect(0, 0, w, h);
+        
+        const macroVal = this.values.mod1_macro || 0.0;
+        const p1_mod = this.values.mod1_filter_cutoff_mod || 0.0;
+        const p2_mod = this.values.mod1_filter_offset_mod || 0.0;
+        const p3_mod = this.values.mod1_filter_reso_mod || 0.0;
+        const shape_mod = this.values.mod1_shape_mod || 0.0;
+        
+        let partialsVal = (this.values.mod1_filter_cutoff !== undefined ? this.values.mod1_filter_cutoff : 256.0) + macroVal * p1_mod * 256.0;
+        partialsVal = Math.max(1.0, Math.min(partialsVal, 256.0));
+        
+        let balanceVal = (this.values.mod1_filter_offset || 0.0) + macroVal * p2_mod;
+        balanceVal = Math.max(-1.0, Math.min(balanceVal, 1.0));
+        
+        let widthVal = (this.values.mod1_filter_reso || 0.0) + macroVal * p3_mod;
+        widthVal = Math.max(-1.0, Math.min(widthVal, 1.0));
+        
+        let shapeVal = (this.values.mod1_shape !== undefined ? this.values.mod1_shape : 0.0) + macroVal * shape_mod;
+        shapeVal = Math.max(0.0, Math.min(shapeVal, 1.0));
+        
+        const getSpectralShape = (p, harmonicIndex, shapeIndex) => {
+            let rawVal = 0.0;
+            switch (shapeIndex) {
+                case 0: rawVal = 1.0 / Math.pow(harmonicIndex, 1.3); break;
+                case 1: rawVal = (p % 2 === 0) ? (1.0 / harmonicIndex) : (0.08 / harmonicIndex); break;
+                case 2: rawVal = (Math.sin(p * 0.22) * 0.4 + 0.6) / Math.sqrt(harmonicIndex); break;
+                case 3: rawVal = (0.1 + 0.9 * (p / 256.0)) * (1.0 / Math.sqrt(harmonicIndex)); break;
+                case 4: rawVal = Math.exp(-Math.pow(harmonicIndex - 3, 2) / 2) + 0.5 * Math.exp(-Math.pow(harmonicIndex - 8, 2) / 8) + 0.05 / harmonicIndex; break;
+                case 5: rawVal = Math.exp(-Math.pow(harmonicIndex - 6, 2) / 4) + 0.4 * Math.exp(-Math.pow(harmonicIndex - 14, 2) / 16) + 0.05 / harmonicIndex; break;
+                case 6: rawVal = (p % 2 === 1) ? (1.0 / Math.pow(harmonicIndex, 1.2)) : (0.15 / harmonicIndex); break;
+                case 7: rawVal = (Math.sin(p * 1.618) * 0.4 + 0.6) / Math.pow(harmonicIndex, 0.7); break;
+                case 8: rawVal = (p === 0) ? 1.0 : (0.08 + 0.92 * Math.exp(-Math.pow(harmonicIndex - 12, 2) / 2)); break;
+                case 9: rawVal = (Math.sin(p * 123.456) * 0.3 + 0.7) / harmonicIndex; break;
+                default: rawVal = 0.0; break;
+            }
+            const baseline = 0.05 / Math.max(0.001, Math.sqrt(harmonicIndex));
+            return rawVal * 0.90 + baseline;
+        };
+
+        const scaledTimbre = shapeVal * 9.0;
+        let timbreIdx = Math.floor(scaledTimbre);
+        let timbreMix = scaledTimbre - timbreIdx;
+        if (timbreIdx >= 9) {
+            timbreIdx = 8;
+            timbreMix = 1.0;
+        }
+        
+        // The canvas X-axis maps to exactly 256 slots
+        const maxSlots = 256.0; 
+        
+        let spacing = 1.0;
+        if (widthVal > 0) {
+            const maxWidthSpacing = maxSlots / partialsVal;
+            spacing = 1.0 + widthVal * (maxWidthSpacing - 1.0);
+        } else if (widthVal < 0) {
+            spacing = 1.0 + widthVal * 0.95; // shrinks to 0.05
+        }
+            
+        const totalClusterSpan = partialsVal * spacing;
+        let clusterStart = 0.0; // Start at slot 0
+        
+        if (balanceVal > 0) {
+            const maxStart = Math.max(0.0, maxSlots - totalClusterSpan);
+            clusterStart = balanceVal * maxStart;
+        } else if (balanceVal < 0) {
+            const maxStart = Math.max(0.0, maxSlots - totalClusterSpan);
+            clusterStart = balanceVal * maxStart;
+        }
+        
+        // Draw bars
+        const computedGray = getComputedStyle(document.documentElement).getPropertyValue('--fg-main').trim() || '#e0e0e6';
+        ctx.fillStyle = computedGray;
+        
+        // Proportional lines based on 256 = 50 lines
+        const numDraws = Math.max(1, Math.round((partialsVal / 256.0) * 50)); 
+        const partialStep = partialsVal / Math.max(1, numDraws - 1);
+        
+        for (let i = 0; i < numDraws; i++) {
+            // virtual partial index for this line
+            const p = (i === numDraws - 1) ? partialsVal : (i * partialStep);
+            
+            const slotIndex = clusterStart + p * spacing;
+            const x = (slotIndex / maxSlots) * w;
+            if (x > w) break; // Safety cutoff
+            
+            // Fixed thin lines
+            const barW = 2;
+            
+            const absVH_clamped = Math.max(0.001, Math.abs(slotIndex));
+            const baseAmp = getSpectralShape(p, absVH_clamped, timbreIdx) * (1.0 - timbreMix) 
+                          + getSpectralShape(p, absVH_clamped, timbreIdx + 1) * timbreMix;
+                          
+            const ampClamped = Math.min(1.0, baseAmp);
+            const visualAmp = Math.pow(ampClamped, 0.4);
+            
+            const lineH = h * 0.8 * visualAmp;
+            const yOffset = h * 0.9 - lineH; // Align to bottom (0.9h)
+            
+            ctx.globalAlpha = 1.0;
+            ctx.fillStyle = '#d1d1d6';
+            
+            ctx.fillRect(x, yOffset, barW, lineH);
+            ctx.globalAlpha = 1.0;
+        }
+    }
+    
+    drawFilterCanvas() {
+        const canvas = document.getElementById('filter-ui-canvas');
+        if (!canvas || !this.filterCtx) return;
+        if (!document.body.contains(canvas)) return;
+        
+        const ctx = this.filterCtx;
+        const rect = canvas.getBoundingClientRect();
+        const w = rect.width;
+        const h = rect.height;
+        
+        ctx.clearRect(0, 0, w, h);
+        
+        let laneId = null;
+        for (let i = 2; i <= 8; i++) {
+            if (this.laneEngines[i] === 'filter') {
+                laneId = i;
+                break;
+            }
+        }
+        if (!laneId) return;
+
+        const macroVal = this.values[`mod${laneId}_macro`] || 0.0;
+        const baseCutoff = this.values[`mod${laneId}_filter_cutoff`] !== undefined ? this.values[`mod${laneId}_filter_cutoff`] : 0.5;
+        const baseOffset = this.values[`mod${laneId}_filter_offset`] !== undefined ? this.values[`mod${laneId}_filter_offset`] : 0.0;
+        const baseReso = this.values[`mod${laneId}_filter_reso`] !== undefined ? this.values[`mod${laneId}_filter_reso`] : 0.2;
+        const baseSlope = this.values[`mod${laneId}_filter_slope`] !== undefined ? this.values[`mod${laneId}_filter_slope`] : 0.5;
+        const baseMorph = this.values[`mod${laneId}_filter_morph`] !== undefined ? this.values[`mod${laneId}_filter_morph`] : 0.0;
+        
+        const filterVal = Math.max(0.0, Math.min(1.0, baseCutoff + macroVal * (this.values[`mod${laneId}_filter_cutoff_mod`] || 0.0)));
+        const filterOffsetVal = Math.max(-1.0, Math.min(1.0, baseOffset + macroVal * (this.values[`mod${laneId}_filter_offset_mod`] || 0.0)));
+        const filterResoVal = Math.max(0.0, Math.min(1.0, baseReso + macroVal * (this.values[`mod${laneId}_filter_reso_mod`] || 0.0)));
+        const filterSlopeVal = Math.max(0.0, Math.min(1.0, baseSlope + macroVal * (this.values[`mod${laneId}_filter_slope_mod`] || 0.0)));
+        const morph = Math.max(0.0, Math.min(1.0, baseMorph + macroVal * (this.values[`mod${laneId}_filter_morph_mod`] || 0.0)));
+        // 2. Fetch the current DSP values for filter types
+        const typeA = this.values[`mod${laneId}_filter_typeA`] !== undefined ? Math.round(this.values[`mod${laneId}_filter_typeA`]) : 0;
+        const typeB = this.values[`mod${laneId}_filter_typeB`] !== undefined ? Math.round(this.values[`mod${laneId}_filter_typeB`]) : 0;
+        
+        const cutoffA_norm = Math.min(1.0, Math.max(0.0, filterVal - filterOffsetVal * 0.165));
+        const cutoffB_norm = Math.min(1.0, Math.max(0.0, filterVal + filterOffsetVal * 0.165));
+        const fcA = 50.0 * Math.pow(2, cutoffA_norm * 8.0);
+        const fcB = 50.0 * Math.pow(2, cutoffB_norm * 8.0);
+        // const Q = ...
+        // const N = ...
+        const calculateFilterMult = (freq, fc, rawReso, rawSlope, type) => {
+            if (fc < 1.0) return 0.0;
+            const x = freq / fc;
+            const x2 = x * x;
+            
+            if (type <= 3) {
+                const scaledReso = (type <= 2) ? (rawReso * 0.36) : rawReso;
+                const q = 0.707 * Math.exp(scaledReso * 3.0);
+                const n = 1.0 + rawSlope * 3.0;
+                const D = (1.0 - x2) * (1.0 - x2) + (x2 / (q * q));
+                let denom = Math.pow(D, n * 0.5);
+                if (denom < 0.000001) denom = 0.000001;
+                if (type === 0) return 1.0 / denom;
+                if (type === 1) return Math.pow(x2, n) / denom;
+                if (type === 2) return (Math.pow(x / q, n) / denom) * (1.0 + scaledReso * scaledReso * 10.0);
+                if (type === 3) return Math.pow(Math.abs(1.0 - x2), n) / denom;
+            }
+
+            if (type === 4) {
+                const phase = rawSlope * 6.283185307;
+                const comb = 0.5 - 0.5 * Math.cos(freq * 6.283185307 / fc + phase);
+                return 1.0 - rawReso * comb;
+            }
+            if (type === 5) {
+                const v = rawSlope;
+                let p1 = 700.0 * (1.0 - v) * (1.0 - v) + 300.0 * 2.0 * v * (1.0 - v) + 270.0 * v * v;
+                let p2 = 1100.0 * (1.0 - v) * (1.0 - v) + 870.0 * 2.0 * v * (1.0 - v) + 2300.0 * v * v;
+                let p3 = 2400.0 * (1.0 - v) * (1.0 - v) + 2200.0 * 2.0 * v * (1.0 - v) + 3000.0 * v * v;
+                const shift = fc / 1000.0;
+                p1 *= shift; p2 *= shift; p3 *= shift;
+                const width = 0.1 + (1.0 - rawReso) * 0.4;
+                const g = (center) => {
+                    const diff = (freq - center) / (center * width);
+                    return Math.exp(-diff * diff);
+                };
+                const mult = g(p1) + 0.5 * g(p2) + 0.2 * g(p3);
+                return 0.1 + mult * 2.0;
+            }
+
+            return 1.0;
+        };
+
+        const numLines = 24;
+        const barWidth = Math.max(1, w / (numLines * 2.5));
+        
+        ctx.fillStyle = '#d1d1d6';
+        
+        for (let i = 0; i < numLines; i++) {
+            const minFreq = 50.0;
+            const maxFreq = 12000.0;
+            const ratio = i / (numLines - 1);
+            const freq = minFreq * Math.pow(maxFreq / minFreq, ratio);
+            
+            const multA = calculateFilterMult(freq, fcA, filterResoVal, filterSlopeVal, Math.round(typeA));
+            const multB = calculateFilterMult(freq, fcB, filterResoVal, filterSlopeVal, Math.round(typeB));
+            const filterMult = multA * (1.0 - morph) + multB * morph;
+            
+            // Convert to Decibels for professional EQ visualization scaling
+            const dB = 20.0 * Math.log10(filterMult + 0.0001);
+            
+            // Map: -20dB = 0% height, 0dB = ~45% height, +24dB = 100% height
+            const mappedHeight = (dB + 20.0) / 44.0;
+            const magnitude = Math.max(0.0, Math.min(1.0, mappedHeight));
+            
+            const barHeight = Math.max(2, magnitude * h);
+            
+            const x = (w / numLines) * i + (w / numLines) / 2 - barWidth / 2;
+            const y = h - barHeight;
+            
+            ctx.fillRect(x, y, barWidth, barHeight);
+        }
+    }
+
+    // ==========================================================================
+    // 7. Hypnotic Partials Render Engine
+    // ==========================================================================
+    draw() {
+        const w = this.canvas.width / window.devicePixelRatio;
+        const h = this.canvas.height / window.devicePixelRatio;
+
+        // Clear canvas completely to eliminate static line burn-in / smudging
+        this.ctx.fillStyle = '#252528';
+        this.ctx.fillRect(0, 0, w, h);
+
+        // Center coordinates inside the middle panel container
+        const centerX = w / 2;
+        const centerY = h / 2;
+        const maxRadius = Math.min(w * 0.42, h * 0.42);
+
+        let visual1 = 0.0; // Form/Warp
+        let visual2 = this.values.mod1_macro || 0.0; // Timbre
+        let visual3 = 0.0; // Filter
+        let visual4 = 0.0; // Space
+        let visual5 = 0.0; // Alter
+        let visual6 = 0.0; // Infect
+        let visual7 = 0.0; // Desync
+        let visual8 = 0.5; // Pitch
+
+        for (let lane = 2; lane <= 8; lane++) {
+            let engine = this.laneEngines[lane];
+            let macroVal = this.values[`mod${lane}_macro`] || 0.0;
+            
+            if (engine === 'form') visual1 = Math.max(visual1, macroVal);
+            else if (engine === 'filter') visual3 = Math.max(visual3, macroVal);
+            else if (engine === 'space') visual4 = Math.max(visual4, macroVal);
+            else if (engine === 'alter') visual5 = Math.max(visual5, macroVal);
+            else if (engine === 'infect') visual6 = Math.max(visual6, macroVal);
+            else if (engine === 'desync') visual7 = Math.max(visual7, macroVal);
+            else if (engine === 'pitch') {
+                if (Math.abs(macroVal - 0.5) > Math.abs(visual8 - 0.5)) {
+                    visual8 = macroVal;
+                }
+            }
+        }
+
+        const baseCutoff = this.values.filterCutoff !== undefined ? this.values.filterCutoff : 0.75;
+        const filterSliderVal = visual3;
+        const filterVal = Math.max(0.0, Math.min(1.0, baseCutoff + filterSliderVal * (this.values.filterCutoffMod || 0.0)));
+
+        // Smoothly update visual envelope matching the DSP ADSR (0.8s attack, 1.5s release)
+        const targetEnvelope = this.activeKeys.size > 0 ? 1.0 : 0.0;
+        if (targetEnvelope > this.visualEnvelope) {
+            this.visualEnvelope += (targetEnvelope - this.visualEnvelope) * 0.025;
+            this.visualReverbEnv += (targetEnvelope - this.visualReverbEnv) * 0.08;
+        } else {
+            this.visualEnvelope += (targetEnvelope - this.visualEnvelope) * 0.012;
+            const decayTimeSeconds = 0.1 + visual6 * visual6 * 5.9;
+            const decayCoef = 1.0 - (1.0 / (decayTimeSeconds * 60.0));
+            this.visualReverbEnv *= Math.max(0.9, Math.min(0.998, decayCoef));
+        }
+        const activeRatio = this.visualEnvelope;
+
+        // 1. Draw slider organic connection lines (linked directly to slider thumb pixels)
+        // Set to fade in/out with the ADSR envelope
+        // Dynamically fetch the 8 main UI sliders by looking at the HTML structure
+        // This ensures the visualizer adapts if slider names/engines change in the future
+        const mainSliders = Array.from(document.querySelectorAll('.slider-wrapper')).map(el => el.getAttribute('data-param'));
+        mainSliders.forEach((key, index) => {
+            const slider = this.sliders[key];
+            const start = slider.getThumbCanvasPos(this.canvas);
+            
+            // Connect to orbital layers (modulo 4 prevents expanding orbit for right side sliders)
+            const orbitIdx = index % 4;
+            let phaseOffset = orbitIdx * (Math.PI / 2);
+            if (index >= 4) {
+                phaseOffset += Math.PI; // Connect to opposite/distinct side of orbits for right sliders
+            }
+            const t = Date.now() * 0.0004 + phaseOffset;
+            const anchorRadius = maxRadius * (0.2 + orbitIdx * 0.2) * (1.0 - visual3 * 0.1);
+            
+            // Rotate anchor target on grid
+            const targetX = centerX + anchorRadius * Math.cos(t);
+            const targetY = centerY + anchorRadius * Math.sin(t);
+
+            // Drag rope wobble based on form/space macro
+            const wobbleY = Math.sin(Date.now() * 0.002 + index * 2) * (visual1 * 25);
+
+            // Draw curved light-gray visual guide line (always visible, floats cleanly)
+            const guideOpacity = 0.45 + activeRatio * 0.55;
+            this.ctx.strokeStyle = `rgba(224, 224, 230, ${(0.08 + visual4 * 0.12) * guideOpacity})`;
+            this.ctx.lineWidth = 1.0;
+            this.ctx.beginPath();
+            this.ctx.moveTo(start.x, start.y);
+            this.ctx.bezierCurveTo(
+                start.x + 80, start.y + wobbleY,
+                centerX - 120, targetY - wobbleY,
+                targetX, targetY
+            );
+            this.ctx.stroke();
+
+            // Draw glowing anchor point on the canvas orbit
+            const anchorOpacity = 0.5 + activeRatio * 0.5;
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${(0.22 + visual4 * 0.28) * anchorOpacity})`;
+            this.ctx.beginPath();
+            this.ctx.arc(targetX, targetY, 3, 0, Math.PI * 2);
+            this.ctx.fill();
+        });
+
+        
+
+        // 2. Draw geometric grid background
+        const gridCount = 6;
+        this.ctx.lineWidth = 1.0;
+        for (let i = 1; i <= gridCount; i++) {
+            const rad = maxRadius * (i / gridCount) * (1.0 - visual3 * 0.15);
+            this.ctx.strokeStyle = `rgba(255, 255, 255, ${0.015 + (1.0 - visual4 * 0.5) * 0.025})`;
+            this.ctx.beginPath();
+            for (let angle = 0; angle <= Math.PI * 2; angle += 0.05) {
+                const warp = Math.sin(angle * 5 + Date.now() * 0.0008) * visual1 * 14 * (i / gridCount);
+                
+                // INFECT (visual6) Spiky Grid Jitter
+                let spike = 0.0;
+                if (visual6 > 0.001) {
+                    const hash = Math.sin(angle * 123.456 + i * 87.65 + Date.now() * 0.005);
+                    spike = hash * 40.0 * visual6 * (i / gridCount);
+                }
+                
+                const x = centerX + (rad + warp + spike) * Math.cos(angle);
+                const y = centerY + (rad + warp + spike) * Math.sin(angle);
+                if (angle === 0) this.ctx.moveTo(x, y);
+                else this.ctx.lineTo(x, y);
+            }
+            this.ctx.closePath();
+            this.ctx.stroke();
+        }
+
+        // Draw expanding hard-sync shockwave ring
+        if (visual7 > 0.1 && this.activeKeys.size > 0) {
+            const syncTime = (Date.now() * 0.004) % 1.0;
+            const syncRadius = maxRadius * syncTime * 1.1;
+            const syncOpacity = (1.0 - syncTime) * visual7 * 0.18;
+            this.ctx.strokeStyle = `rgba(255, 255, 255, ${syncOpacity})`;
+            this.ctx.lineWidth = 1.5;
+            this.ctx.beginPath();
+            this.ctx.arc(centerX, centerY, syncRadius, 0, Math.PI * 2);
+            this.ctx.stroke();
+        }
+
+        // 3. Draw 256 partials mandala with fading trails
+        let prevX = 0;
+        let prevY = 0;
+
+        for (let i = 0; i < this.particles.length; i++) {
+            const p = this.particles[i];
+
+            // Speed up drift when space is high, and scale with pitch transposition
+            const pitchSpeedFactor = Math.pow(2.0, (visual8 - 0.5) * 2.0);
+            p.phase += p.speed * (1.0 + visual4 * 2.5) * pitchSpeedFactor;
+
+            // Angle warp caused by form slider (harmonic to chaotic Moiré)
+            const angleWarp = Math.sin(i * 0.12 + p.phase * 0.05) * visual1 * visual1 * 5.0;
+            const theta = (i * 0.22) + p.phase * 0.08 + angleWarp;
+
+            let polyFactor = 1.0;
+            if (visual7 > 0.05) {
+                const N = 3 + (i % 3); // Crystalline mix of triangles, squares, pentagons
+                const alpha = (2 * Math.PI) / N;
+                const thetaRel = ((theta % alpha) + alpha) % alpha - (alpha / 2);
+                const targetPolyFactor = Math.cos(alpha / 2) / Math.cos(thetaRel);
+                polyFactor = 1.0 * (1.0 - visual7) + targetPolyFactor * visual7;
+            }
+
+            // Amplitude envelope shape calculation
+            let amp = 1.0;
+            if (visual2 < 0.5) {
+                const mix = visual2 * 2.0;
+                const ampA = 1.0 / Math.pow(i + 1, 0.75);
+                const ampB = Math.sin(i * 0.22) * 0.5 + 0.5;
+                amp = ampA * (1 - mix) + ampB * mix;
+            } else {
+                const mix = (visual2 - 0.5) * 2.0;
+                const ampB = Math.sin(i * 0.22) * 0.5 + 0.5;
+                const ampC = 1.0 - (i / this.particles.length);
+                amp = ampB * (1 - mix) + ampC * mix;
+            }
+
+            // FILTER: progressively suppress higher index particles
+            const filterIndex = visual3 * this.particles.length;
+            if (i > filterIndex) {
+                amp *= Math.max(0, 1.0 - (i - filterIndex) / 24.0);
+            }
+
+            const pitchScale = Math.pow(2.0, (visual8 - 0.5) * 0.6);
+            const dist = maxRadius * (0.15 + 0.85 * (i / this.particles.length)) * pitchScale;
+            // Tiny continuous orbit modulation even when silent, morphing to deep active waves
+            const modulationScale = 8.0 + activeRatio * 37.0;
+            const amplitudeScale = amp * modulationScale;
+            const modulation = Math.sin(p.phase + i * 0.4) * amplitudeScale;
+
+            const r = dist * polyFactor + modulation;
+            const x = centerX + r * Math.cos(theta);
+            const y = centerY + r * Math.sin(theta);
+
+            // Update particle coordinate history
+            p.history.push({ x: x, y: y, amp: amp });
+            if (p.history.length > 5) {
+                p.history.shift();
+            }
+
+            // Slowly rotate base hue over time (cycles colors dynamically)
+            const baseHue = (Date.now() * 0.012) % 360;
+            const hue = (baseHue + (i / this.particles.length) * 80) % 360;
+            const sat = activeRatio * 85; // 0% (gray) to 85% (vibrant pastel) saturation
+            const light = 42 + activeRatio * 38; // 42% (mid gray) to 80% (bright pastel) lightness
+
+            const headOpacity = 0.45 + activeRatio * 0.45; // 0.45 (idle) to 0.90 (bright)
+            const trailOpacity = 0.10 + activeRatio * 0.12; // 0.10 (idle) to 0.22 (bright)
+            const lineOpacity = (0.08 + activeRatio * 0.12) * (1.0 - visual1 * 0.5); // 0.08 (idle) to 0.20 (bright)
+
+            // Render fading trails from history
+            for (let hIdx = 0; hIdx < p.history.length; hIdx++) {
+                const hist = p.history[hIdx];
+                const alpha = (hIdx + 1) / p.history.length;
+                this.ctx.fillStyle = `hsla(${hue}, ${sat}%, ${light}%, ${hist.amp * trailOpacity * alpha})`;
+                this.ctx.beginPath();
+                this.ctx.arc(hist.x, hist.y, 0.8 + hist.amp * 2.0 * alpha, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+
+            // Draw current active head particle
+            this.ctx.fillStyle = `hsla(${hue}, ${sat}%, ${light}%, ${amp * headOpacity})`;
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, 1.2 + amp * 2.2, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            // Interconnecting elastic mesh strings (clean, no trails)
+            if (i > 0) {
+                this.ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${light - 10}%, ${amp * lineOpacity})`;
+                this.ctx.beginPath();
+                this.ctx.moveTo(prevX, prevY);
+                
+                if (visual6 > 0.001) {
+                    // INFECT (visual6) Spiky Web Jitter
+                    const hash = Math.sin(i * 1234.5 + Date.now() * 0.005);
+                    const midX = (prevX + x) * 0.5 + Math.cos(hash * Math.PI) * 50.0 * visual6;
+                    const midY = (prevY + y) * 0.5 + Math.sin(hash * Math.PI) * 50.0 * visual6;
+                    this.ctx.lineTo(midX, midY);
+                }
+                
+                this.ctx.lineTo(x, y);
+                this.ctx.stroke();
+            }
+
+            // 4. Draw ALTER cross-connecting laser web (Concept 3)
+            const webOpacity = visual5 * (0.015 + activeRatio * 0.05) * amp;
+            if (webOpacity > 0.001) {
+                const targetIdx = (i + 47) % this.particles.length;
+                const pTarget = this.particles[targetIdx];
+                if (pTarget.history && pTarget.history.length > 0) {
+                    const targetPos = pTarget.history[pTarget.history.length - 1];
+                    this.ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${light + 10}%, ${webOpacity})`;
+                    this.ctx.lineWidth = 0.5 + visual5 * 0.8;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, y);
+                    this.ctx.lineTo(targetPos.x, targetPos.y);
+                    this.ctx.stroke();
+                }
+            }
+
+            prevX = x;
+            prevY = y;
+        }
+    }
+}
+
+// Start Synthesizer
+window.addEventListener('DOMContentLoaded', () => {
+    window.kronosSynth = new KronosSynth();
+});

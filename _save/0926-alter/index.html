@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KRONOS // Experimental Additive Drone Synthesizer</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app-container">
+        <!-- Unified Background Canvas -->
+        <canvas id="canvas-visualizer"></canvas>
+
+        <!-- Overlay Header -->
+        <header class="overlay-header">
+            <div class="header-left">
+                <span class="brand">KRONOS</span>
+                <span class="tagline">drone synthesis laboratory</span>
+            </div>
+            <div class="header-right">
+                <span class="build-version">BUILD #0.77</span>
+            </div>
+        </header>
+
+        <!-- Left Side Floating Control Panel -->
+        <section class="control-panel-left">
+            <div class="sliders-container" id="lanes-left">
+                <!-- Lane 1 (Source) -->
+                <div class="slider-wrapper mod-lane" data-lane="1" data-param="mod1_macro">
+                    <div class="slider-header">
+                        <div class="lane-mover" style="visibility: hidden;"><span class="move-left move-btn">&lt;</span><span class="move-right move-btn">&gt;</span></div>
+                        <span class="slider-name">SOURCE</span>
+                        <span class="slider-val" id="val-mod1_macro">0.00</span>
+                    </div>
+                    <div class="custom-slider" id="slider-mod1_macro" data-min="0" data-max="1" data-default="0">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
+                    </div>
+                    <div class="dsp-edit-toggle" data-target="mod1"></div>
+                </div>
+
+                <!-- Lane 2 -->
+                <div class="slider-wrapper mod-lane" data-lane="2" data-param="mod2_macro">
+                    <div class="slider-header">
+                        <div class="lane-mover"><span class="move-left move-btn">&lt;</span><span class="move-right move-btn">&gt;</span></div>
+                        <select class="slider-name engine-selector">
+                            <option value="empty" selected>EMPTY</option>
+                            <option value="filter">FILTER</option>
+                            <option value="space">SPACE</option>
+                            <option value="pitch">PITCH</option>
+                            <option value="alter">ALTER</option>
+                            <option value="infect">INFECT</option>
+
+                            <option value="form">FORM</option>
+                        </select>
+                        <span class="slider-val" id="val-mod2_macro">0.00</span>
+                    </div>
+                    <div class="custom-slider" id="slider-mod2_macro" data-min="0" data-max="1" data-default="0">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
+                    </div>
+                    <div class="dsp-edit-toggle" data-target="mod2"></div>
+                </div>
+
+                <!-- Lane 3 -->
+                <div class="slider-wrapper mod-lane" data-lane="3" data-param="mod3_macro">
+                    <div class="slider-header">
+                        <div class="lane-mover"><span class="move-left move-btn">&lt;</span><span class="move-right move-btn">&gt;</span></div>
+                        <select class="slider-name engine-selector">
+                            <option value="empty" selected>EMPTY</option>
+                            <option value="filter">FILTER</option>
+                            <option value="space">SPACE</option>
+                            <option value="pitch">PITCH</option>
+                            <option value="alter">ALTER</option>
+                            <option value="infect">INFECT</option>
+
+                            <option value="form">FORM</option>
+                        </select>
+                        <span class="slider-val" id="val-mod3_macro">0.00</span>
+                    </div>
+                    <div class="custom-slider" id="slider-mod3_macro" data-min="0" data-max="1" data-default="0">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
+                    </div>
+                    <div class="dsp-edit-toggle" data-target="mod3"></div>
+                </div>
+
+                <!-- Lane 4 -->
+                <div class="slider-wrapper mod-lane" data-lane="4" data-param="mod4_macro">
+                    <div class="slider-header">
+                        <div class="lane-mover"><span class="move-left move-btn">&lt;</span><span class="move-right move-btn">&gt;</span></div>
+                        <select class="slider-name engine-selector">
+                            <option value="empty" selected>EMPTY</option>
+                            <option value="filter">FILTER</option>
+                            <option value="space">SPACE</option>
+                            <option value="pitch">PITCH</option>
+                            <option value="alter">ALTER</option>
+                            <option value="infect">INFECT</option>
+
+                            <option value="form">FORM</option>
+                        </select>
+                        <span class="slider-val" id="val-mod4_macro">0.00</span>
+                    </div>
+                    <div class="custom-slider" id="slider-mod4_macro" data-min="0" data-max="1" data-default="0">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
+                    </div>
+                    <div class="dsp-edit-toggle" data-target="mod4"></div>
+                </div>
+            </div>
+
+            <div class="dsp-edit-area" id="dsp-area-left">
+                <!-- Dynamically injected Left Panels go here -->
+            </div>
+        </section>
+
+        <!-- Right Side Floating Control Panel (Symmetric Sliders) -->
+        <section class="control-panel-right">
+            <div class="sliders-container" id="lanes-right">
+                <!-- Lane 5 -->
+                <div class="slider-wrapper mod-lane" data-lane="5" data-param="mod5_macro">
+                    <div class="slider-header">
+                        <div class="lane-mover"><span class="move-left move-btn">&lt;</span><span class="move-right move-btn">&gt;</span></div>
+                        <select class="slider-name engine-selector">
+                            <option value="empty" selected>EMPTY</option>
+                            <option value="filter">FILTER</option>
+                            <option value="space">SPACE</option>
+                            <option value="pitch">PITCH</option>
+                            <option value="alter">ALTER</option>
+                            <option value="infect">INFECT</option>
+
+                            <option value="form">FORM</option>
+                        </select>
+                        <span class="slider-val" id="val-mod5_macro">0.00</span>
+                    </div>
+                    <div class="custom-slider" id="slider-mod5_macro" data-min="0" data-max="1" data-default="0">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
+                    </div>
+                    <div class="dsp-edit-toggle" data-target="mod5"></div>
+                </div>
+
+                <!-- Lane 6 -->
+                <div class="slider-wrapper mod-lane" data-lane="6" data-param="mod6_macro">
+                    <div class="slider-header">
+                        <div class="lane-mover"><span class="move-left move-btn">&lt;</span><span class="move-right move-btn">&gt;</span></div>
+                        <select class="slider-name engine-selector">
+                            <option value="empty" selected>EMPTY</option>
+                            <option value="filter">FILTER</option>
+                            <option value="space">SPACE</option>
+                            <option value="pitch">PITCH</option>
+                            <option value="alter">ALTER</option>
+                            <option value="infect">INFECT</option>
+
+                            <option value="form">FORM</option>
+                        </select>
+                        <span class="slider-val" id="val-mod6_macro">0.00</span>
+                    </div>
+                    <div class="custom-slider" id="slider-mod6_macro" data-min="0" data-max="1" data-default="0">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
+                    </div>
+                    <div class="dsp-edit-toggle" data-target="mod6"></div>
+                </div>
+
+                <!-- Lane 7 -->
+                <div class="slider-wrapper mod-lane" data-lane="7" data-param="mod7_macro">
+                    <div class="slider-header">
+                        <div class="lane-mover"><span class="move-left move-btn">&lt;</span><span class="move-right move-btn">&gt;</span></div>
+                        <select class="slider-name engine-selector">
+                            <option value="empty" selected>EMPTY</option>
+                            <option value="filter">FILTER</option>
+                            <option value="space">SPACE</option>
+                            <option value="pitch">PITCH</option>
+                            <option value="alter">ALTER</option>
+                            <option value="infect">INFECT</option>
+
+                            <option value="form">FORM</option>
+                        </select>
+                        <span class="slider-val" id="val-mod7_macro">0.00</span>
+                    </div>
+                    <div class="custom-slider" id="slider-mod7_macro" data-min="0" data-max="1" data-default="0">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
+                    </div>
+                    <div class="dsp-edit-toggle" data-target="mod7"></div>
+                </div>
+
+                <!-- Lane 8 -->
+                <div class="slider-wrapper mod-lane" data-lane="8" data-param="mod8_macro">
+                    <div class="slider-header">
+                        <div class="lane-mover"><span class="move-left move-btn">&lt;</span><span class="move-right move-btn">&gt;</span></div>
+                        <select class="slider-name engine-selector">
+                            <option value="empty" selected>EMPTY</option>
+                            <option value="filter">FILTER</option>
+                            <option value="space">SPACE</option>
+                            <option value="pitch">PITCH</option>
+                            <option value="alter">ALTER</option>
+                            <option value="infect">INFECT</option>
+
+                            <option value="form">FORM</option>
+                        </select>
+                        <span class="slider-val" id="val-mod8_macro">0.00</span>
+                    </div>
+                    <div class="custom-slider" id="slider-mod8_macro" data-min="0" data-max="1" data-default="0">
+                        <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
+                    </div>
+                    <div class="dsp-edit-toggle" data-target="mod8"></div>
+                </div>
+            </div>
+            
+            <div class="dsp-edit-area" id="dsp-area-right">
+                <!-- Dynamically injected Right Panels go here -->
+            </div>
+        </section>
+
+        <!-- HTML TEMPLATES FOR DYNAMIC ENGINE INJECTION -->
+        
+        <!-- SOURCE ENGINE TEMPLATE -->
+        <template id="tmpl-engine-source">
+            <div class="dsp-panel engine-source-panel">
+                <div class="filter-ui-canvas-container">
+                    <canvas id="source-ui-canvas"></canvas>
+                </div>
+                <div class="filter-morph-row" style="visibility: hidden;"></div>
+                <div class="filter-params-row">
+                    <div class="knob-wrapper" data-param="mod{{LANE}}_p1">
+                        <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p1" data-min="1" data-max="256" data-default="256" data-step="1" data-mod-param="mod{{LANE}}_p1_mod">
+                            <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names">
+                            <span class="knob-name-a">PARTIALS</span>
+                        </div>
+                        <span class="knob-val" id="val-mod{{LANE}}_p1">256</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="mod{{LANE}}_shape">
+                        <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_shape" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_shape_mod">
+                            <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names">
+                            <span class="knob-name-a">SHAPE</span>
+                        </div>
+                        <span class="knob-val" id="val-mod{{LANE}}_shape">0.00</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="mod{{LANE}}_p2">
+                        <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-mod{{LANE}}_p2" data-bipolar="true" data-mod-param="mod{{LANE}}_p2_mod">
+                            <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names">
+                            <span class="knob-name-a">BALANCE</span>
+                        </div>
+                        <span class="knob-val" id="val-mod{{LANE}}_p2">0.00</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="mod{{LANE}}_p3">
+                        <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-mod{{LANE}}_p3" data-bipolar="true" data-mod-param="mod{{LANE}}_p3_mod">
+                            <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names">
+                            <span class="knob-name-a">WIDTH</span>
+                        </div>
+                        <span class="knob-val" id="val-mod{{LANE}}_p3">0.00</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="mod{{LANE}}_p4">
+                        <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-mod{{LANE}}_p4" data-min="-36" data-max="36" data-default="0" data-bipolar="true" data-mod-param="mod{{LANE}}_p4_mod">
+                            <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names">
+                            <span class="knob-name-a">PITCH</span>
+                        </div>
+                        <span class="knob-val" id="val-mod{{LANE}}_p4">0.00</span>
+                    </div>
+                </div>
+                <div class="filter-params-row adsr-params-row">
+                    <div class="knob-wrapper" data-param="attack">
+                        <div class="custom-knob filter-knob" id="knob-attack" data-min="0.001" data-max="7.0" data-default="0.003" data-logarithmic="true">
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names"><span class="knob-name-a">ATTACK</span></div>
+                        <span class="knob-val" id="val-attack">3ms</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="decay">
+                        <div class="custom-knob filter-knob" id="knob-decay" data-min="0.001" data-max="7.0" data-default="0.5" data-logarithmic="true">
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names"><span class="knob-name-a">DECAY</span></div>
+                        <span class="knob-val" id="val-decay">500ms</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="sustain">
+                        <div class="custom-knob filter-knob" id="knob-sustain" data-min="0" data-max="1" data-default="0.8">
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names"><span class="knob-name-a">SUSTAIN</span></div>
+                        <span class="knob-val" id="val-sustain">0.80</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="release">
+                        <div class="custom-knob filter-knob" id="knob-release" data-min="0.001" data-max="7.0" data-default="0.5" data-logarithmic="true">
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names"><span class="knob-name-a">RELEASE</span></div>
+                        <span class="knob-val" id="val-release">500ms</span>
+                    </div>
+                    <div class="knob-wrapper" data-param="drift">
+                        <div class="custom-knob filter-knob" id="knob-drift" data-min="0" data-max="1" data-default="0">
+                            <div class="knob-dial"><div class="knob-marker"></div></div>
+                        </div>
+                        <div class="knob-names"><span class="knob-name-a">DRIFT</span></div>
+                        <span class="knob-val" id="val-drift">0.00</span>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- FILTER ENGINE TEMPLATE -->
+        <template id="tmpl-engine-filter">
+        <div class="dsp-panel engine-filter-panel">
+            <div class="filter-ui-canvas-container">
+                <canvas id="filter-ui-canvas"></canvas>
+            </div>
+            <div class="filter-morph-row">
+                <div class="filter-type" id="filter-type-a-{{LANE}}">
+                    <select class="filter-type-select"></select>
+                </div>
+                <div class="morph-slider-container" data-param="mod{{LANE}}_filter_morph">
+                    <div class="mod-line-container" data-mod-param="mod{{LANE}}_filter_morph_mod">
+                        <div class="mod-line-bg"></div>
+                        <div class="mod-line-fill"></div>
+                    </div>
+                    <div class="custom-slider horizontal" id="slider-mod{{LANE}}_filter_morph" data-mod-param="mod{{LANE}}_filter_morph_mod">
+                        <div class="slider-track horizontal-track">
+                            <div class="slider-fill horizontal-fill"></div>
+                            <div class="slider-thumb horizontal-thumb"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="filter-type" id="filter-type-b-{{LANE}}">
+                    <select class="filter-type-select"></select>
+                </div>
+            </div>
+            <div class="filter-params-row">
+                <div class="knob-wrapper" data-param="mod{{LANE}}_filter_cutoff">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_filter_cutoff" data-mod-param="mod{{LANE}}_filter_cutoff_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">CUTOFF</span>
+                        <span class="knob-name-b">CUTOFF</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_filter_cutoff">0.75</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_filter_offset">
+                    <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-mod{{LANE}}_filter_offset" data-bipolar="true" data-mod-param="mod{{LANE}}_filter_offset_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">OFFSET</span>
+                        <span class="knob-name-b">OFFSET</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_filter_offset">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_filter_reso">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_filter_reso" data-mod-param="mod{{LANE}}_filter_reso_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">RESO</span>
+                        <span class="knob-name-b">RESO</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_filter_reso">0.20</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_filter_slope">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_filter_slope" data-mod-param="mod{{LANE}}_filter_slope_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">SLOPE</span>
+                        <span class="knob-name-b">SLOPE</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_filter_slope">0.50</span>
+                </div>
+            </div>
+        </div>
+        </template>
+
+        <!-- FORM ENGINE TEMPLATE -->
+        <template id="tmpl-engine-form">
+        <div class="dsp-panel engine-form-panel">
+            <div class="filter-ui-canvas-container">
+                <canvas id="form-ui-canvas-{{LANE}}"></canvas>
+            </div>
+            <div class="filter-morph-row" style="visibility: hidden;"></div>
+            <div class="filter-params-row">
+                <div class="knob-wrapper" data-param="mod{{LANE}}_form_warp">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_form_warp" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_form_warp_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">WARP</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_form_warp">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_form_fold">
+                    <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-mod{{LANE}}_form_fold" data-bipolar="true" data-mod-param="mod{{LANE}}_form_fold_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">SHIFT</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_form_fold">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_form_tension">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_form_tension" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_form_tension_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">TENSION</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_form_tension">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_form_shape">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_form_shape" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_form_shape_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">SHAPE</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_form_shape">0.00</span>
+                </div>
+            </div>
+        </div>
+        </template>
+
+        <!-- SPACE ENGINE TEMPLATE -->
+        <template id="tmpl-engine-space">
+        <div class="dsp-panel engine-space-panel">
+            <div class="filter-ui-canvas-container">
+                <canvas id="space-ui-canvas-{{LANE}}"></canvas>
+            </div>
+            <div class="filter-morph-row" style="visibility: hidden;"></div>
+            <div class="filter-params-row">
+                <div class="knob-wrapper" data-param="mod{{LANE}}_space_width">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_space_width" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_space_width_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">WIDTH</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_space_width">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_space_orbit">
+                    <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-mod{{LANE}}_space_orbit" data-min="-1" data-max="1" data-default="0" data-bipolar="true" data-mod-param="mod{{LANE}}_space_orbit_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">ORBIT</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_space_orbit">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_space_smear">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_space_smear" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_space_smear_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">SMEAR</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_space_smear">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_p4" style="opacity: 0.2; pointer-events: none;">
+                    <div class="custom-knob filter-knob" id="knob-mod{{LANE}}_p4">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">-</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_p4">-</span>
+                </div>
+            </div>
+        </div>
+        </template>
+
+        <!-- ALTER ENGINE TEMPLATE -->
+        <template id="tmpl-engine-alter">
+        <div class="dsp-panel engine-alter-panel">
+            <div class="filter-ui-canvas-container">
+                <canvas id="alter-ui-canvas-{{LANE}}"></canvas>
+            </div>
+            <div class="filter-morph-row" style="visibility: hidden;"></div>
+            <div class="filter-params-row">
+                <div class="knob-wrapper" data-param="mod{{LANE}}_alter_fm">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_alter_fm" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_alter_fm_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">FM</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_alter_fm">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_alter_pinch">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_alter_pinch" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_alter_pinch_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">PINCH</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_alter_pinch">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_alter_desync">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_alter_desync" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_alter_desync_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">DESYNC</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_alter_desync">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_alter_fold">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_alter_fold" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_alter_fold_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">FOLD</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_alter_fold">0.00</span>
+                </div>
+            </div>
+        </div>
+        </template>
+        <!-- INFECT ENGINE TEMPLATE -->
+        <template id="tmpl-engine-infect">
+        <div class="dsp-panel engine-infect-panel">
+            <div class="filter-params-row">
+                <div class="knob-wrapper" data-param="mod{{LANE}}_infect_drive">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_infect_drive" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_infect_drive_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">INFECT</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_infect_drive">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_infect_sym">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_infect_sym" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_infect_sym_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">AMOUNT</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_infect_sym">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_infect_clone">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_infect_clone" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_infect_clone_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">CLONE</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_infect_clone">0.00</span>
+                </div>
+                <div class="knob-wrapper" data-param="mod{{LANE}}_infect_cloneAmount">
+                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_infect_cloneAmount" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_infect_cloneAmount_mod">
+                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
+                        <div class="knob-dial"><div class="knob-marker"></div></div>
+                    </div>
+                    <div class="knob-names">
+                        <span class="knob-name-a">AMOUNT</span>
+                    </div>
+                    <span class="knob-val" id="val-mod{{LANE}}_infect_cloneAmount">0.00</span>
+                </div>
+            </div>
+        </div>
+        </template>
+    </div>
+    
+    <script src="app.js?v=1788029963"></script>
+<script>
+  setTimeout(() => {
+    const el = document.querySelector('.mod-line-container');
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      console.log('DEBUG_RECT:', JSON.stringify(rect));
+      const clickTarget = document.elementFromPoint(rect.x + rect.width/2, rect.y + rect.height/2);
+      console.log('DEBUG_TARGET:', clickTarget ? clickTarget.tagName + '.' + clickTarget.className : 'null');
+    } else {
+      console.log('DEBUG_RECT: NOT_FOUND');
+    }
+  }, 1000);
+</script>
+</body>
+</html>

@@ -1,0 +1,905 @@
+/* KRONOS DRONE SYNTHESIZER AESTHETIC SYSTEM */
+
+:root {
+    --bg-main: #252528;          /* Matte mid-gray base */
+    --bg-overlay: rgba(30, 30, 32, 0.45); /* Glass panel */
+    --fg-main: #e0e0e6;          /* Light gray text */
+    --fg-muted: #8e8e93;         /* Medium-dark gray text */
+    --accent: #d1d1d6;           /* UI element light gray */
+    --accent-glow: rgba(255, 255, 255, 0.2);
+    --font-ui: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: 'Space Mono', monospace;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--fg-main);
+    font-family: var(--font-ui);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#app-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 4vh 4vw;
+}
+
+/* ==========================================================================
+   Background Canvas
+   ========================================================================== */
+#canvas-visualizer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    background-color: var(--bg-main);
+}
+
+/* ==========================================================================
+   Overlay screen for Audio Context Unlock
+   ========================================================================== */
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(24, 24, 26, 0.95);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    transition: opacity 0.5s ease, visibility 0.5s ease;
+    backdrop-filter: blur(8px);
+}
+
+.overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.overlay-content {
+    text-align: center;
+    max-width: 600px;
+    padding: 40px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: rgba(35, 35, 38, 0.5);
+    border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.logo {
+    font-size: 3.5rem;
+    font-weight: 200;
+    letter-spacing: 0.8rem;
+    margin-bottom: 10px;
+    color: #ffffff;
+    text-indent: 0.8rem;
+}
+
+.subtitle {
+    font-size: 0.85rem;
+    font-weight: 400;
+    letter-spacing: 0.25rem;
+    color: var(--fg-muted);
+    margin-bottom: 20px;
+}
+
+.specs {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--accent);
+    opacity: 0.6;
+    margin-bottom: 40px;
+}
+
+.btn-primary {
+    background-color: var(--accent);
+    color: #1a1a1f;
+    border: none;
+    padding: 14px 36px;
+    font-family: var(--font-ui);
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.15rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.btn-primary:hover {
+    background-color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 255, 255, 0.15);
+}
+
+/* ==========================================================================
+   Overlay Header
+   ========================================================================== */
+.overlay-header {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 0 0 1vh 0;
+    margin-bottom: 3vh;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+
+.brand {
+    font-size: 2.5vw;
+    font-weight: 200;
+    letter-spacing: 0.7vw;
+    color: #ffffff;
+    pointer-events: auto;
+}
+
+.tagline {
+    font-size: 1.15vw;
+    font-weight: 400;
+    letter-spacing: 0.2vw;
+    color: var(--fg-muted);
+    margin-left: 1.5vw;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    padding-left: 1.5vw;
+}
+
+.midi-status {
+    display: flex;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1rem;
+    color: var(--fg-muted);
+    pointer-events: auto;
+}
+
+.status-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--fg-muted);
+    margin-right: 8px;
+}
+
+.status-indicator.active {
+    background-color: #a3e635;
+    box-shadow: 0 0 8px #a3e635;
+}
+
+/* ==========================================================================
+   Floating Left and Right Control Panels (Transparent overlay over visualizer)
+   ========================================================================== */
+.control-panel-left {
+    position: absolute;
+    top: 18vh;
+    bottom: 4vh;
+    left: 1.5vw;
+    width: 24vw;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    pointer-events: none; /* Let clicks pass through visualizer where empty */
+}
+
+.control-panel-left * {
+    pointer-events: auto; /* Re-enable pointer events for actual slider/knob UI controls */
+}
+
+.control-panel-right {
+    position: absolute;
+    top: 14vh;
+    bottom: 4vh;
+    right: 0.8vw;
+    width: 24vw;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    pointer-events: none;
+}
+
+.control-panel-right * {
+    pointer-events: auto;
+}
+
+.adsr-spacer {
+    width: 100%;
+    margin-top: 2vh;
+    padding-top: 2vh;
+    height: 6vw;
+    visibility: hidden;
+}
+
+.sliders-container {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+    width: 100%;
+    height: 60%; /* Same relative height limits as before */
+}
+
+.slider-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    flex: 1;
+}
+
+.slider-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 2.5vh;
+    text-align: center;
+    font-family: var(--font-mono);
+}
+
+.lane-mover {
+    display: flex;
+    justify-content: space-between;
+    width: 60%;
+    margin-bottom: 2px;
+}
+
+.move-btn {
+    font-size: 1.0vw;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    transition: color 0.2s;
+    user-select: none;
+    font-weight: bold;
+}
+
+.move-btn:hover {
+    color: rgba(255, 255, 255, 1.0);
+}
+
+.move-btn.disabled {
+    color: rgba(255, 255, 255, 0.1);
+    pointer-events: none;
+}
+
+.drag-placeholder {
+    width: 100%;
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    transition: height 0.2s ease;
+    margin: 10px 0;
+}
+
+.slider-name {
+    font-size: 1.1vw;
+    font-weight: 600;
+    letter-spacing: 0.08vw;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 4px;
+    font-family: var(--font-ui);
+}
+
+select.slider-name {
+    background: transparent;
+    border: none;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    text-align: center;
+    text-align-last: center;
+    cursor: pointer;
+    outline: none;
+}
+
+select.slider-name option {
+    background: rgba(30, 30, 35, 0.9);
+    color: #ffffff;
+    font-weight: 400;
+    text-align: left;
+}
+
+.slider-val {
+    font-size: 1.1vw;
+    color: var(--accent);
+}
+
+/* Custom vertical slider */
+.custom-slider {
+    position: relative;
+    width: 3vw;
+    height: 100%; /* Fill the container space to match original height */
+    cursor: pointer;
+    touch-action: none;
+}
+
+.slider-track {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 1px;
+    transition: background 0.2s ease;
+}
+
+.custom-slider:hover .slider-track {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.slider-fill {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    background: rgba(209, 209, 214, 0.3);
+    border-radius: 1px;
+}
+
+.slider-thumb {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1.4vw;
+    height: 1.4vw;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+    transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.custom-slider:hover .slider-thumb {
+    background: #ffffff;
+    transform: translateX(-50%) scale(1.2);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+/* DSP Edit Toggle */
+.dsp-edit-toggle {
+    width: 0.8vw;
+    height: 0.8vw;
+    flex-shrink: 0;
+    aspect-ratio: 1 / 1;
+    border: 1px solid var(--accent);
+    border-radius: 50%;
+    margin-top: 2vh;
+    cursor: pointer;
+    background: transparent;
+    transition: all 0.2s ease;
+}
+.mod-lane {
+    position: relative;
+    border-radius: 8px;
+    background: transparent;
+    transition: background 0.3s ease, transform 0.2s ease, margin 0.2s ease;
+    padding: 10px 0;
+}
+.dsp-edit-toggle:hover {
+    border-color: #ffffff;
+    transform: scale(1.1);
+}
+
+.dsp-edit-toggle.active {
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(209, 209, 214, 0.4);
+}
+
+
+/* ==========================================================================
+   Keyboard overlay
+   ========================================================================== */
+.keyboard-overlay {
+    position: absolute;
+    bottom: 40px;
+    left: 40px;
+    right: 40px;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.keyboard-container {
+    background: transparent;
+    border: none;
+    padding: 15px;
+    pointer-events: auto;
+    box-shadow: none;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.keyboard-instructions {
+    font-size: 0.65rem;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08rem;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.keyboard-instructions span {
+    font-family: var(--font-mono);
+    color: var(--accent);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+}
+
+.piano-keyboard {
+    display: flex;
+    justify-content: center;
+    position: relative;
+    height: 60px;
+    width: 100%;
+}
+
+.key {
+    background-color: rgba(45, 45, 48, 0.55);
+    border: 1px solid rgba(26, 26, 31, 0.6);
+    border-bottom: 3px solid rgba(26, 26, 31, 0.6);
+    flex: 1;
+    max-width: 40px;
+    height: 100%;
+    cursor: pointer;
+    border-radius: 0 0 4px 4px;
+    transition: background-color 0.1s ease, border-bottom-color 0.1s ease;
+    z-index: 1;
+}
+
+.key.black {
+    background-color: #121214;
+    border: 1px solid #000;
+    max-width: 24px;
+    height: 60%;
+    margin-left: -12px;
+    margin-right: -12px;
+    z-index: 2;
+    border-radius: 0 0 2px 2px;
+}
+
+.key:hover {
+    background-color: rgba(61, 61, 68, 0.7);
+}
+
+.key.black:hover {
+    background-color: #1d1d22;
+}
+
+.key.active {
+    background-color: var(--accent) !important;
+    border-bottom-color: var(--fg-muted);
+}
+
+.key.black.active {
+    background-color: var(--accent) !important;
+    border-bottom-color: #a3a3a3;
+}
+
+.build-version {
+    font-family: var(--font-mono);
+    font-size: 1.0vw;
+    color: var(--fg-muted);
+    opacity: 0.5;
+    pointer-events: auto;
+}
+
+/* ==========================================================================
+   ADSR Knobs System
+   ========================================================================== */
+.adsr-container {
+    width: 100%;
+    border-top: none;
+    padding-top: 2vh;
+    margin-top: 2vh;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.adsr-title {
+    font-family: var(--font-mono);
+    font-size: 0.75vw;
+    color: var(--fg-muted);
+    letter-spacing: 0.08vw;
+    margin-bottom: 1.5vh;
+    text-transform: uppercase;
+}
+
+.knobs-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 1.6vw;
+    width: 100%;
+}
+
+.knob-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 0 0 5.5vw;
+}
+
+.custom-knob {
+    width: 2.0vw;
+    height: 2.0vw;
+    border-radius: 50%;
+    background: transparent;
+    border: 1px solid var(--accent); /* Same color outline as sliders */
+    position: relative;
+    cursor: pointer;
+    touch-action: none;
+    margin-bottom: 0.8vh;
+}
+
+.knob-dial {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform: rotate(-135deg); /* Start at min angle */
+}
+
+.knob-marker {
+    width: 1.5px;
+    height: 35%;
+    background-color: var(--accent);
+    position: absolute;
+    top: 5%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 0.5px;
+}
+
+.custom-knob:hover {
+    border-color: #ffffff;
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.2);
+}
+
+.custom-knob:hover .knob-marker {
+    background-color: #ffffff;
+}
+
+.knob-name {
+    font-size: 0.8vw;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 2px;
+}
+
+.knob-val {
+    font-family: var(--font-mono);
+    font-size: 0.7vw;
+    color: var(--fg-muted);
+}
+
+/* ==========================================================================
+   Reverb (Size/Sweep) Knobs System
+   ========================================================================== */
+.cloud-knobs-container {
+    width: 100%;
+    border-top: none;
+    padding-top: 2vh;
+    margin-top: 2vh;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end; /* Right-align to sit under Cloud slider */
+}
+
+.cloud-knobs-title {
+    font-family: var(--font-mono);
+    font-size: 0.75vw;
+    color: var(--fg-muted);
+    letter-spacing: 0.08vw;
+    margin-bottom: 1.5vh;
+    text-transform: uppercase;
+    text-align: right;
+}
+
+.cloud-knobs-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end; /* Right-align the knobs */
+    gap: 1.6vw;
+    width: 100%;
+}
+
+.small-knob {
+    width: 1.5vw !important;
+    height: 1.5vw !important;
+}
+
+/* ==========================================================================
+   DSP Edit Area & Panels
+   ========================================================================== */
+.dsp-edit-area {
+    width: 100%;
+    height: 40%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    position: relative;
+    pointer-events: auto;
+}
+
+.dsp-panel {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: opacity 0.3s ease;
+}
+
+.dsp-panel.hidden {
+    display: none;
+    opacity: 0;
+}
+
+/* Filter Canvas */
+.filter-ui-canvas-container {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    margin-bottom: 2vh;
+    position: relative;
+}
+
+#filter-ui-canvas, #source-ui-canvas {
+    width: 100%;
+    height: 100%;
+}
+
+/* Morph Row */
+.filter-morph-row {
+    width: 100%;
+    height: 15%;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 1vw;
+    margin-bottom: 2vh;
+}
+
+.filter-type {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.filter-type-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: var(--bg-main);
+    color: var(--fg-muted);
+    font-family: var(--font-mono);
+    font-size: 0.7vw;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0.2vw 1.2vw 0.2vw 0.4vw;
+    /* Custom darker gray arrow */
+    background-image: url("data:image/svg+xml;utf8,<svg fill='%23666666' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>");
+    background-repeat: no-repeat;
+    background-position-x: 95%;
+    background-position-y: 50%;
+    background-size: 0.8vw;
+    font-weight: 700;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.filter-type-select:hover {
+    color: #ffffff;
+    background-color: #1a1a1d;
+}
+
+.filter-type-select:focus {
+    outline: none;
+}
+
+.type-label {
+    width: 4vw;
+    flex: 0 0 4vw;
+    text-align: center;
+    font-weight: 700;
+}
+
+.morph-slider-container {
+    position: relative;
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 1vw;
+}
+
+.custom-slider.horizontal {
+    width: 100%;
+    height: 2vh;
+}
+
+.slider-track.horizontal-track {
+    width: 100%;
+    height: 2px;
+    top: 50%;
+    left: 0;
+    bottom: auto;
+    transform: translateY(-50%);
+}
+
+.slider-fill.horizontal-fill {
+    height: 2px;
+    width: 0%; /* updated by JS */
+    left: 0;
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+}
+
+.slider-thumb.horizontal-thumb {
+    width: 0.8vw;
+    height: 0.8vw;
+    min-width: 10px;
+    min-height: 10px;
+    top: 50%;
+    left: 0%; /* updated by JS */
+    transform: translate(-50%, -50%);
+    bottom: auto;
+}
+
+.custom-slider.horizontal:hover .slider-thumb.horizontal-thumb {
+    transform: translate(-50%, -50%) scale(1.2);
+}
+
+/* Parameter Row (Knobs) */
+.filter-params-row {
+    width: 100%;
+    height: 25%;
+    flex-shrink: 0;
+    margin-top: 2vh;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+    align-items: flex-end;
+    box-sizing: border-box;
+}
+
+/* Push the 4 knobs down by exactly 14px ONLY in the FILTER engine */
+.engine-filter-panel .filter-params-row {
+    transform: translateY(14px);
+}
+
+.engine-source-panel .filter-params-row {
+    transform: translateY(10px);
+}
+
+/* Mod Ring Outer SVG */
+.mod-ring-svg {
+    position: absolute;
+    top: -25%;
+    left: -25%;
+    width: 150%;
+    height: 150%;
+    z-index: 10;
+    pointer-events: none; /* Let clicks pass through empty space */
+}
+
+.mod-ring-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.08);
+    stroke-width: 12;
+    pointer-events: auto; /* Catch clicks on the path */
+    cursor: ns-resize;
+    transition: stroke 0.2s ease;
+}
+
+.mod-ring-bg:hover {
+    stroke: rgba(255, 255, 255, 0.3);
+}
+
+.mod-ring-arc {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 12;
+    stroke-linecap: round;
+    pointer-events: none;
+}
+.bipolar-arc-neg {
+    stroke: #3b82f6; /* Blue for negative modulation */
+}
+.bipolar-arc-pos {
+    stroke: #f97316; /* Orange for positive modulation */
+}
+
+/* Filter Custom Knobs for DSP area */
+.filter-knob {
+    margin-bottom: 0.5vh;
+}
+
+.mod-line-container {
+    width: 100%;
+    height: 20px;
+    position: absolute;
+    top: -15px;
+    left: 0;
+    cursor: ew-resize;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+}
+
+.mod-line-bg {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    position: absolute;
+    pointer-events: none;
+}
+
+.mod-line-fill {
+    height: 4px;
+    background: var(--accent);
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 50%;
+    width: 0%;
+    pointer-events: none;
+    transition: none;
+}
+
+.knob-names {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    margin-top: 5px;
+    margin-bottom: 2px;
+}
+
+.knob-name-a {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.65vw;
+    font-weight: 700;
+    letter-spacing: 0.1vw;
+    color: #e0e0e6;
+}
+
+.knob-name-b {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.65vw;
+    font-weight: 700;
+    letter-spacing: 0.1vw;
+    color: #8c8c94;
+}
