@@ -525,8 +525,6 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     // --- 1. Source Engine (Lane 1) ---
     float partials_param = processor->mod1_p[0] ? processor->mod1_p[0]->load() : 256.0f;
     float partials_mod   = processor->mod1_pMod[0] ? processor->mod1_pMod[0]->load() : 0.0f;
-    float balance_param  = processor->mod1_p[1] ? processor->mod1_p[1]->load() : 0.0f;
-    float balance_mod    = processor->mod1_pMod[1] ? processor->mod1_pMod[1]->load() : 0.0f;
     float width_param    = processor->mod1_p[2] ? processor->mod1_p[2]->load() : 0.0f;
     float width_mod      = processor->mod1_pMod[2] ? processor->mod1_pMod[2]->load() : 0.0f;
 
@@ -539,7 +537,6 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
     float sourceMacro    = processor->mod1_macro ? processor->mod1_macro->load() : 0.0f;
 
     float currentPartials = std::clamp(partials_param + sourceMacro * partials_mod * 256.0f, 1.0f, 256.0f);
-    float currentBalance  = std::clamp(balance_param + sourceMacro * balance_mod, -1.0f, 1.0f);
     float currentWidth    = std::clamp(width_param + sourceMacro * width_mod, -1.0f, 1.0f);
     float currentPitch    = std::clamp(pitch_param + sourceMacro * pitch_mod * 36.0f, -36.0f, 36.0f); // Range is already -36 to 36
     float currentShape    = std::clamp(shape_param + sourceMacro * shape_mod, 0.0f, 1.0f);
@@ -560,16 +557,11 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         spacing = 1.0f + currentWidth * 0.95f; // shrinks to 0.05
     }
 
-    float totalClusterSpan = (float)targetPartials * spacing;
     float clusterStart = 1.0f;
-    if (currentBalance > 0.0f) {
-        float maxStart = maxHarmonics - totalClusterSpan;
-        if (maxStart < 1.0f) maxStart = 1.0f;
-        clusterStart = 1.0f + currentBalance * (maxStart - 1.0f);
-    } else if (currentBalance < 0.0f) {
-        float maxStart = maxHarmonics - totalClusterSpan;
-        if (maxStart < 1.0f) maxStart = 1.0f;
-        clusterStart = 1.0f + currentBalance * maxStart; // Pushes down to roughly -maxStart
+
+    float densityComp = 1.0f;
+    if (spacing < 1.0f) {
+        densityComp = std::max(0.1f, std::sqrt(spacing));
     }
 
     auto getSpectralShape = [](int p, float harmonicIndex, int shapeIndex) -> float {
@@ -618,7 +610,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
                 float absVH_clamped = std::max(0.001f, absVH);
                 float baseAmp = getSpectralShape(p, absVH_clamped, timbreIdx) * (1.0f - timbreMix) 
                               + getSpectralShape(p, absVH_clamped, timbreIdx + 1) * timbreMix;
-                targetAmps[p] = targetAmp * std::min(1.0f, baseAmp);
+                targetAmps[p] = targetAmp * std::min(1.0f, baseAmp) * densityComp;
             }
         } else {
             freqs[p] = 0.0f;
