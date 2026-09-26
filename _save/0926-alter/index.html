@@ -21,7 +21,7 @@
                 <span class="tagline">drone synthesis laboratory</span>
             </div>
             <div class="header-right">
-                <span class="build-version">BUILD #0.77</span>
+                <span class="build-version">BUILD #0.79</span>
             </div>
         </header>
 
@@ -240,16 +240,7 @@
                         </div>
                         <span class="knob-val" id="val-mod{{LANE}}_shape">0.00</span>
                     </div>
-                    <div class="knob-wrapper" data-param="mod{{LANE}}_p2">
-                        <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-mod{{LANE}}_p2" data-bipolar="true" data-mod-param="mod{{LANE}}_p2_mod">
-                            <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
-                            <div class="knob-dial"><div class="knob-marker"></div></div>
-                        </div>
-                        <div class="knob-names">
-                            <span class="knob-name-a">BALANCE</span>
-                        </div>
-                        <span class="knob-val" id="val-mod{{LANE}}_p2">0.00</span>
-                    </div>
+
                     <div class="knob-wrapper" data-param="mod{{LANE}}_p3">
                         <div class="custom-knob filter-knob bipolar-knob has-mod" id="knob-mod{{LANE}}_p3" data-bipolar="true" data-mod-param="mod{{LANE}}_p3_mod">
                             <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
@@ -544,6 +535,10 @@
         <!-- INFECT ENGINE TEMPLATE -->
         <template id="tmpl-engine-infect">
         <div class="dsp-panel engine-infect-panel">
+            <div class="filter-ui-canvas-container">
+                <canvas id="infect-ui-canvas-{{LANE}}"></canvas>
+            </div>
+            <div class="filter-morph-row" style="visibility: hidden;"></div>
             <div class="filter-params-row">
                 <div class="knob-wrapper" data-param="mod{{LANE}}_infect_drive">
                     <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_infect_drive" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_infect_drive_mod">
