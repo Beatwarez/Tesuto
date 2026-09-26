@@ -1,62 +1,47 @@
 ﻿import re
 
-html_code = """<template id="tmpl-engine-infect">
-        <div class="dsp-panel engine-infect-panel">
-            <div class="filter-params-row">
-                <div class="knob-wrapper" data-param="mod{{LANE}}_p1">
-                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p1" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_p1_mod">
-                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
-                        <div class="knob-dial"><div class="knob-marker"></div></div>
-                    </div>
-                    <div class="knob-names">
-                        <span class="knob-name-a">INFECT</span>
-                    </div>
-                    <span class="knob-val" id="val-mod{{LANE}}_p1">0.00</span>
-                </div>
-                <div class="knob-wrapper" data-param="mod{{LANE}}_p2">
-                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p2" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_p2_mod">
-                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
-                        <div class="knob-dial"><div class="knob-marker"></div></div>
-                    </div>
-                    <div class="knob-names">
-                        <span class="knob-name-a">AMOUNT</span>
-                    </div>
-                    <span class="knob-val" id="val-mod{{LANE}}_p2">0.00</span>
-                </div>
-                <div class="knob-wrapper" data-param="mod{{LANE}}_p3">
-                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p3" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_p3_mod">
-                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
-                        <div class="knob-dial"><div class="knob-marker"></div></div>
-                    </div>
-                    <div class="knob-names">
-                        <span class="knob-name-a">CLONE</span>
-                    </div>
-                    <span class="knob-val" id="val-mod{{LANE}}_p3">0.00</span>
-                </div>
-                <div class="knob-wrapper" data-param="mod{{LANE}}_p4">
-                    <div class="custom-knob filter-knob has-mod" id="knob-mod{{LANE}}_p4" data-min="0" data-max="1" data-default="0" data-mod-param="mod{{LANE}}_p4_mod">
-                        <svg class="mod-ring-svg" viewBox="0 0 100 100"><path class="mod-ring-bg" d="M 17.47 82.53 A 46 46 0 1 1 82.53 82.53" /><path class="mod-ring-arc" d="" /></svg>
-                        <div class="knob-dial"><div class="knob-marker"></div></div>
-                    </div>
-                    <div class="knob-names">
-                        <span class="knob-name-a">AMOUNT</span>
-                    </div>
-                    <span class="knob-val" id="val-mod{{LANE}}_p4">0.00</span>
-                </div>
-            </div>
-        </div>
-        </template>"""
-
 with open('index.html', 'r', encoding='utf-8') as f:
-    content = f.read()
+    html = f.read()
 
-content = re.sub(
-    r"<template id=\"tmpl-engine-infect\">.*?</template>",
-    html_code,
-    content,
-    flags=re.DOTALL
-)
+def replace_param(html, engine_id, old_param, new_param):
+    start = html.find(f'<template id="tmpl-engine-{engine_id}">')
+    if start == -1: return html
+    end = html.find('</template>', start)
+    block = html[start:end]
+    block = block.replace(f'data-param="mod{{{{LANE}}}}_{old_param}"', f'data-param="mod{{{{LANE}}}}_{new_param}"')
+    block = block.replace(f'id="knob-mod{{{{LANE}}}}_{old_param}"', f'id="knob-mod{{{{LANE}}}}_{new_param}"')
+    block = block.replace(f'data-mod-param="mod{{{{LANE}}}}_{old_param}_mod"', f'data-mod-param="mod{{{{LANE}}}}_{new_param}_mod"')
+    block = block.replace(f'id="val-mod{{{{LANE}}}}_{old_param}"', f'id="val-mod{{{{LANE}}}}_{new_param}"')
+    return html[:start] + block + html[end:]
+
+html = replace_param(html, 'alter', 'p1', 'alter_fm')
+html = replace_param(html, 'alter', 'p2', 'alter_pinch')
+html = replace_param(html, 'alter', 'p3', 'alter_desync')
+html = replace_param(html, 'alter', 'p4', 'alter_quant')
+
+html = replace_param(html, 'filter', 'p1', 'filter_cutoff')
+html = replace_param(html, 'filter', 'p2', 'filter_offset')
+html = replace_param(html, 'filter', 'p3', 'filter_reso')
+html = replace_param(html, 'filter', 'p4', 'filter_slope')
+html = replace_param(html, 'filter', 'p5', 'filter_morph')
+html = replace_param(html, 'filter', 'filterA', 'filter_typeA')
+html = replace_param(html, 'filter', 'filterB', 'filter_typeB')
+
+html = replace_param(html, 'space', 'p1', 'space_width')
+html = replace_param(html, 'space', 'p2', 'space_orbit')
+html = replace_param(html, 'space', 'p3', 'space_smear')
+
+html = replace_param(html, 'infect', 'p1', 'infect_drive')
+html = replace_param(html, 'infect', 'p2', 'infect_sym')
+html = replace_param(html, 'infect', 'p3', 'infect_clone')
+html = replace_param(html, 'infect', 'p4', 'infect_cloneAmount')
+
+html = replace_param(html, 'form', 'p1', 'form_warp')
+html = replace_param(html, 'form', 'p2', 'form_fold')
+html = replace_param(html, 'form', 'p3', 'form_tension')
+html = replace_param(html, 'form', 'p4', 'form_shape')
+
+html = html.replace('BUILD #0.73', 'BUILD #0.75')
 
 with open('index.html', 'w', encoding='utf-8') as f:
-    f.write(content)
-
+    f.write(html)

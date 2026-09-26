@@ -67,8 +67,8 @@ static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_pinch_mod", 1), "mod" + mStr + "_alter_pinch_mod", -1.0f, 1.0f, 0.0f));
         layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_desync", 1), "mod" + mStr + "_alter_desync", 0.0f, 1.0f, 0.0f));
         layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_desync_mod", 1), "mod" + mStr + "_alter_desync_mod", -1.0f, 1.0f, 0.0f));
-        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_quant", 1), "mod" + mStr + "_alter_quant", 0.0f, 1.0f, 0.0f));
-        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_quant_mod", 1), "mod" + mStr + "_alter_quant_mod", -1.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_fold", 1), "mod" + mStr + "_alter_fold", 0.0f, 1.0f, 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_alter_fold_mod", 1), "mod" + mStr + "_alter_fold_mod", -1.0f, 1.0f, 0.0f));
         
         // INFECT
         layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("mod" + mStr + "_infect_drive", 1), "mod" + mStr + "_infect_drive", 0.0f, 1.0f, 0.0f));
@@ -172,8 +172,8 @@ KronosAudioProcessor::KronosAudioProcessor()
         mod_engine_pMod[m-2][5][1] = apvts.getRawParameterValue("mod" + mStr + "_alter_pinch_mod");
         mod_engine_p[m-2][5][2] = apvts.getRawParameterValue("mod" + mStr + "_alter_desync");
         mod_engine_pMod[m-2][5][2] = apvts.getRawParameterValue("mod" + mStr + "_alter_desync_mod");
-        mod_engine_p[m-2][5][3] = apvts.getRawParameterValue("mod" + mStr + "_alter_quant");
-        mod_engine_pMod[m-2][5][3] = apvts.getRawParameterValue("mod" + mStr + "_alter_quant_mod");
+        mod_engine_p[m-2][5][3] = apvts.getRawParameterValue("mod" + mStr + "_alter_fold");
+        mod_engine_pMod[m-2][5][3] = apvts.getRawParameterValue("mod" + mStr + "_alter_fold_mod");
         
         mod_engine_p[m-2][7][0] = apvts.getRawParameterValue("mod" + mStr + "_infect_drive");
         mod_engine_pMod[m-2][7][0] = apvts.getRawParameterValue("mod" + mStr + "_infect_drive_mod");
@@ -633,7 +633,7 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         float deSyncVal = 0.0f;
     float alterVal = 0.0f;
     float pinchVal = 0.0f;
-    float quantVal = 0.0f;
+    float foldVal = 0.0f;
 
     for (int i = 0; i < 7; ++i) {
         int laneNumber = std::round(processor->routingOrder[i].load());
@@ -734,9 +734,9 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             float desync_mod   = processor->mod_engine_pMod[laneIdx][5][2] ? processor->mod_engine_pMod[laneIdx][5][2]->load() : 0.0f;
             deSyncVal = std::clamp(desync_param + macroVal * desync_mod, 0.0f, 1.0f);
 
-            float quant_param = processor->mod_engine_p[laneIdx][5][3] ? processor->mod_engine_p[laneIdx][5][3]->load() : 0.0f;
-            float quant_mod   = processor->mod_engine_pMod[laneIdx][5][3] ? processor->mod_engine_pMod[laneIdx][5][3]->load() : 0.0f;
-            quantVal = std::clamp(quant_param + macroVal * quant_mod, 0.0f, 1.0f);
+            float fold_param = processor->mod_engine_p[laneIdx][5][3] ? processor->mod_engine_p[laneIdx][5][3]->load() : 0.0f;
+            float fold_mod   = processor->mod_engine_pMod[laneIdx][5][3] ? processor->mod_engine_pMod[laneIdx][5][3]->load() : 0.0f;
+            foldVal = std::clamp(fold_param + macroVal * fold_mod, 0.0f, 1.0f);
 
             float curve = deSyncVal * deSyncVal * deSyncVal;
             float syncMultiplier = 1.0f + curve * 9.0f;
@@ -1025,6 +1025,15 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
       }
 
       // maxModulatingIndex is now pre-calculated before the loop!
+      
+      float invPhaseDelta0 = 1.0f / phaseDeltas[0];
+      float windowPhase = phases[0];
+      float syncWindow = 1.0f;
+      if (syncMix > 0.0f) {
+          float winNorm = windowPhase * 0.5f;
+          int winIdx = static_cast<int>(winNorm * 32768.0f) & 32767;
+          syncWindow = std::min(1.0f, sineTable[winIdx] * 4.0f);
+      }
 
       for (int i = 0; i < numActivePartials; ++i) {
         int p = activePartials[i];
@@ -1045,9 +1054,9 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
             if (deSyncVal > 0.0f && masterWrapped) {
               // Clickless subsample precision sync
               float overshoot = phases[0];
-              syncedPhases[p] = overshoot * (phaseDeltas[p] / phaseDeltas[0]);
-              if (syncedPhases[p] >= 1.0f) {
-                  syncedPhases[p] -= std::floor(syncedPhases[p]);
+              syncedPhases[p] = overshoot * phaseDeltas[p] * invPhaseDelta0;
+              while (syncedPhases[p] >= 1.0f) {
+                  syncedPhases[p] -= 1.0f;
               }
             } else if (syncedPhases[p] >= 1.0f) {
               syncedPhases[p] -= 1.0f;
@@ -1064,12 +1073,6 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
 
         // Unsynced phase calculation (using fast bitwise wrapping instead of std::floor)
         float modPhaseUnsync = phases[p] + modOffset;
-        if (quantVal > 0.0f) {
-            float curve = quantVal * quantVal * quantVal;
-            float steps = 2.0f + (1.0f - curve) * 62.0f;
-            float quantizedPhase = (std::floor(modPhaseUnsync * steps) + 0.5f) / steps;
-            modPhaseUnsync = modPhaseUnsync * (1.0f - quantVal) + quantizedPhase * quantVal;
-        }
         if (pinchVal > 0.0f) {
             int pinchIdx = static_cast<int>((modPhaseUnsync + 1024.0f) * 32768.0f) & 32767;
             modPhaseUnsync += sineTable[pinchIdx] * pinchVal * 0.3f;
@@ -1077,18 +1080,19 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
         int idxUnsync = static_cast<int>((modPhaseUnsync + 1024.0f) * 32768.0f) & 32767;
         float valUnsync = sineTable[idxUnsync];
 
+        if (foldVal > 0.0f) {
+            float drive = 1.0f + foldVal * 7.0f;
+            float foldPhase = valUnsync * drive * 0.25f;
+            int foldIdx = static_cast<int>((foldPhase + 1024.0f) * 32768.0f) & 32767;
+            float folded = sineTable[foldIdx];
+            valUnsync = valUnsync * (1.0f - foldVal) + folded * foldVal;
+        }
+
         float val = valUnsync;
 
           // Bypass heavy sync calculations if mix is 0
           if (syncMix > 0.0f) {
               float modPhaseSync = (p > 0) ? syncedPhases[p] + modOffset : modPhaseUnsync;
-              
-              if (quantVal > 0.0f) {
-                  float curve = quantVal * quantVal * quantVal;
-                  float steps = 2.0f + (1.0f - curve) * 62.0f;
-                  float quantizedPhase = (std::floor(modPhaseSync * steps) + 0.5f) / steps;
-                  modPhaseSync = modPhaseSync * (1.0f - quantVal) + quantizedPhase * quantVal;
-              }
               if (pinchVal > 0.0f && p > 0) {
                   int pinchIdx = static_cast<int>((modPhaseSync + 1024.0f) * 32768.0f) & 32767;
                   modPhaseSync += sineTable[pinchIdx] * pinchVal * 0.3f;
@@ -1097,9 +1101,15 @@ void KronosVoice::renderNextBlock(juce::AudioBuffer<float> &outputBuffer, int st
               int idxSync = static_cast<int>((modPhaseSync + 1024.0f) * 32768.0f) & 32767;
               float valSync = sineTable[idxSync];
               
+              if (foldVal > 0.0f) {
+                  float drive = 1.0f + foldVal * 7.0f;
+                  float foldPhase = valSync * drive * 0.25f;
+                  int foldIdx = static_cast<int>((foldPhase + 1024.0f) * 32768.0f) & 32767;
+                  float folded = sineTable[foldIdx];
+                  valSync = valSync * (1.0f - foldVal) + folded * foldVal;
+              }
+              
               // Windowed sync (VOSIM) smoothing driven by the fundamental phase
-              float windowPhase = phases[0];
-              float syncWindow = std::min(1.0f, std::sin(windowPhase * 3.14159265f) * 4.0f);
               valSync *= syncWindow;
               
               val = valUnsync * (1.0f - syncMix) + valSync * syncMix;

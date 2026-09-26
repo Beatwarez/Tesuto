@@ -36,7 +36,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             { name: 'space', defaultValue: 0.3, minValue: 0.0, maxValue: 1.0 },
             { name: 'alter', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'pinch', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
-            { name: 'quant', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
+            { name: 'fold', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
             { name: 'size', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
             { name: 'sweep', defaultValue: 0.5, minValue: 0.0, maxValue: 1.0 },
             { name: 'infectAmount', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0 },
@@ -217,7 +217,7 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
             const spaceVal = parameters.space[0];
             const alterVal = parameters.alter ? parameters.alter[0] : 0.0;
               const pinchVal = parameters.pinch ? parameters.pinch[0] : 0.0;
-              const quantVal = parameters.quant ? parameters.quant[0] : 0.0;
+              const foldVal = parameters.fold ? parameters.fold[0] : 0.0;
             const sizeVal = parameters.size ? parameters.size[0] : 0.5;
             const sweepVal = parameters.sweep ? parameters.sweep[0] : 0.5;
             const infectAmount = parameters.infectAmount ? parameters.infectAmount[0] : 0.0;
@@ -571,6 +571,15 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                         voice.phases[0] -= 1.0;
                         masterWrapped = true;
                     }
+                    
+                    let invPhaseDelta0 = 1.0 / phaseDeltas[0];
+                    let windowPhase = voice.phases[0];
+                    let syncWindow = 1.0;
+                    if (deSyncVal > 0.0) {
+                        let winNorm = windowPhase * 0.5;
+                        let winIdx = ((winNorm * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
+                        syncWindow = Math.min(1.0, SINE_TABLE[winIdx] * 4.0);
+                    }
 
                     for (let idx = 0; idx < voice.activePartials.length; idx++) {
                         const p = voice.activePartials[idx];
@@ -591,9 +600,9 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                               if (masterWrapped) {
                                   // Clickless subsample precision sync
                                   let overshoot = voice.phases[0];
-                                  voice.phases[p] = overshoot * (phaseDeltas[p] / phaseDeltas[0]);
-                                  if (voice.phases[p] >= 1.0) {
-                                      voice.phases[p] -= Math.floor(voice.phases[p]);
+                                  voice.phases[p] = overshoot * phaseDeltas[p] * invPhaseDelta0;
+                                  while (voice.phases[p] >= 1.0) {
+                                      voice.phases[p] -= 1.0;
                                   }
                               }
                               // We use the reset phase for synced, and the original phase for unsynced crossfade
@@ -614,21 +623,24 @@ class DroneSynthProcessor extends AudioWorkletProcessor {
                                                     if (pinchVal > 0.0) {
                               modPhase += Math.sin(modPhase * 2.0 * Math.PI) * pinchVal * 0.3;
                           }
-                                                      if (quantVal > 0.0) {
-                                let curve = quantVal * quantVal * quantVal;
-                                let steps = 2.0 + (1.0 - curve) * 62.0;
-                                let quantizedPhase = (Math.floor(modPhase * steps) + 0.5) / steps;
-                                modPhase = modPhase * (1.0 - quantVal) + quantizedPhase * quantVal;
-                            }
                             // Lookup sine table with phase wrapped to [0, 1)
                           let normModPhase = modPhase % 1.0;
                           if (normModPhase < 0) normModPhase += 1.0;
                           const sineIdx = ((normModPhase * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
                           let val = SINE_TABLE[sineIdx];
                           
+                          if (foldVal > 0.0) {
+                              let drive = 1.0 + foldVal * 7.0;
+                              let foldPhase = val * drive * 0.25;
+                              let foldNorm = foldPhase % 1.0;
+                              if (foldNorm < 0) foldNorm += 1.0;
+                              let fIdx = ((foldNorm * SINE_TABLE_SIZE) | 0) & (SINE_TABLE_SIZE - 1);
+                              let folded = SINE_TABLE[fIdx];
+                              val = val * (1.0 - foldVal) + folded * foldVal;
+                          }
+                          
                           if (p > 0 && deSyncVal > 0.0) {
-                              let windowPhase = voice.phases[0];
-                              let syncWindow = Math.min(1.0, Math.sin(windowPhase * Math.PI) * 4.0);
+                              // syncWindow is hoisted
                               // Smoothly crossfade into the windowed sync
                               val = val * (1.0 - deSyncVal) + (val * syncWindow) * deSyncVal;
                           }
