@@ -2140,6 +2140,7 @@ class KronosSynth {
         this.canvas.height = rect.height * window.devicePixelRatio;
         this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
         this.initFilterCanvas();
+        this.initSourceCanvas();
     }
 
     initParticles() {
@@ -2197,18 +2198,18 @@ class KronosSynth {
         ctx.clearRect(0, 0, w, h);
         
         const macroVal = this.values.mod1_macro || 0.0;
-        const p1_mod = this.values.mod1_filter_cutoff_mod || 0.0;
-        const p2_mod = this.values.mod1_filter_offset_mod || 0.0;
-        const p3_mod = this.values.mod1_filter_reso_mod || 0.0;
+        const p1_mod = this.values.mod1_p1_mod || 0.0;
+        const p2_mod = this.values.mod1_p2_mod || 0.0;
+        const p3_mod = this.values.mod1_p3_mod || 0.0;
         const shape_mod = this.values.mod1_shape_mod || 0.0;
         
-        let partialsVal = (this.values.mod1_filter_cutoff !== undefined ? this.values.mod1_filter_cutoff : 256.0) + macroVal * p1_mod * 256.0;
+        let partialsVal = (this.values.mod1_p1 !== undefined ? this.values.mod1_p1 : 256.0) + macroVal * p1_mod * 256.0;
         partialsVal = Math.max(1.0, Math.min(partialsVal, 256.0));
         
-        let balanceVal = (this.values.mod1_filter_offset || 0.0) + macroVal * p2_mod;
+        let balanceVal = (this.values.mod1_p2 || 0.0) + macroVal * p2_mod;
         balanceVal = Math.max(-1.0, Math.min(balanceVal, 1.0));
         
-        let widthVal = (this.values.mod1_filter_reso || 0.0) + macroVal * p3_mod;
+        let widthVal = (this.values.mod1_p3 || 0.0) + macroVal * p3_mod;
         widthVal = Math.max(-1.0, Math.min(widthVal, 1.0));
         
         let shapeVal = (this.values.mod1_shape !== undefined ? this.values.mod1_shape : 0.0) + macroVal * shape_mod;
